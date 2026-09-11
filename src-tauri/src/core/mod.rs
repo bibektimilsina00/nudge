@@ -9,6 +9,7 @@ pub mod capture;
 pub mod click;
 pub mod keyboard;
 pub mod launch;
+pub mod privacy;
 pub mod provider;
 pub mod session;
 pub mod speech;

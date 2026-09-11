@@ -39,6 +39,13 @@ pub struct Config {
     /// moving someone's mouse is a bigger promise than showing them where to aim,
     /// and it needs Accessibility permission. Toggleable from the menu bar.
     pub auto_click: bool,
+    /// Refuse to screenshot password managers and windows that name a secret.
+    /// On by default: the cost of being wrong is not symmetric.
+    pub privacy_guard: bool,
+    /// Extra application names to refuse, beyond the built-in list.
+    pub blocked_apps: Vec<String>,
+    /// Extra window-title fragments to refuse, beyond the built-in list.
+    pub blocked_titles: Vec<String>,
 }
 
 impl Default for Config {
@@ -55,6 +62,9 @@ impl Default for Config {
             speech_model: "gemini-2.5-flash-preview-tts".into(),
             speech_voice: None,
             auto_click: false,
+            privacy_guard: true,
+            blocked_apps: Vec::new(),
+            blocked_titles: Vec::new(),
         }
     }
 }

@@ -4,7 +4,8 @@
 //! front, and it is the reason this is a loop rather than one call.
 use crate::core::capture::{self, Shot};
 use crate::config::Config;
-use crate::error::Result;
+use crate::error::{Error, Result};
+use crate::core::privacy;
 use crate::core::provider::{self, Ask, Provider, Step};
 use std::sync::Mutex;
 
@@ -72,6 +73,15 @@ impl Nudge {
             return Ok(Some(Step::Unsure {
                 say: format!("Stopping after {MAX_STEPS} steps -- this isn't converging."),
             }));
+        }
+
+        // Before the capture. There is no un-sending a screenshot, so the check
+        // has to happen while the only thing that exists is a window title.
+        if let Some((app, title)) = privacy::frontmost() {
+            if let Some(reason) = privacy::blocked_by(&self.cfg, &app, &title) {
+                self.end();
+                return Err(Error::Blocked(reason));
+            }
         }
 
         let shot: Shot = capture::grab(self.cfg.max_edge, logical)?;

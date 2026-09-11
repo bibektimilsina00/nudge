@@ -15,6 +15,8 @@ pub enum Error {
     Launch(String),
     #[error("{0}")]
     Click(String),
+    #[error("{0}")]
+    Blocked(String),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

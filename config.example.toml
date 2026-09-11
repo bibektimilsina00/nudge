@@ -39,3 +39,10 @@ voice_model = "gemini-3.8-flash"
 # Click the control instead of only pointing at it. Needs Accessibility permission.
 # Toggleable at runtime from the menu bar ("Click for me").
 auto_click = false
+
+# Refuse to screenshot password managers and windows whose title names a secret
+# (.env, id_rsa, "password", ...). On by default -- the cost of being wrong is not
+# symmetric. Extend rather than replace the built-in lists.
+privacy_guard = true
+blocked_apps = []
+blocked_titles = []

@@ -42,6 +42,14 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
 
     // The probe compares models, so it works in image space and skips the
     // overlay mapping -- logical size is irrelevant here.
+    // The probe captures too, so it refuses the same things the app does.
+    if let Some((app, title)) = nudge_lib::core::privacy::frontmost() {
+        if let Some(reason) = nudge_lib::core::privacy::blocked_by(&cfg, &app, &title) {
+            println!("{name}: {reason} (frontmost: {app})");
+            return Ok(());
+        }
+    }
+
     let t0 = std::time::Instant::now();
     let shot = capture::grab(cfg.max_edge, (0.0, 0.0))?;
     let captured = t0.elapsed();
