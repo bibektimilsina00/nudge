@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@theme {
+  --color-accent: #ff2d55;
+
+  --animate-ring: ring 1.6s ease-out infinite;
+  --animate-ripple: ripple 1.9s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  --animate-think: think 1.15s ease-in-out infinite;
+  --animate-breathe: breathe 5s ease-in-out infinite;
+
+  /* Grows and fades outward, so it draws the eye without ever covering the
+     control it is pointing at. */
+  @keyframes ring {
+    0%   { transform: scale(0.82); opacity: 0; }
+    35%  { opacity: 1; }
+    100% { transform: scale(1.18); opacity: 0; }
+  }
+
+  /* Sound leaving the mic. transform + opacity only -- the box-shadow pulse this
+     replaced repainted the glow on every frame, at the cursor, forever. */
+  @keyframes ripple {
+    0%   { transform: scale(0.5); opacity: 0; }
+    18%  { opacity: 0.5; }
+    100% { transform: scale(2.4); opacity: 0; }
+  }
+
+  /* Seen constantly, so it is deliberately below conscious notice: five seconds,
+     three percent. Enough that the companion is never completely still. */
+  @keyframes breathe {
+    0%, 100% { transform: scale(1); }
+    50%      { transform: scale(1.03); }
+  }
+
+  @keyframes think {
+    0%, 100% { transform: scale(1);    opacity: 0.6; }
+    50%      { transform: scale(1.22); opacity: 1; }
+  }
+}
+
+/* The native window is genuinely see-through; anything opaque here would paint a
+   grey sheet over the app the user is actually working in. */
+html,
+body,
+#root {
+  height: 100%;
+  background: transparent;
+  overflow: hidden;
+}
+
+body {
+  cursor: default;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+  font-family: -apple-system, BlinkMacSystemFont, system-ui, sans-serif;
+}
+
+/* Reduced motion means gentler, not absent: the ring and the mic still have to be
+   findable. Movement goes; the states they indicate stay legible.
+   `motion-safe:` on the elements above suppresses the rest. */
+@media (prefers-reduced-motion: reduce) {
+  #ring { animation: none; opacity: 1; }
+}

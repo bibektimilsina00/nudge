@@ -1,0 +1,41 @@
+# Copy to ~/.config/nudge/config.toml. Every field is optional.
+
+# "ollama" (local, free, offline) | "gemini" (free tier) | "anthropic"
+provider = "ollama"
+
+# Omit to use the provider's default.
+# model = "qwen3-vl:4b"   # gemini default: gemini-3.5-flash-lite
+
+# Prefer the env var (ANTHROPIC_API_KEY / GEMINI_API_KEY) -- it wins over this.
+# api_key = ""
+
+hotkey = "cmd+shift+space"
+
+# Long edge of the screenshot sent to the model -- the main speed dial.
+# Measured on a 3024x1964 display: 1920px cost 3.6s a step, 1280px cost 2.4s, and
+# both landed dead centre on a 20px icon. Raise it only if small widgets get missed.
+# Anthropic silently downscales anything over 2576px, desyncing every coordinate.
+max_edge = 1280
+
+# Read each nudge aloud.
+speak = true
+# "system" is macOS `say`: free, offline, instant, and the default -- speech happens
+# on every step, so it should not cost money by default. "gemini" sounds far better
+# and is one menu-bar click away ("Natural voice"). It is also the automatic
+# fallback target whenever Gemini is unreachable.
+#
+# macOS ships only 1990s "compact" voices, and the modern Siri voices offered in
+# Manage Voices are deliberately unavailable to `say` and to every third-party app.
+# For a good offline voice, install a *non-Siri* Premium English voice (Ava,
+# Allison, Zoe, Evan, Nathan, Joelle, Tom) -- those do work with "system".
+speech_engine = "system"
+speech_model = "gemini-2.5-flash-preview-tts"
+# Gemini prebuilt voice ("Kore", "Puck", "Aoede", "Charon"...) or a macOS voice name.
+# speech_voice = "Kore"
+
+# Model that turns speech into text. Independent of `model` above.
+voice_model = "gemini-3.8-flash"
+
+# Click the control instead of only pointing at it. Needs Accessibility permission.
+# Toggleable at runtime from the menu bar ("Click for me").
+auto_click = false

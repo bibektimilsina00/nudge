@@ -1,0 +1,10 @@
+target/
+node_modules/
+shot.png
+hit-*.png
+.DS_Store
+config.toml
+.env
+.env.*
+dist/
+.signing-identity

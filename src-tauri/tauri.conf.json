@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Nudge",
+  "version": "0.1.0",
+  "identifier": "dev.nudge.app",
+  "build": {
+    "frontendDist": "../ui/dist",
+    "devUrl": "http://localhost:1420",
+    "beforeDevCommand": "pnpm --dir ui dev",
+    "beforeBuildCommand": "pnpm --dir ui build"
+  },
+  "app": {
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self' ipc: http://ipc.localhost"
+    },
+    "windows": [
+      {
+        "label": "overlay",
+        "url": "index.html",
+        "transparent": true,
+        "decorations": false,
+        "alwaysOnTop": false,
+        "shadow": false,
+        "resizable": false,
+        "skipTaskbar": true,
+        "focus": false,
+        "acceptFirstMouse": true,
+        "width": 1512,
+        "height": 982,
+        "visibleOnAllWorkspaces": true
+      }
+    ]
+  },
+  "bundle": {
+    "active": true,
+    "targets": "app",
+    "macOS": {
+      "minimumSystemVersion": "12.0"
+    }
+  }
+}

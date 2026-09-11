@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Menu-bar app: no Dock icon at all, so there is no icon flash before the
+       activation policy is applied in setup(). -->
+  <key>LSUIElement</key>
+  <true/>
+  <key>NSMicrophoneUsageDescription</key>
+  <string>Nudge listens while you hold the hotkey, so you can ask for help out loud.</string>
+</dict>
+</plist>

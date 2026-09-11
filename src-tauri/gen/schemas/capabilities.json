@@ -1,0 +1,1 @@
+{"default":{"identifier":"default","description":"Overlay window: draw, toggle click-through, listen for the hotkey.","local":true,"windows":["overlay"],"permissions":["core:default","core:window:allow-set-ignore-cursor-events","core:window:allow-set-focus","global-shortcut:default"]}}
