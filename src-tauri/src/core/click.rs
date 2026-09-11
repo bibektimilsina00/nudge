@@ -20,6 +20,16 @@ extern "C" {
     fn CGPreflightPostEventAccess() -> bool;
     fn CGRequestPostEventAccess() -> bool;
     fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
+    fn CGCursorIsDrawnInFramebuffer() -> bool;
+}
+
+/// Is the pointer currently drawn on screen?
+///
+/// Apps hide the cursor all the time -- video players, presentations, editors that
+/// hide it while you type, games. A companion that keeps hovering next to a cursor
+/// that is not there stops being a companion and becomes a smudge on the screen.
+pub fn cursor_visible() -> bool {
+    unsafe { CGCursorIsDrawnInFramebuffer() }
 }
 
 /// Has the user allowed us to post input events?

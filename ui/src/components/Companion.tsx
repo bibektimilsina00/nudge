@@ -30,9 +30,17 @@ const SNAP = "cubic-bezier(0.23, 1, 0.32, 1)";
  * out for a microphone glyph would throw away the one thing that makes the
  * companion recognisable between states.
  */
-export function Companion({ mode }: { mode: CompanionMode }) {
+export function Companion({
+  mode,
+  anchored = false,
+}: {
+  mode: CompanionMode;
+  /** Sit still and centred, for the panel, instead of chasing the cursor. */
+  anchored?: boolean;
+}) {
   const listening = mode === "listening";
   const shell = useRef<HTMLDivElement>(null);
+  const skin = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const wave = useRef<SVGPathElement>(null);
 
@@ -46,6 +54,7 @@ export function Companion({ mode }: { mode: CompanionMode }) {
   });
 
   useEffect(() => {
+    if (anchored) return;
     const target = { x: -200, y: -200 };
     const shown = { x: -200, y: -200 };
     const level = { raw: 0, shown: 0 };
@@ -58,6 +67,12 @@ export function Companion({ mode }: { mode: CompanionMode }) {
       }),
       listen<number>("level", (e) => {
         level.raw = Math.min(1, Math.max(0, e.payload));
+      }),
+      // Apps hide the pointer constantly -- video, presentations, editors while
+      // you type. Written straight to the node like everything else here, so a
+      // visibility flicker never costs a React render.
+      listen<boolean>("cursor-visible", (e) => {
+        if (skin.current) skin.current.style.opacity = e.payload ? "1" : "0";
       }),
     ];
 
@@ -110,10 +125,18 @@ export function Companion({ mode }: { mode: CompanionMode }) {
       cancelAnimationFrame(frame);
       subs.forEach((p) => void p.then((un) => un()));
     };
-  }, []);
+  }, [anchored]);
 
   return (
-    <div ref={shell} aria-hidden className="pointer-events-none fixed top-0 left-0">
+    <div
+      ref={shell}
+      aria-hidden
+      className={
+        anchored
+          ? "relative grid place-items-center"
+          : "pointer-events-none fixed top-0 left-0"
+      }
+    >
       <div ref={body} className="origin-center will-change-transform">
         <div className="absolute -translate-x-1/2 -translate-y-1/2">
           <div className="relative grid size-14 place-items-center">

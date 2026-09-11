@@ -29,6 +29,20 @@
         "width": 1512,
         "height": 982,
         "visibleOnAllWorkspaces": true
+      },
+      {
+        "label": "panel",
+        "url": "index.html",
+        "title": "Nudge",
+        "width": 420,
+        "height": 300,
+        "transparent": true,
+        "decorations": false,
+        "resizable": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "shadow": true
       }
     ]
   },

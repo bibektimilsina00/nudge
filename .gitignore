@@ -8,3 +8,6 @@ config.toml
 .env.*
 dist/
 .signing-identity
+
+# Reference only: another project's source, not ours to ship.
+clicky/

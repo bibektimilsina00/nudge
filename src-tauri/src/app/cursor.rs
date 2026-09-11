@@ -13,10 +13,33 @@ pub fn follow(app: &AppHandle) {
     std::thread::spawn(move || {
         let mut last = (f64::MIN, f64::MIN);
         let mut was_down = false;
+        let mut shown = true;
         let mut tick: u32 = 0;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(16));
             tick = tick.wrapping_add(1);
+
+            // Check the overlay's Space membership ten times a second.
+            //
+            // Measured, not guessed: a poll of the window server showed Nudge's
+            // window ABSENT from the on-screen list the moment a full-screen Space
+            // activated -- not hidden behind the app, removed from the Space. The
+            // collection behaviour set at startup does not survive, and no window
+            // event we can subscribe to fires on a Space change, so there is nothing
+            // to hook.
+            //
+            // ponytail: polling instead of observing
+            // NSWorkspaceActiveSpaceDidChangeNotification, which needs an
+            // Objective-C observer object to carry a Rust callback. At 1Hz the
+            // overlay visibly blinked out on each Space change; at 10Hz the gap is
+            // under a frame or two, and the check is one getter that usually says
+            // "already fine".
+            if tick % 6 == 0 {
+                let handle = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    super::overlay::keep_everywhere(&handle);
+                });
+            }
 
             // Microphone level, at half the poll rate. 30Hz is plenty for a
             // waveform and halves the IPC traffic while the key is held.
@@ -32,6 +55,13 @@ pub fn follow(app: &AppHandle) {
 
             // Release, not press: a click is only finished when the button comes
             // back up, and reporting the press would fire mid-drag too.
+            // The companion belongs to the pointer; when the pointer goes, it goes.
+            let visible = click::cursor_visible();
+            if visible != shown {
+                shown = visible;
+                app.emit("cursor-visible", visible).ok();
+            }
+
             let down = click::left_button_down();
             if was_down && !down {
                 app.emit("click", [x, y]).ok();

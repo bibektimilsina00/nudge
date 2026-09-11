@@ -1,6 +1,6 @@
 //! The frontend's entire API surface. Thin on purpose: every one of these is a
 //! translation from an IPC call into a `core` call, and nothing more.
-use super::state::{Auto, Screen, Settle, Voice};
+use super::state::{Auto, Docked, Screen, Settle, Voice};
 use crate::core::provider::{Act, Step};
 use crate::core::session::Nudge;
 use crate::core::{click, keyboard, launch, speech};
@@ -103,6 +103,59 @@ pub fn cancel(app: AppHandle, silence: bool) {
         speech::hush();
     }
     app.state::<Nudge>().end();
+}
+
+/// Is the companion parked in the panel?
+#[tauri::command]
+pub fn docked(app: AppHandle) -> bool {
+    app.state::<Docked>().0.on()
+}
+
+/// Park the companion in the panel, or release it onto the screen.
+#[tauri::command]
+pub fn set_docked(app: AppHandle, docked: bool) {
+    app.state::<Docked>().0.set(docked);
+    // Both windows draw the companion, so both need to know which of them owns it.
+    app.emit("docked", docked).ok();
+    if !docked {
+        // Releasing it is the point of pressing the button; the panel has done its
+        // job and standing in front of the screen is the opposite of helping.
+        if let Some(panel) = super::panel::window(&app) {
+            let _ = panel.hide();
+        }
+    }
+}
+
+/// Turn "click for me" on or off from the panel.
+///
+/// Refuses to report itself on without the permission that makes it work: a switch
+/// that looks enabled while silently doing nothing is worse than one that will not
+/// move.
+#[tauri::command]
+pub fn set_auto(app: AppHandle, on: bool) -> bool {
+    let allowed = !on || click::may_click() || click::request_click_permission();
+    app.state::<Auto>().0.set(on && allowed);
+    if on && !allowed {
+        app.emit(
+            "error",
+            "Clicking needs Accessibility: System Settings > Privacy & Security > \
+             Accessibility, then reopen Nudge.",
+        )
+        .ok();
+    }
+    on && allowed
+}
+
+/// Is "click for me" on?
+#[tauri::command]
+pub fn auto(app: AppHandle) -> bool {
+    app.state::<Auto>().0.on()
+}
+
+/// Let the panel size itself to its content.
+#[tauri::command]
+pub fn fit_panel(app: AppHandle, height: f64) {
+    super::panel::fit(&app, height);
 }
 
 /// Asking needs the keyboard; pointing must not steal a single click.

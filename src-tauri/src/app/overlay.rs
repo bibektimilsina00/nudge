@@ -29,6 +29,8 @@ pub fn fit(app: &AppHandle) -> tauri::Result<Screen> {
         None => Screen { w: 1512.0, h: 982.0, scale: 2.0 },
     };
     win.set_ignore_cursor_events(true)?;
+    // Never focusable at rest -- see set_prompt_mode.
+    let _ = win.set_focusable(false);
     follow_everywhere(&win);
 
     // Safety net. While asking, this window owns the keyboard; if it somehow ends
@@ -68,6 +70,16 @@ pub fn set_prompt_mode(app: &AppHandle, asking: bool) -> tauri::Result<()> {
     // quietly sinks back under the menus after the first question.
     follow_everywhere(&win);
 
+    // The overlay is focusable only while it is asking something.
+    //
+    // This is what actually kept the companion out of full-screen Spaces. A window
+    // the system considers focusable is one it considers part of a Space, and it is
+    // evicted when a full-screen Space takes over -- the window server reported
+    // ours ABSENT the moment VS Code went full screen. Clicky's overlay hard-codes
+    // canBecomeKey to false and needs no Space handling at all; tao backs the same
+    // method with a `focusable` ivar, which `set_focusable` writes.
+    let _ = win.set_focusable(asking);
+
     if asking {
         let (w, h) = PROMPT;
         win.set_size(LogicalSize::new(w, h))?;
@@ -87,6 +99,49 @@ pub fn set_prompt_mode(app: &AppHandle, asking: bool) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Put the overlay back if the window server has dropped it from the current
+/// Space. Cheap enough to run ten times a second.
+///
+/// Measured: entering a full-screen Space removes our window from the on-screen
+/// list outright, and the collection behaviour set at startup does not survive it.
+/// No window event fires on a Space change, so there is nothing to subscribe to --
+/// this polls a getter and only does work when the answer is wrong.
+#[cfg(target_os = "macos")]
+pub fn keep_everywhere(app: &AppHandle) {
+    use objc2_app_kit::NSWindow;
+
+    let win = window(app);
+    let Ok(ptr) = win.ns_window() else { return };
+    if ptr.is_null() {
+        return;
+    }
+    let ns: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+
+    // Only the cheap, idempotent setters belong on a 10Hz timer.
+    //
+    // `setStyleMask` does not: it rebuilds the window frame, and calling it ten
+    // times a second took the overlay out of the window list entirely -- the poll
+    // meant to keep it alive was what killed it. Style, focusability and
+    // deactivation behaviour are set once, in `fit`.
+    //
+    // No early-out on isOnActiveSpace() either: with CanJoinAllSpaces set, AppKit
+    // answers `true` unconditionally, even while the window server has the window
+    // out of the current Space.
+    ns.setCollectionBehavior(behavior());
+    ns.setLevel(objc2_app_kit::NSScreenSaverWindowLevel);
+    // Rejoining the Space is not enough on its own; it also has to be put back in
+    // front of it.
+    ns.orderFrontRegardless();
+    // If the webview was adopted into a window of ours, that is the one that has
+    // to stay in front; tao's is empty and ordered out.
+    super::native::keep_front();
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn keep_everywhere(app: &AppHandle) {
+    follow_everywhere(&window(app));
+}
+
 /// Make the overlay exist on every Space, above full-screen apps and open menus.
 ///
 /// This is the difference between a demo and a product. Nudge is pitched at people
@@ -102,7 +157,9 @@ pub fn set_prompt_mode(app: &AppHandle, asking: bool) -> tauri::Result<()> {
 /// also clears other apps' panels.
 #[cfg(target_os = "macos")]
 fn follow_everywhere(win: &WebviewWindow) {
-    use objc2_app_kit::{NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior};
+    use objc2_app_kit::{
+        NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+    };
 
     let Ok(ptr) = win.ns_window() else { return };
     if ptr.is_null() {
@@ -110,28 +167,33 @@ fn follow_everywhere(win: &WebviewWindow) {
     }
     // Tauri hands back the NSWindow it owns; borrow it, never take ownership.
     let window: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
-    // Deliberately WITHOUT FullScreenAuxiliary. Its name misleads: it means
-    // "auxiliary to this application's own full-screen window", not "may float
-    // over full-screen". Setting it does not grant floating over another app's
-    // Space, and it suppresses the all-spaces behaviour that does -- verified by
-    // reading the behaviour back (NUDGE_DEBUG_WINDOW=1) while the overlay stayed
-    // invisible in full screen.
+    // All three, matching what Clicky's OverlayWindow uses -- worth stating because
+    // an earlier version of this file dropped FullScreenAuxiliary after concluding
+    // it was harmful. It was not: at the time, Tauri's alwaysOnTop was still
+    // resetting the level out from under us, and the wrong flag got the blame.
     //
-    // CanJoinAllSpaces puts the window in every Space including full-screen ones;
-    // Stationary stops it sliding around during Space transitions. That pair plus
-    // an accessory activation policy is what screen-annotation tools use.
-    let behavior = NSWindowCollectionBehavior::CanJoinAllSpaces
-        | NSWindowCollectionBehavior::Stationary
-        // Never a target for cmd-tab or the window cycler. It is a cursor, not a
-        // window anyone means to switch to.
-        | NSWindowCollectionBehavior::IgnoresCycle;
-    // Escape hatch for trying combinations without a rebuild; the bits are in
-    // NSWindowCollectionBehavior.
-    let behavior = match std::env::var("NUDGE_WINDOW_BEHAVIOR").ok().and_then(|v| v.parse().ok()) {
-        Some(bits) => NSWindowCollectionBehavior(bits),
-        None => behavior,
-    };
-    window.setCollectionBehavior(behavior);
+    //   CanJoinAllSpaces   put the window in every Space, including full-screen ones
+    //   Stationary         do not slide it around during Space transitions
+    //   FullScreenAuxiliary  permit it alongside a full-screen window
+    //   IgnoresCycle       never a cmd-tab target; it is a cursor, not a window
+    window.setCollectionBehavior(behavior());
+
+    // Borderless, matching Clicky's OverlayWindow exactly.
+    //
+    // tao builds this window as FullSizeContentView|Miniaturizable (32772), which
+    // also makes it key-capable. A key-capable window is a window the system
+    // believes belongs to a Space -- and it gets evicted when a full-screen Space
+    // takes over, which is precisely what the window-server poll showed. Borderless
+    // makes canBecomeKeyWindow false, and the overlay stops being treated as a
+    // window someone might switch to.
+    window.setStyleMask(NSWindowStyleMask::Borderless);
+
+    // The missing piece. Nudge is an accessory app, so it is *never* the active
+    // application -- and a window that hides on deactivation is therefore a window
+    // that is hidden almost all the time. It happened to survive on the desktop and
+    // vanish in full screen, which is what sent the last three attempts hunting
+    // through collection-behaviour flags.
+    window.setHidesOnDeactivate(false);
 
     // Window level is what decides both "does it survive full screen" and "is it
     // above that menu", and the ladder is unforgiving:
@@ -146,6 +208,15 @@ fn follow_everywhere(win: &WebviewWindow) {
     window.setLevel(NSScreenSaverWindowLevel);
 
     if std::env::var("NUDGE_DEBUG_WINDOW").is_ok() {
+        println!(
+            "nudge: styleMask={:?} canBecomeKeyWindow={} onActiveSpace={} hidesOnDeactivate={}",
+            window.styleMask(),
+            window.canBecomeKeyWindow(),
+            window.isOnActiveSpace(),
+            window.hidesOnDeactivate(),
+        );
+    }
+    if std::env::var("NUDGE_DEBUG_WINDOW_VERBOSE").is_ok() {
         let class: &objc2_foundation::NSString = unsafe { objc2::msg_send![window, className] };
         println!(
             "nudge: window class={class} level={} behavior={:?} visible={}",
@@ -159,4 +230,17 @@ fn follow_everywhere(win: &WebviewWindow) {
 #[cfg(not(target_os = "macos"))]
 fn follow_everywhere(win: &WebviewWindow) {
     let _ = win.set_visible_on_all_workspaces(true);
+}
+
+/// The overlay's Space membership, in one place so the setup and the upkeep cannot
+/// drift apart.
+#[cfg(target_os = "macos")]
+fn behavior() -> objc2_app_kit::NSWindowCollectionBehavior {
+    use objc2_app_kit::NSWindowCollectionBehavior as B;
+    let default = B::CanJoinAllSpaces | B::Stationary | B::FullScreenAuxiliary | B::IgnoresCycle;
+    // Escape hatch for trying combinations without a rebuild.
+    match std::env::var("NUDGE_WINDOW_BEHAVIOR").ok().and_then(|v| v.parse().ok()) {
+        Some(bits) => B(bits),
+        None => default,
+    }
 }

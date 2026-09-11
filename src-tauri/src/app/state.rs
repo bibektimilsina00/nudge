@@ -26,6 +26,11 @@ impl Flag {
     }
 }
 
+/// Whether the companion is sitting in the panel rather than following the cursor.
+/// Undocking is how you put it to work; docking is how you get your screen back
+/// without quitting.
+pub struct Docked(pub Flag);
+
 /// Whether Nudge clicks for you, or only points.
 pub struct Auto(pub Flag);
 
