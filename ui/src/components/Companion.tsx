@@ -40,7 +40,6 @@ export function Companion({
 }) {
   const listening = mode === "listening";
   const shell = useRef<HTMLDivElement>(null);
-  const skin = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
   const wave = useRef<SVGPathElement>(null);
 
@@ -68,11 +67,11 @@ export function Companion({
       listen<number>("level", (e) => {
         level.raw = Math.min(1, Math.max(0, e.payload));
       }),
-      // Apps hide the pointer constantly -- video, presentations, editors while
-      // you type. Written straight to the node like everything else here, so a
-      // visibility flicker never costs a React render.
+      // Fade out while the pointer is at rest -- which is every case where an app
+      // hides it: video, presentations, an editor while you type. Written straight
+      // to the node like the transform above, so it never costs a React render.
       listen<boolean>("cursor-visible", (e) => {
-        if (skin.current) skin.current.style.opacity = e.payload ? "1" : "0";
+        if (body.current) body.current.style.opacity = e.payload ? "1" : "0";
       }),
     ];
 
@@ -137,7 +136,12 @@ export function Companion({
           : "pointer-events-none fixed top-0 left-0"
       }
     >
-      <div ref={body} className="origin-center will-change-transform">
+      <div
+        ref={body}
+        // Only opacity transitions: the transform is rewritten every frame and
+        // must not be interpolated on top of that.
+        className="origin-center transition-opacity duration-300 ease-[cubic-bezier(0.23,1,0.32,1)] will-change-transform"
+      >
         <div className="absolute -translate-x-1/2 -translate-y-1/2">
           <div className="relative grid size-14 place-items-center">
             {listening && (

@@ -60,6 +60,7 @@ fn on_key(app: &AppHandle, state: ShortcutState) {
                 // Key repeat fires Pressed over and over; only the first one counts.
                 *held = Some((std::time::Instant::now(), voice::start()));
                 app.emit("listening", ()).ok();
+                app.emit("status", "listening").ok();
             }
         }
         ShortcutState::Released => {

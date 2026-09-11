@@ -47,6 +47,24 @@ impl Nudge {
         *self.session.lock().unwrap() = None;
     }
 
+    /// What the current session is working towards, if anything. The agent
+    /// runtime needs it to restart the loop under its own control.
+    pub fn goal(&self) -> String {
+        self.session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|s| s.goal.clone())
+            .unwrap_or_default()
+    }
+
+    /// Fold an answer into the context, so the next turn knows what was said.
+    pub fn note(&self, line: String) {
+        if let Some(s) = self.session.lock().unwrap().as_mut() {
+            s.done.push(line);
+        }
+    }
+
     pub fn active(&self) -> bool {
         self.session.lock().unwrap().is_some()
     }

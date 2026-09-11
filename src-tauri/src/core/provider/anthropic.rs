@@ -54,6 +54,30 @@ impl Provider for Anthropic {
                 // computer tool can only click, so "open Blender" has no way to
                 // come back as anything but prose otherwise.
                 {
+                    "name": "run_agent",
+                    "description": "Carry out a whole task unattended, step by step, \
+                                    rather than pointing at one control.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "title": {"type": "string", "description": "Short name for the task."},
+                        },
+                        "required": ["title"],
+                    },
+                },
+                {
+                    "name": "ask_user",
+                    "description": "Ask the user something you cannot see or decide. \
+                                    Only when genuinely blocked.",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": {
+                            "question": {"type": "string"},
+                        },
+                        "required": ["question"],
+                    },
+                },
+                {
                     "name": "open_url",
                     "description": "Open a web page in the browser. Prefer this when \
                                     the machine has no application for what was asked.",
@@ -129,6 +153,17 @@ fn read_step(resp: &serde_json::Value) -> Option<Step> {
             .iter()
             .find(|b| b["type"] == "tool_use" && b["name"] == name)
     };
+
+    if let Some(q) = tool("ask_user").and_then(|b| b["input"]["question"].as_str()) {
+        return Some(Step::Question { question: q.to_string() });
+    }
+
+    if let Some(title) = tool("run_agent").and_then(|b| b["input"]["title"].as_str()) {
+        return Some(Step::Agent {
+            title: title.to_string(),
+            say: if say.is_empty() { format!("Starting: {title}") } else { say },
+        });
+    }
 
     if let Some(url) = tool("open_url").and_then(|b| b["input"]["url"].as_str()) {
         return Some(Step::Open {

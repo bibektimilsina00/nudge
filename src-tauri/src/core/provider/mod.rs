@@ -51,6 +51,16 @@ pub enum Step {
     /// Type into whatever is focused. `submit` presses Return afterwards, which
     /// is what an address bar or a search box almost always wants.
     Type { text: String, submit: bool, say: String },
+    /// A whole task rather than a next click: Nudge takes it away and finishes
+    /// it on its own. `title` is what the progress card is called.
+    Agent { title: String, say: String },
+    /// Blocked on something only the user knows -- which song, which Sara,
+    /// whether the QR code has been scanned yet. The loop pauses here.
+    ///
+    /// Named `Question` and not `Ask` because [`Ask`] in this module is the
+    /// context *given to* the model; two things called Ask pointing opposite ways
+    /// would be a reliable source of confusion.
+    Question { question: String },
     /// Just talking. Not every hotkey press is a task -- sometimes it is a
     /// question, a greeting, or someone bored at 2am.
     Reply { say: String },
@@ -65,6 +75,8 @@ impl Step {
             | Step::Launch { say, .. }
             | Step::Open { say, .. }
             | Step::Type { say, .. }
+            | Step::Agent { say, .. }
+            | Step::Question { question: say }
             | Step::Reply { say } => say,
         }
     }
@@ -166,6 +178,17 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          follow, which an address bar or a search box almost always wants.\n\
          If the goal is already achieved, say so and mark it done.\n\
          If it was never a task at all, reply and leave it there.\n\n\
+         Some requests are a whole job rather than a next click -- \"play X on \
+         YouTube\", \"message Sara on WhatsApp\", \"find me a flight\". Those are \
+         agent work: answer with agent and a short title, and Nudge will carry \
+         the task out itself, step by step, without the user watching. Choose it \
+         when the user wants the outcome, not directions. Choose a point when \
+         they want to know where something is.\n\
+         While carrying out a task, ask only when genuinely blocked on something \
+         you cannot see or decide -- which of several matches they meant, a \
+         search term they never gave, a login only they can complete. Do not ask \
+         to confirm what they already said; an agent that checks in at every step \
+         is worse than none.\n\n\
          Applications installed on this machine:\n{apps}"
     )
 }
@@ -179,6 +202,36 @@ pub(crate) fn first_json(text: &str) -> Option<serde_json::Value> {
 
 /// Unknown or missing means click: it is what most targets want, and a wrong
 /// click is recoverable where a wrong hover just stalls.
+/// Shared by the JSON providers: the outcomes that carry no coordinates.
+pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Option<Step> {
+    match kind {
+        "done" => Some(Step::Done { say }),
+        "unsure" => Some(Step::Unsure { say }),
+        "reply" => Some(Step::Reply { say }),
+        "launch" => Some(Step::Launch {
+            app: v["app"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "open" => Some(Step::Open {
+            url: v["url"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "type" => Some(Step::Type {
+            text: v["text"].as_str().unwrap_or_default().to_string(),
+            submit: v["submit"].as_bool().unwrap_or(false),
+            say,
+        }),
+        "agent" => Some(Step::Agent {
+            title: v["title"].as_str().unwrap_or("Working").to_string(),
+            say,
+        }),
+        "ask" | "question" => Some(Step::Question {
+            question: v["question"].as_str().unwrap_or(&say).to_string(),
+        }),
+        _ => None,
+    }
+}
+
 pub(crate) fn act_from(raw: Option<&str>) -> Act {
     match raw.unwrap_or("") {
         "doubleClick" | "double_click" | "double" => Act::DoubleClick,

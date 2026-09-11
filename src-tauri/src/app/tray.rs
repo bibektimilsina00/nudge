@@ -3,7 +3,7 @@
 use super::state::{Auto, Voice, VoiceMode};
 use crate::core::click;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Emitter, Manager};
 
 pub fn install(app: &AppHandle, hotkey: &str) -> tauri::Result<()> {
@@ -46,38 +46,6 @@ pub fn install(app: &AppHandle, hotkey: &str) -> tauri::Result<()> {
         .icon_as_template(true) // follows the light/dark menu bar like a native item
         .tooltip("Nudge")
         .menu(&menu)
-        // Left click opens the panel; the menu stays on right click. Without this
-        // the menu eats the left click and the panel can never be reached.
-        .show_menu_on_left_click(false)
-        .on_tray_icon_event(|tray, event| {
-            eprintln!("nudge: tray event {event:?}");
-            if let TrayIconEvent::Click {
-                button: MouseButton::Left,
-                button_state: MouseButtonState::Up,
-                rect,
-                ..
-            } = event
-            {
-                // Convert with the real scale factor, not 1.0. `to_physical`
-                // passes physical values through untouched but multiplies logical
-                // ones -- so a hardcoded 1.0 puts the panel at half the correct x
-                // on a Retina display, which is off the side of the screen for a
-                // menu bar item on the right.
-                let scale = tray
-                    .app_handle()
-                    .primary_monitor()
-                    .ok()
-                    .flatten()
-                    .map(|m| m.scale_factor())
-                    .unwrap_or(2.0);
-                let size = rect.size.to_physical::<f64>(scale);
-                let pos = rect.position.to_physical::<f64>(scale);
-                super::panel::toggle(
-                    tray.app_handle(),
-                    Some((pos.x, pos.y + size.height, size.width)),
-                );
-            }
-        })
         .on_menu_event(move |app, event| match event.id.as_ref() {
             "ask" => {
                 app.emit("ask", ()).ok();

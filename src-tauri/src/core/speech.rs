@@ -43,6 +43,26 @@ fn current(turn: u64) -> bool {
     TURN.load(Ordering::SeqCst) == turn
 }
 
+/// Is audio still coming out?
+///
+/// `try_wait` rather than `wait`: the caller polls this to know when to drop the
+/// "speaking" indicator, and blocking a task until the sentence ends would hold
+/// the runtime for as long as the voice does.
+pub fn is_playing() -> bool {
+    let mut slot = PLAYER.lock().unwrap();
+    match slot.as_mut() {
+        Some(child) => match child.try_wait() {
+            Ok(Some(_)) => {
+                *slot = None;
+                false
+            }
+            Ok(None) => true,
+            Err(_) => false,
+        },
+        None => false,
+    }
+}
+
 /// Stop mid-sentence. Escape should silence Nudge as completely as it hides it.
 pub fn hush() {
     begin();

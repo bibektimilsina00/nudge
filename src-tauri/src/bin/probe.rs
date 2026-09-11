@@ -77,6 +77,8 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         provider::Step::Launch { app, .. } => println!("  launch: {app}"),
         provider::Step::Open { url, .. } => println!("  open:   {url}"),
         provider::Step::Reply { .. } => println!("  reply:  (conversation, no action)"),
+        provider::Step::Agent { title, .. } => println!("  agent:  {title:?} (would run unattended)"),
+        provider::Step::Question { question } => println!("  ask:    {question:?}"),
         provider::Step::Type { text, submit, .. } => {
             println!("  type:   {text:?}{}", if submit { " + Return" } else { "" })
         }

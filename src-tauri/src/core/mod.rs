@@ -5,8 +5,10 @@
 //! unit-testable without spawning a window, and it is why the tests in here run in
 //! milliseconds.
 
+pub mod agent;
 pub mod capture;
 pub mod click;
+pub mod haptics;
 pub mod keyboard;
 pub mod launch;
 pub mod privacy;

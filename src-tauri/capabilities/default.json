@@ -4,7 +4,8 @@
   "description": "Overlay: draw, toggle click-through. Panel: settings dropdown.",
   "windows": [
     "overlay",
-    "panel"
+    "panel",
+    "agents"
   ],
   "permissions": [
     "core:default",

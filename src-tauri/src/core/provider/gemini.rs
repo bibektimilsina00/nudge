@@ -52,6 +52,8 @@ impl Provider for Gemini {
              {{\"kind\":\"launch\",\"app\":\"Blender\",\"say\":\"...\"}}\n\
              {{\"kind\":\"open\",\"url\":\"https://...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"reply\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"agent\",\"title\":\"Playing the song\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"ask\",\"question\":\"...\"}}\n\
              {{\"kind\":\"type\",\"text\":\"...\",\"submit\":true,\"say\":\"...\"}}\n\
              where y and x are normalised to 0-1000.",
             prompt(ask)
@@ -84,26 +86,8 @@ impl Provider for Gemini {
             .to_string();
         let v = first_json(&text).ok_or_else(|| no_point("gemini", text.clone()))?;
         let say = v["say"].as_str().unwrap_or("Here.").to_string();
-        match v["kind"].as_str() {
-            Some("done") => return Ok(Step::Done { say }),
-            Some("unsure") => return Ok(Step::Unsure { say }),
-            Some("reply") => return Ok(Step::Reply { say }),
-            Some("type") => {
-                return Ok(Step::Type {
-                    text: v["text"].as_str().unwrap_or_default().to_string(),
-                    submit: v["submit"].as_bool().unwrap_or(false),
-                    say,
-                })
-            }
-            Some("launch") => {
-                let app = v["app"].as_str().unwrap_or_default().to_string();
-                return Ok(Step::Launch { app, say });
-            }
-            Some("open") => {
-                let url = v["url"].as_str().unwrap_or_default().to_string();
-                return Ok(Step::Open { url, say });
-            }
-            _ => {}
+        if let Some(step) = super::simple_step(v["kind"].as_str().unwrap_or(""), &v, say.clone()) {
+            return Ok(step);
         }
 
         let pt: Vec<f64> = v["point"]

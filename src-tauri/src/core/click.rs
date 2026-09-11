@@ -20,16 +20,40 @@ extern "C" {
     fn CGPreflightPostEventAccess() -> bool;
     fn CGRequestPostEventAccess() -> bool;
     fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
-    fn CGCursorIsDrawnInFramebuffer() -> bool;
+    fn CGEventSourceSecondsSinceLastEventType(state: i32, event: u32) -> f64;
 }
 
-/// Is the pointer currently drawn on screen?
+// CGEventType values we care about.
+const KEY_DOWN: u32 = 10;
+const MOUSE_MOVED: u32 = 5;
+const LEFT_DOWN: u32 = 1;
+const RIGHT_DOWN: u32 = 3;
+const SCROLL: u32 = 22;
+
+fn since(event: u32) -> f64 {
+    const COMBINED: i32 = 0;
+    unsafe { CGEventSourceSecondsSinceLastEventType(COMBINED, event) }
+}
+
+/// Has macOS hidden the pointer because the user is typing?
 ///
-/// Apps hide the cursor all the time -- video players, presentations, editors that
-/// hide it while you type, games. A companion that keeps hovering next to a cursor
-/// that is not there stops being a companion and becomes a smudge on the screen.
-pub fn cursor_visible() -> bool {
-    unsafe { CGCursorIsDrawnInFramebuffer() }
+/// There is no public way to ask whether the cursor is visible.
+/// `CGCursorIsDrawnInFramebuffer` sounds like it and is not -- measured, it
+/// reports whether the cursor is composited in software and never changed once
+/// across a session. The private SkyLight calls that do answer are not something
+/// to ship in a loop that runs sixty times a second.
+///
+/// But the rule macOS follows is simple and observable from public events: typing
+/// hides the pointer, moving it brings it back. So whichever happened *more
+/// recently* is the answer -- no thresholds, no timers, and it stays hidden for as
+/// long as the real cursor does rather than for some duration we invented.
+pub fn pointer_hidden() -> bool {
+    let typed = since(KEY_DOWN);
+    let pointed = since(MOUSE_MOVED)
+        .min(since(LEFT_DOWN))
+        .min(since(RIGHT_DOWN))
+        .min(since(SCROLL));
+    typed < pointed
 }
 
 /// Has the user allowed us to post input events?

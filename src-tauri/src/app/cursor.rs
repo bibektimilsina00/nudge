@@ -14,6 +14,8 @@ pub fn follow(app: &AppHandle) {
         let mut last = (f64::MIN, f64::MIN);
         let mut was_down = false;
         let mut shown = true;
+        let notch = super::notch::measure();
+        let mut at_notch = false;
         let mut tick: u32 = 0;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(16));
@@ -55,20 +57,52 @@ pub fn follow(app: &AppHandle) {
 
             // Release, not press: a click is only finished when the button comes
             // back up, and reporting the press would fire mid-drag too.
-            // The companion belongs to the pointer; when the pointer goes, it goes.
-            let visible = click::cursor_visible();
-            if visible != shown {
-                shown = visible;
-                app.emit("cursor-visible", visible).ok();
-            }
-
             let down = click::left_button_down();
             if was_down && !down {
                 app.emit("click", [x, y]).ok();
             }
             was_down = down;
 
-            if (x - last.0).abs() < 0.5 && (y - last.1).abs() < 0.5 {
+            // Pointing at the notch opens the dock. Polling rather than a tracking
+            // area, because the window is click-through when closed and therefore
+            // never sees a mouse event of its own.
+            let hovering = notch.is_hovered(x, y, at_notch);
+            if hovering != at_notch {
+                at_notch = hovering;
+                super::panel::set_interactive(&app, hovering);
+                app.emit("notch", hovering).ok();
+                if hovering {
+                    // Arriving only. A tick on the way out would make leaving feel
+                    // like an action, and leaving is just moving on.
+                    //
+                    // The burst is spaced from a throwaway thread rather than by
+                    // sleeping between ticks on the main thread, which would stall
+                    // the UI for the length of the thunk.
+                    let handle = app.clone();
+                    std::thread::spawn(move || {
+                        for i in 0..crate::core::haptics::BURST {
+                            let _ = handle.run_on_main_thread(crate::core::haptics::tick);
+                            if i + 1 < crate::core::haptics::BURST {
+                                std::thread::sleep(crate::core::haptics::GAP);
+                            }
+                        }
+                    });
+                }
+            }
+
+            let moved = (x - last.0).abs() >= 0.5 || (y - last.1).abs() >= 0.5;
+
+            // The companion belongs to the pointer, so it goes when the pointer
+            // goes -- but *only* then. An earlier version faded it after a few
+            // seconds of stillness, which caught the typing case by accident and
+            // also hid it whenever anyone paused to read.
+            let visible = !click::pointer_hidden();
+            if visible != shown {
+                shown = visible;
+                app.emit("cursor-visible", visible).ok();
+            }
+
+            if !moved {
                 continue;
             }
             last = (x, y);

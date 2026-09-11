@@ -48,6 +48,8 @@ pub enum VoiceMode {
 }
 
 impl VoiceMode {
+    /// Stable identifiers, shared by the menu bar and the panel so the two cannot
+    /// disagree about what the modes are called.
     pub const ALL: [(&'static str, VoiceMode); 3] = [
         ("voice:off", VoiceMode::Off),
         ("voice:system", VoiceMode::System),

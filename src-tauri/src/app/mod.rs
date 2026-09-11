@@ -2,7 +2,9 @@
 //! `core` into the OS, and `core` never reaches back the other way.
 
 pub mod commands;
+pub(crate) mod agent;
 mod native;
+mod notch;
 mod panel;
 mod cursor;
 mod hotkey;
@@ -55,11 +57,14 @@ pub fn run() {
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));
+            app.manage(crate::core::agent::Agents::default());
 
             println!(
                 "nudge: windows = {:?}",
                 app.webview_windows().keys().collect::<Vec<_>>()
             );
+            panel::dock_to_notch(handle);
+            agent::place_window(handle);
             tray::install(handle, &hotkey)?;
             cursor::follow(handle);
             hotkey::register(handle, &hotkey)?;
@@ -75,6 +80,15 @@ pub fn run() {
             commands::fit_panel,
             commands::auto,
             commands::set_auto,
+            commands::voice_mode,
+            commands::set_voice_mode,
+            commands::microphone,
+            commands::version,
+            commands::quit,
+            commands::agents,
+            commands::answer_agent,
+            commands::stop_agent,
+            commands::dismiss_agent,
         ])
         .run(tauri::generate_context!())
         .expect("nudge failed to start");

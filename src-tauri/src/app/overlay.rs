@@ -158,7 +158,7 @@ pub fn keep_everywhere(app: &AppHandle) {
 #[cfg(target_os = "macos")]
 fn follow_everywhere(win: &WebviewWindow) {
     use objc2_app_kit::{
-        NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+        NSScreenSaverWindowLevel, NSWindow, NSWindowStyleMask,
     };
 
     let Ok(ptr) = win.ns_window() else { return };

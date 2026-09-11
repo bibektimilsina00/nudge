@@ -60,6 +60,13 @@ pub fn request_access() {
 #[cfg(not(target_os = "macos"))]
 pub fn request_access() {}
 
+/// The input device that recording will actually use, for showing in settings.
+/// A name here that disagrees with what is recorded would be worse than no name.
+pub fn input_name() -> Option<String> {
+    use cpal::traits::{DeviceTrait, HostTrait};
+    cpal::default_host().default_input_device()?.name().ok()
+}
+
 /// A recording in progress. `cpal::Stream` is `!Send`, so it never leaves the
 /// thread that built it -- the handle talks to that thread instead of owning it.
 pub struct Recording {

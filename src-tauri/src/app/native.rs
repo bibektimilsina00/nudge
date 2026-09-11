@@ -23,8 +23,8 @@
 use objc2::rc::Retained;
 use objc2::MainThreadOnly;
 use objc2_app_kit::{
-    NSBackingStoreType, NSColor, NSScreen, NSScreenSaverWindowLevel, NSWindow,
-    NSWindowCollectionBehavior, NSWindowOrderingMode, NSWindowStyleMask,
+    NSBackingStoreType, NSColor, NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior,
+    NSWindowOrderingMode, NSWindowStyleMask,
 };
 use objc2_foundation::{NSPoint, NSRect, NSSize};
 use objc2_foundation::MainThreadMarker;
@@ -113,12 +113,29 @@ pub fn keep_front() {
     }
 }
 
-/// Follow the display when the screen resolution or arrangement changes.
-pub fn resize_to_screen() {
-    let (Some(win), Some(mtm)) = (overlay(), MainThreadMarker::new()) else {
+/// Give any Tauri window the overlay's Space behaviour and level.
+///
+/// The notch panel needs the same treatment as the companion: above the menu bar,
+/// present on every Space. It is anchored the same way too -- see `anchor_overlay`
+/// for why a parent window is what makes that stick.
+pub fn float_everywhere(win: &tauri::WebviewWindow) {
+    let Ok(ptr) = win.ns_window() else { return };
+    if ptr.is_null() {
         return;
-    };
-    if let Some(screen) = NSScreen::mainScreen(mtm) {
-        win.setFrame_display(screen.frame(), true);
+    }
+    let ns: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+    ns.setLevel(NSScreenSaverWindowLevel);
+    ns.setCollectionBehavior(
+        NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::Stationary
+            | NSWindowCollectionBehavior::FullScreenAuxiliary,
+    );
+    ns.setHidesOnDeactivate(false);
+    ns.setHasShadow(false);
+
+    if let Some(anchor) = overlay() {
+        // Same trick as the companion: a child window follows its parent between
+        // Spaces, which is the only thing that survives going full screen.
+        unsafe { anchor.addChildWindow_ordered(ns, NSWindowOrderingMode::Above) };
     }
 }
