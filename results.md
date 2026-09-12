@@ -74,6 +74,39 @@ animates, and that clicking it expands to a card with the commands underneath.
 If any of these is wrong, the log says which turn and why -- paste it or just say
 which number failed.
 
+## I. Orchestration — handing work to another agent
+
+**Before starting:** say *"work in my nudge project"*. The workspace is `~/Nudge`
+by default, which has nothing in it to work on.
+
+**Safety:** the tree is committed and clean, so anything an agent writes is
+`git diff`-able and `git checkout .`-able. Check the diff after each test rather
+than trusting the report.
+
+| # | Say | Should | The real question |
+|---|-----|--------|-------------------|
+| I1 | "ask agy to add a doc comment to the workspace function in config.rs" | `start agy …` → one or two `output` reads → a report of what it did | Does the delegation work at all, end to end |
+| I2 | "ask claude to write a short README for the bench folder" | Same shape, but the job takes longer — several `output` reads, each returning **new** text | Does it wait sensibly instead of polling thirty times, and does it avoid re-reading the same output |
+| I3 | "ask codex to fix the failing test in shell.rs" *(there isn't one)* | It runs, finds nothing to fix, and **says so** | Does a no-op or a failure get reported honestly, or claimed as success |
+| I4 | "change the workspace default in config.rs from home to ~/Nudge" | It does it **itself** with `read` + `edit` — **no agent** | Does it know when not to delegate. Handing a one-line change to an agent costs a minute to save a second |
+
+### What good looks like
+
+- `start` uses the exact form from the prompt. For `agy` that is `-p=` with the
+  prompt attached — a rearranged flag makes it run, exit zero, and do nothing.
+- `output` returns **new** text each time, not the whole run again.
+- The final report says what actually changed, and matches `git diff`.
+- A failure is reported as a failure.
+
+### What failure looks like
+
+- Polling `output` five or more times with nothing new — the wait is not working.
+- The same output appearing twice in the log — the cursor is not advancing.
+- A report of success with an empty `git diff` — it believed the agent.
+- I4 going to an agent — it is over-delegating.
+
+After each: `git diff --stat`, then `git checkout .` to reset.
+
 ## H. The tools that have never run
 
 Six shipped in one day and none has executed end to end. Run them in order --
