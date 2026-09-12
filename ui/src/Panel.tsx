@@ -10,7 +10,7 @@ import { Settings } from "./panel/Settings";
 /**
  * The notch dock.
  *
- * Laid out to match HeyClicky's panel closely, on request. Several sections are
+ * Several sections are
  * deliberately inert -- Agents, Upgrade, Skills, Integrations -- because the
  * features do not exist yet; they are here as placeholders so the shape is settled
  * before the behaviour arrives. Anything wired up is marked below; everything else

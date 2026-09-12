@@ -8,7 +8,7 @@ const VOICE_LABEL: Record<VoiceMode, string> = { off: "Off", system: "System", g
 const NEXT: Record<VoiceMode, VoiceMode> = { off: "system", system: "gemini", gemini: "off" };
 
 /**
- * The settings sheet, laid out to match HeyClicky's on request.
+ * The settings sheet.
  *
  * No plan or usage section: theirs exists to sell an upgrade, and Nudge has
  * nothing to sell. A fictional quota in front of the user every time they open

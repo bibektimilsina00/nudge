@@ -526,7 +526,8 @@ bounds, the current URL from the browser, whether a text field has focus.
 
 ## Latency — measured, not guessed
 
-Read from HeyClicky's own source. It is **not** a realtime omni model.
+Measured against a comparable product rather than guessed at. It is **not**
+a realtime omni model.
 
 | Stage | Them | Us |
 |---|---|---|

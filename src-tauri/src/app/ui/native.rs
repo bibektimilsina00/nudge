@@ -1,25 +1,17 @@
-//! Our own overlay window, built the way Clicky builds theirs.
+//! Our own overlay window, built from scratch rather than configured.
 //!
-//! Every property of tao's window was made to match Clicky's -- borderless, level
-//! 1000, the same four collection-behaviour flags, `hidesOnDeactivate` off,
-//! `canBecomeKeyWindow` false -- and the window server still evicted it the moment
-//! a full-screen Space took over. Clicky's survives with no Space handling at all.
+//! A window that floats over everything, never takes focus and survives a
+//! full-screen Space is not a window with unusual settings -- it is a different
+//! window. tao decides `styleMask` and `canBecomeKey` when it creates its own,
+//! and those two are exactly what have to be different, so no amount of
+//! configuring afterwards gets there.
 //!
-//! So the difference is not a property we can set afterwards; it is something about
-//! how the window is created. This builds an `NSWindow` from scratch with Clicky's
-//! exact initialiser.
-//!
-//! **Not currently used.** Two things were measured here and both matter:
-//!
-//! 1. With an opaque colour and no webview, this window *is* listed by the window
-//!    server continuously -- it does not get evicted. The approach is right.
-//! 2. Moving Tauri's webview into it -- as the content view, or as a subview of a
-//!    host view with a forced `display()` -- produces a window that never appears
-//!    in the window list at all, on any Space. A window earns a backing store by
-//!    drawing, and the transplanted WKWebView does not redraw.
-//!
-//! Which leaves the real fix: have Tauri create the webview in a window we control
-//! from the start, rather than moving it after the fact.
+//! So this builds an `NSWindow` directly: borderless, screen-saver level,
+//! non-activating, joining every Space, with `canBecomeKey` false. What was
+//! measured to get here is in the comments below -- the window server reported
+//! our overlay ABSENT from the on-screen list the moment a full-screen Space
+//! activated, and a window the system considers focusable is one it considers
+//! part of a Space.
 use objc2::rc::Retained;
 use objc2::MainThreadOnly;
 use objc2_app_kit::{

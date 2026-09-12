@@ -143,7 +143,7 @@ fn follow_everywhere(win: &WebviewWindow) {
     }
     // Tauri hands back the NSWindow it owns; borrow it, never take ownership.
     let window: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
-    // All three, matching what Clicky's OverlayWindow uses -- worth stating because
+    // All three together, and worth stating because
     // an earlier version of this file dropped FullScreenAuxiliary after concluding
     // it was harmful. It was not: at the time, Tauri's alwaysOnTop was still
     // resetting the level out from under us, and the wrong flag got the blame.
@@ -154,7 +154,7 @@ fn follow_everywhere(win: &WebviewWindow) {
     //   IgnoresCycle       never a cmd-tab target; it is a cursor, not a window
     window.setCollectionBehavior(behavior());
 
-    // Borderless, matching Clicky's OverlayWindow exactly.
+    // Borderless: a title bar cannot be made to not take focus.
     //
     // tao builds this window as FullSizeContentView|Miniaturizable (32772), which
     // also makes it key-capable. A key-capable window is a window the system

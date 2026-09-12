@@ -9,7 +9,6 @@ config.toml
 dist/
 .signing-identity
 
-# Reference only: other people's source, read for design and never shipped.
-# Both are here to be compared against, not borrowed from.
+# Other people's source, kept locally for reference and never shipped.
 clicky/
 opencode/
