@@ -224,6 +224,96 @@ is genuinely needed for, rather than the case it currently handles alone.
 
 ---
 
+## Why this approach
+
+### What is wrong with the one we have
+
+Nothing in the current pipeline was a bad decision. That is the interesting part.
+
+It is serial because nobody decided it should be serial. Each stage was added on
+its own and the natural place to add a stage is after the last one -- you do not
+design a queue, a queue is what you get by default when every feature is correct
+in isolation and nobody measures the whole.
+
+The two waits in this document are the proof. The acknowledgement genuinely cost
+nothing when it was written; its comment says so and the comment was true. The
+hush loop was genuinely right when it was written, and it fixed a real bug where
+the agent clicked play on something already playing. Neither author was careless.
+They were written months apart, they never appear in the same file, and together
+they cost a second on every turn.
+
+So the failure is not bad code. It is that **no one was looking at the whole path
+at once**, and the only cure for that is the instrumentation in Phase 0.
+
+### Why not simply copy theirs
+
+Their pipeline works. We could rebuild it stage for stage. Four reasons not to:
+
+**Copying arrives at their number, by definition.** Build exactly their
+architecture and you get exactly their latency -- later than them, with less
+money, having learned nothing they do not already know. PLAN.md puts it plainly:
+*feature parity is the losing side of every fight.* It is equally true of
+performance parity. You cannot overtake on the inside by driving their line.
+
+**It is four paid vendors on the hot path.** AssemblyAI to hear, OpenAI to
+transcribe, Anthropic to think, ElevenLabs to speak -- a round trip to four
+companies to click a button. That is coherent for a subscription product. It is a
+strange thing to build when macOS will do two of those stages locally, for free,
+with no network at all. Their speed is bought. Some of ours can be free.
+
+**Their constraints are not ours everywhere.** Streaming is the only lever they
+have left, because every stage of theirs must cross a network. Ours need not.
+`SFSpeechRecognizer` is not a faster round trip, it is the absence of one -- and
+absence beats optimisation.
+
+**We have not earned the right to buy anything yet.** The last two latency wins
+were both our own bugs: 50,000 characters of dead history re-sent every turn, and
+1.2 seconds of waiting for ourselves. Neither needed a vendor. Going shopping
+before Phase 1 would mean paying four companies to carry work we invented.
+
+### Why this order
+
+Each phase is picked for certainty per hour, and the cheap certain ones come
+first:
+
+- **Phases 0-1 are free and cannot fail.** Removal, plus a shared client.
+  No dependency, no new failure mode, no accuracy risk.
+- **Phase 2 is nearly free** and the first thing with real risk attached, which
+  is why it is third and not first -- it touches `Settle`, and the last time
+  something touched `Settle`'s assumption every agent screenshot was taken before
+  its action landed.
+- **Phases 3-4 cost real days**, so they come after the measurement that says
+  which of them is worth those days. Today the table says 4. FINDINGS said 3. One
+  of those was written before the brain model changed, which is the entire
+  argument for not deciding this in advance.
+- **Phase 5 is a bet, and it is last** because it is the only one that is a
+  different project rather than a change to this one.
+
+No phase depends on the next. Stopping after Phase 2 still leaves us better off
+than starting, which is the property that makes an order worth having.
+
+And every phase is judged the same way: **move a latency number, leave the
+accuracy number alone.** We have already run the experiment where speed is bought
+with accuracy -- `flash-lite` was 2.5x quicker and 29% against 50%. A fast wrong
+click costs more than a slow right one, and it costs it in trust rather than
+seconds.
+
+### Where this could be wrong
+
+Stated up front, so the measurement can settle it rather than an argument:
+
+- **AX coverage is uneven.** Native apps expose good trees; Electron and web apps
+  often expose almost nothing useful. Phase 5 is a fast path over a vision floor,
+  not a replacement for vision -- and if the apps people actually use turn out to
+  be the badly-exposed ones, the bet does not pay.
+- **On-device transcription may be worse.** `SFSpeechRecognizer` against
+  `gpt-4o-transcribe` is not a measured comparison, it is an assumption. It gets
+  the same treatment as the brain did: a recorded set, scored, before it ships.
+- **Streaming the brain hides the p95 rather than fixing it.** 9 seconds at the
+  95th percentile is a model problem wearing a pipeline problem's clothes. If
+  Phase 0 shows those are common rather than rare, the answer is a different
+  model or a smaller question, not a faster pipe.
+
 ## Deliberately not doing
 
 - **A realtime omni model.** We checked: they are not using one either. It is an
