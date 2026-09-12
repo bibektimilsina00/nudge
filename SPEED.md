@@ -55,19 +55,30 @@ these rows.
 marked E is a guess until the instrumentation lands, including the ones that look
 obviously right.
 
-| Stage | Us, now | Them | Us, planned | Cost now | What it affects |
+| Stage | Us, now | Them | Us, planned | What is different afterwards | Then, against them |
 |---|---|---|---|---|---|
-| **Speech in** | record to a WAV, upload after you release | streamed over a socket **while you talk** | on-device, streaming while you talk | ~0.1s (E) | gates the whole transcription stage |
-| **Transcribe** | Gemini, one round trip, starts after release | `gpt-4o-transcribe`, already finishing as you release | `SFSpeechRecognizer`, text ready at release | 1.0-1.5s (E) | time until anything at all can happen |
-| **Connection** | a fresh TLS handshake per utterance | pooled | one shared client | 0.15-0.4s (E) | every voice call, both directions |
-| **Settle** | always 2 screen composites + 120ms | no per-turn settle | skip it when nothing was performed | 0.2-0.4s (E) | every turn, including the first |
-| **Hush** | wait for our own acknowledgement to finish | nothing to wait for | capture before speaking | ~1.0s (E) | every turn |
-| **Capture** | `CGWindowListCreateImage`, resize, JPEG, base64, per shot | `SCStream` always running, a frame is already there | overlap with transcription on turn 1 | 0.3-0.5s (E) | every turn |
-| **Brain** | `gemini-3.6-flash`, wait for the whole JSON | `claude-sonnet-4-6`, streamed, acts on early tokens | stream, fire on the first complete field | **4.5s median, 9.0s p95 (M)** | the dominant cost; everything else is rounding next to this |
-| **Grounding** | a vision model finds the pixel | a vision model finds the pixel | AX tree where exposed, vision as the fallback | inside the brain cost | the ceiling -- the only row that can go to ~0 |
-| **Prompt size** | newest step whole, older ones trimmed | n/a | **done** | was 70k chars by turn 3, now 21k (M) | turns 3 and later; nothing on turn 1 |
-| **Speech out** | `say`, after the full sentence is known | ElevenLabs, streamed | streamed | ~0 to latency | feel, not clock |
-| **Feedback gap** | "Sure, one sec.", then silence | tokens start arriving immediately | keep it, but off the critical path | -- | perceived speed, which is most of the complaint |
+| **Speech in** | record a WAV, upload after you release | streamed over a socket **while you talk** | on-device, streaming while you talk | ~0.1s (E) → 0. Nothing is uploaded at all, so nothing can be slow about uploading it | **Ahead.** They still cross the network to hear you. We stop crossing it |
+| **Transcribe** | Gemini, one round trip, begins only after you release | `gpt-4o-transcribe`, essentially finished as you release | `SFSpeechRecognizer` | 1.0-1.5s (E) → ~0. The stage leaves the timeline rather than shrinking: the words exist at the moment the key comes up | **Ahead.** Theirs is a fast round trip; ours is no round trip, and it works with the wifi off |
+| **Connection** | a fresh TLS handshake per utterance | pooled | one shared client | 0.15-0.4s (E) → 0. The first byte leaves immediately instead of after a handshake to a host we were already talking to | **Level.** Table stakes. We are behind on a thing nobody should be behind on |
+| **Settle** | 2 screen composites + 120ms, every turn, unconditionally | no equivalent | skip it when nothing was performed | 0.2-0.4s (E) → 0 on turn 1, unchanged later. The first turn stops paying for a settle when nothing has been done to settle | **Not comparable.** A cost we invented, then removed |
+| **Hush** | wait for our own acknowledgement to finish before the screenshot | no equivalent | capture first, then speak | ~1.0s (E) → 0. The same sentence plays over the model call instead of in front of the screenshot. Nothing about it changes except that it stops being on the clock | **Not comparable.** Also invented, also removed |
+| **Capture** | `CGWindowListCreateImage`, resize, JPEG, base64, per shot | `SCStream` always running -- a frame is already in hand | overlap it with transcription on turn 1 | 0.3-0.5s (E) → hidden on turn 1, unchanged after. The picture is ready before the words are | **Still behind, deliberately.** We hide the cost once; they never pay it. Parity needs `SCStream`, deferred until Phase 0 says it matters |
+| **Brain** | `gemini-3.6-flash`, wait for the entire JSON object | `claude-sonnet-4-6`, streamed, acting on early tokens | stream, act on the first complete field | **4.5s median, 9.0s p95 (M)** → time-to-first-motion falls to the first field, while the sentence is still arriving. The total barely moves; the wait stops being empty | **Level, possibly ahead.** Same trick, smaller model. The p95 of 9s is the real problem and streaming hides it better than it fixes it |
+| **Grounding** | a vision model finds the pixel | a vision model finds the pixel | AX tree where exposed, vision as fallback | seconds → microseconds, for every app that exposes AX. No screenshot, no model call, no token cost, no chance of a wrong pixel | **Ahead, structurally.** The only row where we would be doing something different in kind rather than degree. Also the only one that can reach zero |
+| **Prompt size** | newest step whole, older ones trimmed | not observable from outside | **done** | 70k chars by turn 3 → 21k. Turn 10 now costs what turn 1 costs | **Unknown.** They have the same problem or they solved it; either way it is invisible to us |
+| **Speech out** | `say`, only once the full sentence is known | ElevenLabs, streamed | streamed | ~0 on the clock. The reply begins as soon as its first words exist | **Level** |
+| **Feedback gap** | "Sure, one sec.", then silence | tokens arrive immediately, so there is no gap to fill | keep the line, but off the critical path | the holding phrase stops covering silence and starts overlapping real work | **Level.** The gap is filled either way; theirs is filled with the answer |
+
+**The net, if all five phases land:** ahead on input, because on-device beats a
+fast round trip. Level on the brain, where we copy their trick with a cheaper
+model. Ahead on grounding, which is the only row that changes what the product
+*is* rather than how quickly it does the same thing. Behind on capture, on
+purpose, until a measurement says otherwise.
+
+Four of the eleven rows are costs with no counterpart on their side at all. Those
+are not places where they beat us with better engineering -- they are places we
+invented work and then paid for it. Phase 1 is the whole of that, and it is
+deletion.
 
 ### What each phase buys
 
