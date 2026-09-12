@@ -74,6 +74,33 @@ animates, and that clicking it expands to a card with the commands underneath.
 If any of these is wrong, the log says which turn and why -- paste it or just say
 which number failed.
 
+## H. The tools that have never run
+
+Six shipped in one day and none has executed end to end. Run them in order --
+H3 depends on H6 having made a file.
+
+| # | Say | Should | Watch for |
+|---|-----|--------|-----------|
+| H1 | "what's the newest version of Rust" | Speaks the answer **and its sources**. No browser window. | `search` — it should not fetch or open anything |
+| H2 | "make me a landing page for a bakery and show it to me" | Writes a file, then **opens it**. An artifact chip appears on the card. | `write` + `show` — the second half is the new part |
+| H3 | "change the heading on that page to Sweet Crust" | An **edit**, not a rewrite. It should read the file first. | `read` then `edit`. A `write` here is a fail — that is the whole point of `edit` |
+| H4 | "make me a landing page with a menu, an about section and a contact form" | A **plan** on the card: three or four steps, ticking off as it goes. | `plan` — and the bar should follow the list, not creep |
+| H5 | "look through this project and tell me which files handle the keyboard" | Goes away, reads several files, comes back with **one answer**. | `task` — the subagent's turns should NOT fill the main history |
+| H6 | "what's in the README of this project" | Reads the file. | `read` on its own |
+
+**Then re-run G5** ("send a whatsapp message"), because the prompt changed again
+after it last passed.
+
+### What a failure looks like
+
+- Chose the wrong tool — opened a browser to search, rewrote a file instead of
+  editing it, launched an editor to write.
+- Did the work but did not **show** it.
+- Ran a plan of one item, or no plan on a four-step job.
+- The subagent's reading ended up in the main agent's history.
+
+Any of those, say the number and I will read the log.
+
 ## F. Two displays — needs a second screen
 
 Get one without buying one: **Sidecar with an iPad**, or **BetterDisplay** (free
