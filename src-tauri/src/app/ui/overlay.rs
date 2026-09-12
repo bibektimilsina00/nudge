@@ -1,14 +1,8 @@
 //! The one window: full-screen, transparent, always on top, click-through.
-use super::state::Screen;
+use crate::app::state::Screen;
 use tauri::{
-    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, PhysicalPosition, WebviewWindow,
-    WindowEvent,
+    AppHandle, Emitter, LogicalPosition, LogicalSize, Manager, WebviewWindow, WindowEvent,
 };
-
-/// The prompt box, in points. Only has to fit one line of text.
-const PROMPT: (f64, f64) = (620.0, 92.0);
-/// Distance from the bottom of the screen, matching the bubble's resting place.
-const PROMPT_BOTTOM_GAP: f64 = 56.0;
 
 pub fn window(app: &AppHandle) -> WebviewWindow {
     app.get_webview_window("overlay").expect("overlay window")
@@ -17,19 +11,47 @@ pub fn window(app: &AppHandle) -> WebviewWindow {
 /// Stretches the overlay across the primary monitor and returns its geometry.
 pub fn fit(app: &AppHandle) -> tauri::Result<Screen> {
     let win = window(app);
-    let screen = match win.primary_monitor()? {
-        Some(mon) => {
-            let scale = mon.scale_factor();
-            let size = mon.size().to_logical::<f64>(scale);
-            win.set_position(PhysicalPosition::new(0, 0))?;
-            win.set_size(*mon.size())?;
-            Screen { w: size.width, h: size.height, scale }
-        }
+    // The union of every display, so the overlay is one window covering the whole
+    // desk. Reading only the primary monitor is why a second screen got no
+    // companion and no ring: they were being drawn outside the window.
+    let monitors = win.available_monitors()?;
+    let scale = win
+        .primary_monitor()?
+        .map(|m| m.scale_factor())
+        .unwrap_or(2.0);
+    let screen = if monitors.is_empty() {
         // Only reachable with no monitor attached; a sane guess beats a panic.
-        None => Screen { w: 1512.0, h: 982.0, scale: 2.0 },
+        Screen {
+            w: 1512.0,
+            h: 982.0,
+            scale,
+            origin: (0.0, 0.0),
+        }
+    } else {
+        let (mut x0, mut y0, mut x1, mut y1) = (f64::MAX, f64::MAX, f64::MIN, f64::MIN);
+        for m in &monitors {
+            let s = m.scale_factor();
+            let p = m.position().to_logical::<f64>(s);
+            let z = m.size().to_logical::<f64>(s);
+            x0 = x0.min(p.x);
+            y0 = y0.min(p.y);
+            x1 = x1.max(p.x + z.width);
+            y1 = y1.max(p.y + z.height);
+        }
+        win.set_position(LogicalPosition::new(x0, y0))?;
+        win.set_size(LogicalSize::new(x1 - x0, y1 - y0))?;
+        Screen {
+            w: x1 - x0,
+            h: y1 - y0,
+            scale,
+            origin: (x0, y0),
+        }
     };
     win.set_ignore_cursor_events(true)?;
-    // Never focusable at rest -- see set_prompt_mode.
+    // Never focusable, ever. A window the system considers focusable is one it
+    // considers part of a Space, and it is evicted when a full-screen Space takes
+    // over -- the window server reported ours ABSENT the moment VS Code went full
+    // screen. This is what actually keeps the companion visible there.
     let _ = win.set_focusable(false);
     follow_everywhere(&win);
 
@@ -53,50 +75,6 @@ pub fn fit(app: &AppHandle) -> tauri::Result<Screen> {
         follow_everywhere(&window(&handle));
     });
     Ok(screen)
-}
-
-/// Switch between pointing and asking.
-///
-/// A full-screen window cannot be both click-through and typable: the moment it
-/// accepts the keyboard it also swallows every click on screen, and the app
-/// underneath goes dead. So while it is asking, the window shrinks to the size of
-/// the prompt -- the rest of the screen is simply not covered any more, rather
-/// than covered by something that politely forwards clicks.
-pub fn set_prompt_mode(app: &AppHandle, asking: bool) -> tauri::Result<()> {
-    let win = window(app);
-    let screen = app.state::<Screen>();
-    // Resizing and focusing go through AppKit, which resets the level to whatever
-    // the window was configured with. Re-assert it every time, or the overlay
-    // quietly sinks back under the menus after the first question.
-    follow_everywhere(&win);
-
-    // The overlay is focusable only while it is asking something.
-    //
-    // This is what actually kept the companion out of full-screen Spaces. A window
-    // the system considers focusable is one it considers part of a Space, and it is
-    // evicted when a full-screen Space takes over -- the window server reported
-    // ours ABSENT the moment VS Code went full screen. Clicky's overlay hard-codes
-    // canBecomeKey to false and needs no Space handling at all; tao backs the same
-    // method with a `focusable` ivar, which `set_focusable` writes.
-    let _ = win.set_focusable(asking);
-
-    if asking {
-        let (w, h) = PROMPT;
-        win.set_size(LogicalSize::new(w, h))?;
-        win.set_position(LogicalPosition::new(
-            (screen.w - w) / 2.0,
-            screen.h - h - PROMPT_BOTTOM_GAP,
-        ))?;
-        win.set_ignore_cursor_events(false)?;
-        win.set_focus()?;
-    } else {
-        win.set_ignore_cursor_events(true)?;
-        win.set_position(PhysicalPosition::new(0, 0))?;
-        if let Some(mon) = win.primary_monitor()? {
-            win.set_size(*mon.size())?;
-        }
-    }
-    Ok(())
 }
 
 /// Put the overlay back if the window server has dropped it from the current
@@ -134,7 +112,7 @@ pub fn keep_everywhere(app: &AppHandle) {
     ns.orderFrontRegardless();
     // If the webview was adopted into a window of ours, that is the one that has
     // to stay in front; tao's is empty and ordered out.
-    super::native::keep_front();
+    crate::app::ui::native::keep_front();
 }
 
 #[cfg(not(target_os = "macos"))]
@@ -157,9 +135,7 @@ pub fn keep_everywhere(app: &AppHandle) {
 /// also clears other apps' panels.
 #[cfg(target_os = "macos")]
 fn follow_everywhere(win: &WebviewWindow) {
-    use objc2_app_kit::{
-        NSScreenSaverWindowLevel, NSWindow, NSWindowStyleMask,
-    };
+    use objc2_app_kit::{NSScreenSaverWindowLevel, NSWindow, NSWindowStyleMask};
 
     let Ok(ptr) = win.ns_window() else { return };
     if ptr.is_null() {
@@ -239,7 +215,10 @@ fn behavior() -> objc2_app_kit::NSWindowCollectionBehavior {
     use objc2_app_kit::NSWindowCollectionBehavior as B;
     let default = B::CanJoinAllSpaces | B::Stationary | B::FullScreenAuxiliary | B::IgnoresCycle;
     // Escape hatch for trying combinations without a rebuild.
-    match std::env::var("NUDGE_WINDOW_BEHAVIOR").ok().and_then(|v| v.parse().ok()) {
+    match std::env::var("NUDGE_WINDOW_BEHAVIOR")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
         Some(bits) => B(bits),
         None => default,
     }

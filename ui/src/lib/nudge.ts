@@ -26,7 +26,6 @@ export type Step =
  */
 export type Phase =
   | "idle"
-  | "asking"
   | "listening"
   | "thinking"
   | "showing"
@@ -40,5 +39,4 @@ export const api = {
   /** `silence: false` lets a sentence finish after the overlay clears itself. */
   cancel: (silence: boolean) => invoke<void>("cancel", { silence }),
   /** Click-through off while we need the keyboard, on the rest of the time. */
-  setInteractive: (on: boolean) => invoke<void>("set_interactive", { on }),
 };

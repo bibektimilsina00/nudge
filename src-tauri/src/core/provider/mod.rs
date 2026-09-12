@@ -5,8 +5,8 @@ mod anthropic;
 mod gemini;
 mod ollama;
 
-use crate::core::capture::{Point, Shot};
 use crate::config::Config;
+use crate::core::screen::capture::{Point, Shot};
 use crate::error::{Error, Result};
 use async_trait::async_trait;
 use serde::Serialize;
@@ -38,8 +38,13 @@ pub enum Act {
 pub enum Step {
     /// Do something at this point next.
     Point { at: Point, say: String, act: Act },
-    /// The goal is already achieved.
-    Done { say: String },
+    /// The goal is achieved.
+    ///
+    /// `next` is an optional follow-up offer -- one short question about the
+    /// obvious next step, asked out loud. Optional on purpose: most tasks end
+    /// with nothing worth asking, and an agent that says "what would you like
+    /// now?" every single time is a worse agent than one that never does.
+    Done { say: String, next: Option<String> },
     /// The control is not on this screen. Not an error -- often the right answer.
     Unsure { say: String },
     /// Open an application. Some goals ("open Blender") cannot be satisfied by
@@ -50,10 +55,95 @@ pub enum Step {
     Open { url: String, say: String },
     /// Type into whatever is focused. `submit` presses Return afterwards, which
     /// is what an address bar or a search box almost always wants.
-    Type { text: String, submit: bool, say: String },
+    Type {
+        text: String,
+        submit: bool,
+        say: String,
+    },
+    /// Press a keyboard shortcut, e.g. `cmd+shift+n`.
+    ///
+    /// The reliable way to run a menu command. macOS menus run a nested tracking
+    /// loop and a synthetic click into an open one often shuts it without
+    /// selecting -- one run spent fifteen turns on "New Private Window" while
+    /// the menu dutifully opened and closed. The menu prints the shortcut beside
+    /// the item, so it can be read straight off the screenshot.
+    Press { keys: String, say: String },
+    /// Run a read-only shell command and read what it prints.
+    ///
+    /// For the half of what people want that is not on screen: how many files
+    /// match, what version is installed, what changed in this repo. One exact
+    /// step where clicking would be ten approximate ones.
+    ///
+    /// Read-only, enforced in `core::shell` rather than asked for here.
+    Run { command: String, say: String },
+    /// Write a file inside the workspace.
+    ///
+    /// Creating one is additive and happens without asking. Replacing one is
+    /// refused until the user has agreed to that exact file -- enforced in
+    /// `core::files`, not requested here -- and whatever was there is copied
+    /// aside first, because permission is not the same as safety.
+    Write {
+        path: String,
+        content: String,
+        say: String,
+    },
+    /// Read a web page as text, without opening a browser.
+    ///
+    /// The cheap answer to most questions. Opening a page and looking at it
+    /// costs a window, a settle wait, a screenshot and a vision call; fetching
+    /// it costs one request and a few KB of text.
+    Fetch { url: String, say: String },
+    /// Read part of a file, with line numbers.
+    Read {
+        path: String,
+        from: usize,
+        lines: usize,
+        say: String,
+    },
+    /// Replace an exact piece of text in a file. `old` must be unique in it.
+    Edit {
+        path: String,
+        old: String,
+        new: String,
+        say: String,
+    },
+    /// Write down the plan, and keep it current.
+    ///
+    /// The whole list every time, so what the model believes and what the user
+    /// can see are the same thing.
+    Plan {
+        todos: Vec<(String, String)>,
+        say: String,
+    },
+    /// Search the web. For when the page is not known, only the question.
+    Search { query: String, say: String },
+    /// Hand a scoped job to a second agent with no screen, and wait for what it
+    /// finds.
+    ///
+    /// Worth it when the answer takes several turns of reading or searching: the
+    /// subagent's turns stay in its own history, and only its conclusion comes
+    /// back here.
+    Task { task: String, say: String },
+    /// Put a file you made in front of the user, in whatever opens it.
+    ///
+    /// `open` takes URLs only, so without this an agent could write a page and
+    /// have no way to show it -- which is most of what "make me a landing page"
+    /// is asking for.
+    Show { path: String, say: String },
     /// A whole task rather than a next click: Nudge takes it away and finishes
-    /// it on its own. `title` is what the progress card is called.
-    Agent { title: String, say: String },
+    /// it on its own.
+    ///
+    /// `background` decides whether it gets a window. Most tasks do not: they
+    /// take a few seconds, the user is watching, and a floating card for
+    /// "open YouTube and press play" is a progress bar for something already
+    /// over. Only work measured in minutes earns one -- the same split as a
+    /// coding agent running a quick edit inline and handing a long job to a
+    /// subagent. `title` is what that card is called.
+    Agent {
+        title: String,
+        say: String,
+        background: bool,
+    },
     /// Blocked on something only the user knows -- which song, which Sara,
     /// whether the QR code has been scanned yet. The loop pauses here.
     ///
@@ -66,25 +156,147 @@ pub enum Step {
     Reply { say: String },
 }
 
+/// First line, bounded -- an edit's `old` can be a paragraph, and history is
+/// meant to be readable.
+fn short(s: &str) -> String {
+    let line = s.lines().next().unwrap_or("");
+    if line.chars().count() > 40 {
+        format!("{}…", line.chars().take(40).collect::<String>())
+    } else {
+        line.to_string()
+    }
+}
+
 impl Step {
     pub fn say(&self) -> &str {
         match self {
             Step::Point { say, .. }
-            | Step::Done { say }
+            | Step::Done { say, .. }
             | Step::Unsure { say }
             | Step::Launch { say, .. }
             | Step::Open { say, .. }
             | Step::Type { say, .. }
+            | Step::Press { say, .. }
+            | Step::Run { say, .. }
+            | Step::Write { say, .. }
+            | Step::Fetch { say, .. }
+            | Step::Read { say, .. }
+            | Step::Edit { say, .. }
+            | Step::Plan { say, .. }
+            | Step::Search { say, .. }
+            | Step::Task { say, .. }
+            | Step::Show { say, .. }
             | Step::Agent { say, .. }
             | Step::Question { question: say }
             | Step::Reply { say } => say,
         }
     }
 
+    /// Are these two steps the same *action*, regardless of wording?
+    ///
+    /// The model rephrases constantly -- "Heading straight to YouTube" and
+    /// "Let's teleport straight to YouTube" were the same Open, back to back --
+    /// so comparing sentences catches nothing. Points compare by distance
+    /// because a model re-aiming at one target wanders a few pixels each turn:
+    /// 1106, 1111, 1115, 1108 were nineteen attempts at the same link.
+    pub fn same_action(&self, other: &Self) -> bool {
+        /// Wider than a click needs to be precise, narrower than two genuinely
+        /// different controls ever sit. A row in a list is about this tall.
+        const NEAR: f64 = 24.0;
+        match (self, other) {
+            (Step::Point { at: a, act: x, .. }, Step::Point { at: b, act: y, .. }) => {
+                x == y && (a.x - b.x).hypot(a.y - b.y) <= NEAR
+            }
+            (Step::Open { url: a, .. }, Step::Open { url: b, .. }) => a.eq_ignore_ascii_case(b),
+            (Step::Launch { app: a, .. }, Step::Launch { app: b, .. }) => a == b,
+            (Step::Type { text: a, .. }, Step::Type { text: b, .. }) => a == b,
+            (Step::Press { keys: a, .. }, Step::Press { keys: b, .. }) => a.eq_ignore_ascii_case(b),
+            (Step::Run { command: a, .. }, Step::Run { command: b, .. }) => a == b,
+            (Step::Fetch { url: a, .. }, Step::Fetch { url: b, .. }) => a.eq_ignore_ascii_case(b),
+            (Step::Search { query: a, .. }, Step::Search { query: b, .. }) => {
+                a.eq_ignore_ascii_case(b)
+            }
+            // Reading the same range twice is a loop; an edit is judged by what
+            // it replaces, because the same file edited differently is progress.
+            (
+                Step::Read {
+                    path: pa, from: fa, ..
+                },
+                Step::Read {
+                    path: pb, from: fb, ..
+                },
+            ) => pa == pb && fa == fb,
+            (
+                Step::Edit {
+                    path: pa, old: oa, ..
+                },
+                Step::Edit {
+                    path: pb, old: ob, ..
+                },
+            ) => pa == pb && oa == ob,
+            // Same file, same contents. Same file with *different* contents is a
+            // revision, not a repeat.
+            (
+                Step::Write {
+                    path: pa,
+                    content: ca,
+                    ..
+                },
+                Step::Write {
+                    path: pb,
+                    content: cb,
+                    ..
+                },
+            ) => pa == pb && ca == cb,
+            _ => false,
+        }
+    }
+
+    /// One line of history for the model: what was done, and where.
+    ///
+    /// The sentence alone is not enough. Told only "Let's hit play on that first
+    /// track", it cannot tell that the last five turns aimed at the same pixel
+    /// and none of them worked.
+    pub fn recap(&self) -> String {
+        match self {
+            Step::Point { at, act, say } => {
+                format!("{act:?} at ({:.0}, {:.0}) -- {say}", at.x, at.y)
+            }
+            Step::Open { url, .. } => format!("Opened {url}"),
+            Step::Press { keys, .. } => format!("Pressed {keys}"),
+            Step::Run { command, .. } => format!("Ran `{command}`"),
+            Step::Fetch { url, .. } => format!("Read {url}"),
+            Step::Search { query, .. } => format!("Searched for {query:?}"),
+            Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
+            Step::Show { path, .. } => format!("Showed {path}"),
+            Step::Plan { todos, .. } => {
+                let done = todos.iter().filter(|(_, s)| s == "done").count();
+                format!("Plan: {done} of {} done", todos.len())
+            }
+            Step::Read { path, from, .. } => format!("Read {path} from line {from}"),
+            Step::Edit { path, old, .. } => format!("Edited {path}, replacing {:?}", short(old)),
+            Step::Write { path, content, .. } => {
+                format!("Wrote {path} ({} bytes)", content.len())
+            }
+            Step::Launch { app, .. } => format!("Launched {app}"),
+            Step::Type { text, submit, .. } => {
+                format!(
+                    "Typed {text:?}{}",
+                    if *submit { " and pressed Return" } else { "" }
+                )
+            }
+            other => other.say().to_string(),
+        }
+    }
+
     /// Rewrites the coordinate through `f`; other outcomes pass through untouched.
     pub fn map_point(self, f: impl FnOnce(Point) -> Point) -> Self {
         match self {
-            Step::Point { at, say, act } => Step::Point { at: f(at), say, act },
+            Step::Point { at, say, act } => Step::Point {
+                at: f(at),
+                say,
+                act,
+            },
             other => other,
         }
     }
@@ -99,6 +311,13 @@ pub struct Ask<'a> {
     /// The screen looks identical to before the last step. Either the click
     /// missed, or it landed on something that does nothing.
     pub stalled: bool,
+    /// What macOS reports about the machine right now -- frontmost app, window
+    /// title, whether sound is coming out. Facts a screenshot cannot settle.
+    pub facts: crate::core::screen::facts::Facts,
+    /// Nudge is doing this itself, with nobody watching. The model must act
+    /// rather than delegate or chat -- there is no one to read a reply, and
+    /// answering `agent` from inside an agent is how it delegated to itself.
+    pub agent: bool,
 }
 
 #[async_trait]
@@ -106,6 +325,38 @@ pub trait Provider: Send + Sync {
     fn name(&self) -> &'static str;
 
     async fn next_step(&self, shot: &Shot, ask: &Ask<'_>) -> Result<Step>;
+
+    /// Decide a step with no screenshot.
+    ///
+    /// What a headless subagent runs on. It has no screen, so it cannot point,
+    /// press or type -- and that is the whole reason several of them can run at
+    /// once while a screen agent cannot: there is only one cursor, and none of
+    /// them wants it.
+    ///
+    /// A separate method rather than an `Option<&Shot>` on `next_step`, because
+    /// the two prompts want different things said and every provider would have
+    /// to branch on the same condition anyway.
+    async fn next_step_blind(&self, _ask: &Ask<'_>) -> Result<Step> {
+        Err(Error::Config(format!(
+            "{} cannot run a task without a screen.",
+            self.name()
+        )))
+    }
+
+    /// Search the web and come back with an answer and its sources.
+    ///
+    /// On the provider rather than in a module of its own, because it is a
+    /// capability of the model rather than a service Nudge runs: Gemini grounds
+    /// on Google Search with the key that is already configured, so there is no
+    /// second account, no extra dependency and nothing else to set up. A
+    /// provider without it says so instead of pretending.
+    async fn search(&self, _query: &str) -> Result<String> {
+        Err(Error::Config(format!(
+            "{} cannot search the web. Fetch a page you already know the address of, \
+             or switch provider.",
+            self.name()
+        )))
+    }
 }
 
 pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
@@ -124,74 +375,276 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 /// Shared instruction. Kept in one place so a provider comparison measures the
 /// *model*, not three people's prompt-writing.
 pub(crate) fn prompt(ask: &Ask<'_>) -> String {
-    let (goal, done) = (ask.goal, ask.done);
-    let history = if done.is_empty() {
+    let history = if ask.done.is_empty() {
         "Nothing yet.".to_string()
     } else {
-        done.iter()
+        ask.done
+            .iter()
             .enumerate()
             .map(|(i, s)| format!("{}. {s}", i + 1))
             .collect::<Vec<_>>()
             .join("\n")
     };
-    // Saying it plainly beats letting the model assume its last instruction worked.
-    // Without this it keeps pointing at the same control, because from the
-    // screenshot alone nothing distinguishes "not done yet" from "did not work".
+    // Said plainly, because from a screenshot alone nothing distinguishes "not
+    // done yet" from "did not work", and the model assumes the former.
     let stalled = if ask.stalled {
-        "\n\nThe screen has not changed since the last step. That instruction did not \
+        "\nThe screen has not changed since the last step. That instruction did not \
          work -- the control may have moved, been the wrong one, or need a double \
          click. Do not repeat it unchanged; find another way.\n"
     } else {
         ""
     };
-    let apps = crate::core::launch::installed_apps().join(", ");
+
+    // Two audiences, one document. Guide mode has a person reading every step and
+    // doing the clicking; the agent has nobody. Rules that belong to one are kept
+    // out of the other rather than hedged -- an agent told it may "answer with
+    // agent" spent a whole run delegating the task to itself.
+    let (routing, carrying) = if ask.agent {
+        (AGENT_ROUTING, AGENT_RULES)
+    } else {
+        (GUIDE_ROUTING, "")
+    };
+
     format!(
         "You are Nudge: a small companion living on someone's screen, who can see \
-         what they are looking at and point at things.\n\n\
-         You are warm and quick-witted. A dry aside is welcome; a paragraph of one \
-         is not. When you are giving an instruction, clarity wins over the joke \
-         every time -- be funny around the edges, never in the middle of the step.\n\n\
-         Not every request is a task. If they are chatting, greeting you, asking \
-         about you, or asking something the screen cannot answer, just reply. Do \
-         not invent a control to point at so you have something to do.\n\n\
-         Their goal: {goal}\n\n\
+         what they are looking at, act on it, run commands and read the web.\n\n\
+         ## How you sound\n\n\
+         Like a capable colleague, not a performer. Warm, brief, certain. Short \
+         sentences. Say the thing.\n\
+         Humour is not the job. A light touch is welcome when it costs nothing, \
+         but never inside an instruction and never at the expense of being \
+         understood -- a joke in place of an answer reads as someone filling \
+         time, and there is nothing dry about that.\n\
+         Narrate in the present, plainly: opening the chat with Sandeep; the \
+         page is loading; searching for the file. Not every sentence begins with \
+         *let us* -- vary how you start, and never start two in a row the same \
+         way. This is spoken aloud, so it should sound like someone talking, not \
+         like captions.\n\
+         Use their own words back when you can. Asked for a coffee shop landing \
+         page, say the coffee shop landing page is on its way -- it is how they \
+         know they were heard, and it costs a word.\n\
+         When you cannot do something, lead with what you CAN do. Not a refusal \
+         followed by an apology -- the nearest thing you can actually offer, and \
+         then one line on why the original is out.\n\n\
+         ## The goal\n\n{goal}\n\n\
+         ## What is true right now\n\n\
+         {facts}\
          Steps already completed:\n{history}{stalled}\n\n\
-         Point at the SINGLE next control they must click -- the control itself, \
-         not the panel around it. Assume the screenshot is current. \
-         Say what to do in one short sentence, and why in at most one more.\n\n\
-         Only point at a control you can actually see in the screenshot. If the \
-         screen does not contain it -- the menu is not open yet, or this is just a \
-         desktop -- say that instead and mark it unsure. Guessing a location is \
-         worse than admitting you cannot see it.\n\
-         Say how to reach it: click, doubleClick, or hover.\n\
-         - doubleClick to open a file, folder or application from Finder or the \
-           desktop; a single click there only selects it.\n\
-         - hover for anything inside an already-open menu -- a submenu opens on \
-           hover, and clicking a menu can close it and undo the previous step. \
-           Clicking is right only for the final item that performs the action.\n\
-         If the goal needs an application that is not open yet, launch it by name \
-         instead of pointing -- but only one from this machine's list below. When \
-         what they want has no application here and lives on the web, open the URL \
-         instead; a browser is the right answer far more often than an app is.\n\
-         To put text somewhere -- a search box, an address bar, a filename -- click \
-         the field first, then type on the next step. Set submit when Return should \
-         follow, which an address bar or a search box almost always wants.\n\
-         If the goal is already achieved, say so and mark it done.\n\
-         If it was never a task at all, reply and leave it there.\n\n\
-         Some requests are a whole job rather than a next click -- \"play X on \
-         YouTube\", \"message Sara on WhatsApp\", \"find me a flight\". Those are \
-         agent work: answer with agent and a short title, and Nudge will carry \
-         the task out itself, step by step, without the user watching. Choose it \
-         when the user wants the outcome, not directions. Choose a point when \
-         they want to know where something is.\n\
-         While carrying out a task, ask only when genuinely blocked on something \
-         you cannot see or decide -- which of several matches they meant, a \
-         search term they never gave, a login only they can complete. Do not ask \
-         to confirm what they already said; an agent that checks in at every step \
-         is worse than none.\n\n\
-         Applications installed on this machine:\n{apps}"
+         ## Every reply starts with what you see\n\n\
+         Begin with `screen`: one plain sentence describing what is actually on \
+         the screen, and whether the goal is already met. Describe what is there, \
+         not what your last step was supposed to produce -- it may not have \
+         worked. Choose the action second, from what you just described.\n\n\
+         Answer only what you can SEE or have READ. If it is not there, say you \
+         could not find it and why -- an application that wants setting up, a \
+         page that would not load. A setup prompt is not an answer of zero, an \
+         empty window is not an answer of none, and a plausible number is worse \
+         than no number because they will believe it.\n\n\
+         ## Choosing where to act\n\n\
+         Use the cheapest thing that can ACTUALLY answer, in this order: what the \
+         system reports above; a command; a fetch; and last the screen. Each step \
+         down costs more and fails in more ways, and the last one puts a window \
+         in front of someone who was doing something else.\n\n\
+         The question is whose information it is. Anything public -- weather, a \
+         price, a definition, a score -- is on the web: fetch it. Anything that is \
+         theirs -- their mail, their calendar, their files, their machine's own \
+         state -- is not on the web at all, and an application or the screen is \
+         the only honest route. Go straight there rather than fetching first.\n\n\
+         When they NAME something -- a service, an application, a website -- that \
+         is the one they mean, and there is no second choice. NEVER use a \
+         different one because it happens to be installed: a message sent \
+         through another service arrives somewhere else entirely, to someone who \
+         is not expecting it. If the one they named is not on this machine, open \
+         its WEBSITE; almost everything has one, and the browser reaches far more \
+         than any machine's applications do. Only when there is no web version \
+         either do you say you cannot, naming what was missing. Being installed \
+         is not a reason to use something.\n\n\
+         ## The tools\n\n\
+         **task** hands a scoped job to a second agent that has no screen and \
+         reports back with what it found. Worth it when an answer needs several \
+         turns of reading, searching or running things -- it keeps all of that \
+         out of your own history, and you get the conclusion. Give it one clear \
+         question and everything it needs to answer it; it cannot see your \
+         screen, ask the user anything, or click. Not for a single command or \
+         one page: do those yourself.\n\
+         **search** answers a question from the web when you do not know which \
+         page has it. It comes back as an answer with its sources, so you can \
+         often stop there -- fetch one of them only when you need more than the \
+         answer. Use it for anything current or particular that you would \
+         otherwise be guessing at. If you already know the address, fetch it \
+         directly; searching for a page you can name is a wasted step.\n\
+         **fetch** reads a web page as text and hands it to you next turn. No \
+         window appears and nothing is screenshotted. Open a page instead only \
+         when they want to SEE it, or the task needs something done on it.\n\
+         **run** executes a read-only shell command and returns its output: count \
+         files, search a repo, check what is installed. It needs no Terminal \
+         window and opens none. Reading only -- nothing that creates, deletes, \
+         installs, sends or pushes, and nothing that looks like a key or a \
+         password. Refusals come back with a reason; ask for what you want rather \
+         than working around one.\n\
+         **plan** writes down the steps and keeps them current, which is what \
+         the user sees instead of a bar creeping along. Send the WHOLE list each \
+         time, each step with a status of pending, active or done -- and only \
+         ever ONE active, because only one thing is happening at a time. Use it \
+         when the work is three or more real steps: write the plan before \
+         starting, mark a step active as you begin it, done as you finish, and \
+         add anything you discover along the way. Skip it for short work -- a \
+         plan for a two-step task is ceremony, and the list is meant to mean \
+         something.\n\
+         **read** returns part of a file with line numbers -- ask for a range \
+         when it is long. Read before you edit: matching text you have not seen \
+         is guessing.\n\
+         **edit** replaces one exact piece of text in a file, which is what most \
+         changes actually are. What you give must appear EXACTLY ONCE, so \
+         include enough around it to be unique; you are told how many matches \
+         there were. Prefer this to rewriting a whole file -- a rewrite \
+         regenerates everything you cannot see, and things get lost that way.\n\
+         read, write and edit work on files directly and need NO editor open. \
+         Launching one to write a file is the same mistake as opening Terminal \
+         to run a command: a window the user did not ask for, and a slower route \
+         to the same place.\n\
+         **show** opens a file you made, in whatever application owns that kind \
+         of file -- a page in the browser, an image in Preview. Finish with it \
+         whenever you have made something meant to be looked at: writing a file \
+         they cannot see is half the job, and they asked to be shown.\n\
+         **write** puts a file in the workspace -- how you make something rather \
+         than describe it. Creating needs no permission; replacing is refused \
+         until they agree, so ask with a question naming the file. Whole files \
+         only: no appending, no patching.\n\
+         **open** takes a URL and launches the browser itself -- never launch one \
+         first. Prefer a URL that already carries the query: one step instead of \
+         four, and a step skipped is a step that cannot miss.\n\
+         **launch** opens an application by name, but ONLY a name appearing \
+         character for character in the list at the end. That list is the whole \
+         truth about what is installed; if what they asked for is missing, it is \
+         not on this Mac -- see the rule above about what to do then.\n\
+         **press** sends any key combination -- cmd, shift, option, control, fn \
+         with a letter, digit, punctuation or function key -- and the keys that \
+         mean something alone: escape to close a dialog, tab between fields, \
+         arrows and return to move and choose inside something open.\n\
+         **type** puts text where the focus is. Click the field first, then type \
+         on the next step. Set submit when Return should follow, which a search \
+         box or address bar almost always wants.\n\
+         **point** is the last resort: the SINGLE next control, the control \
+         itself and not the panel around it. Only something you can actually see \
+         -- if the menu is not open yet, or this is a bare desktop, say so and \
+         mark it unsure. Guessing a location is worse than admitting you cannot \
+         see it. Say how to reach it: click, doubleClick, or hover.\n\
+         - doubleClick opens a file, folder or application from Finder or the \
+           desktop; a single click there only selects.\n\
+         - hover for anything inside an already-open menu: a submenu opens on \
+           hover, and a click can close the menu and undo the previous step. \
+           Click only the final item that performs the action.\n\n\
+         Prefer a keyboard shortcut to a menu whenever one exists. Menus here are \
+         unreliable to click -- they open, and the click that should choose an \
+         item closes them instead. Opening a menu to READ it is fine; the \
+         shortcut is printed beside each command, so read it and press that.\n\n\
+         {routing}{carrying}\
+         ## Applications this machine can launch\n\n\
+         What `launch` accepts, and nothing more. Not a list of ways to do \
+         something, and not a set of alternatives to what was asked for -- if \
+         what they named is absent, the answer is its website, not a substitute \
+         from here.\n\n{apps}",
+        goal = ask.goal,
+        facts = ask.facts.brief(),
+        apps = crate::core::screen::launch::installed_apps().join(", "),
     )
 }
+
+/// Guide mode: someone is watching, and some requests are not tasks at all.
+const GUIDE_ROUTING: &str = "## Is this even a task?\n\n\
+     Not every request is a task. If they are chatting, greeting you, asking \
+     about you, or asking something the screen cannot answer, just reply. Do not \
+     invent a control to point at so you have something to do. If it was never a \
+     task, reply and leave it there.\n\n\
+     Count the actions the goal needs. If finishing it takes MORE THAN ONE, it is \
+     agent work: answer with agent and a short title, and do NOT answer with the \
+     first of those actions. Launching an application or opening a page is almost \
+     never the whole job, and anything ending in something played, sent, created \
+     or found is more. Only a goal genuinely finished by one action is that one \
+     action. Choose agent when they want the outcome; choose point when they want \
+     to know where something is.\n\n\
+     Set background only when the task will take minutes and they should get on \
+     with something else meanwhile. Anything over in a few seconds is not \
+     background.\n\n";
+
+/// Agent mode: nobody is watching, so the rules are about restraint.
+const AGENT_ROUTING: &str = "## You are the one acting\n\n\
+     You are carrying this out YOURSELF, right now, with nobody watching. Never \
+     answer with agent -- you already are one. Every turn must move the task \
+     forward, or finish it.\n\n\
+     reply ENDS the task, so use it only to give up and say why. If you need \
+     them to DO something before you can carry on -- scan a code, sign in, \
+     unlock something -- that is a question, not a reply: a question is spoken \
+     and then waits for their answer, and the task carries on from there with \
+     everything you have done so far still in place.\n\n";
+
+const AGENT_RULES: &str = "## Knowing when you are done\n\n\
+     Decide first whether the goal is ALREADY met, and say so in `screen`. Most \
+     controls toggle -- play also pauses, mute also unmutes -- so acting on a \
+     goal that is already met undoes it. A control listed in the steps above has \
+     been used: do not use it again.\n\n\
+     Trust the system report over the picture, read for what it says. Audio \
+     playing means this Mac is making a sound, not that it is the sound you were \
+     asked for; the window title tells you whose it is. When the two agree, THE \
+     GOAL IS MET -- say done and stop. Do not take one more action to be sure: \
+     what you did last turn worked, and the control you are reaching for is the \
+     one that undoes it. A still frame cannot show motion, so never conclude from \
+     the picture that nothing is happening when the report says it is. If the \
+     report names a different frontmost application than you think you are \
+     looking at, it is right and your view is stale or covered.\n\n\
+     If the same action appears twice in the steps above it did not work, and a \
+     third will not either: try a different control, a different route, or say \
+     you are stuck.\n\n\
+     If the goal was a QUESTION, the answer is words, and `say` is spoken aloud \
+     -- so put it there. The temperature, the price, the number they asked for. \
+     Getting the answer on screen is the middle of the job, not the end.\n\n\
+     ## Doing only what was asked\n\n\
+     Do exactly what was asked and then STOP -- not the helpful next thing. When \
+     a goal could be read narrowly or broadly, TAKE THE NARROW ONE and offer the \
+     rest as `next`. Starting something is finished when the thing exists, not \
+     when it has content. Setting something up is finished when it is set up, not \
+     configured. The broad reading always involves choices they did not give you, \
+     made on their behalf with their cursor, on their real machine.\n\n\
+     Clearing what is IN THE WAY is part of the job: a cookie banner, an upgrade \
+     prompt, a sign-in popup over the thing you need. Dismiss those and carry on. \
+     Never sign in, buy, or agree to anything.\n\n\
+     NEVER open a file picker or browser for a goal that named no file, and never \
+     pick a file inside one. That dialog is a decision about their own documents. \
+     If the task truly needs a file and none was named, ask which.\n\n\
+     ## Asking\n\n\
+     BEFORE YOUR FIRST ACTION, work out everything this task needs that you were \
+     not told -- who it goes to, what it should say, which one they meant, how \
+     much -- and ask for ALL of it in one natural spoken question.\n\
+     Make the question easy to answer. Offer a couple of concrete examples of \
+     what an answer could look like, so they can pick one instead of composing \
+     something: not \"what sections do you want?\" but \"what is it for, and what \
+     should be on it? A portfolio with about, projects and contact, say, or a \
+     shop with products and a booking form.\" Then say what you will do with the \
+     answer -- that you will start as soon as they tell you -- so the question \
+     reads as the last thing before the work rather than an obstacle in front of \
+     it. Ask on your \
+     very first turn, before opening anything: stopping halfway to ask something \
+     you could have asked at the start wastes the time between and leaves \
+     half-finished work on screen. Guessing is worse than asking; a message sent \
+     to the wrong person cannot be taken back.\n\n\
+     After that, ask only about what you could NOT have known in advance -- a \
+     login only they can complete, or which of several matches they meant when \
+     you could not have known there were several. Never ask to confirm what they \
+     already said, and never ask for what you could read off the screen.\n\n\
+     ## Finishing\n\n\
+     When you finish you may add `next` to the done answer: ONE short spoken \
+     offer of the obvious next step, phrased as an invitation rather than a \
+     question -- beginning with something like *if you want, I can*, rather than \
+     asking whether you shall. They have what they asked for either way, and an \
+     invitation can be ignored without it feeling like something was left \
+     hanging. Only when there genuinely is one \
+     and they would plausibly want it now -- typically the broad reading you \
+     deliberately stopped short of. Most tasks end with nothing worth asking: \
+     leave `next` out. Never offer for the sake of it, never ask whether there is \
+     anything else, and never offer what you just did. An agent that asks every \
+     time is worse than one that never does, because then the question means \
+     nothing.\n\n";
 
 /// Models wrap JSON in prose and code fences no matter how firmly you ask.
 pub(crate) fn first_json(text: &str) -> Option<serde_json::Value> {
@@ -205,7 +658,15 @@ pub(crate) fn first_json(text: &str) -> Option<serde_json::Value> {
 /// Shared by the JSON providers: the outcomes that carry no coordinates.
 pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Option<Step> {
     match kind {
-        "done" => Some(Step::Done { say }),
+        "done" => Some(Step::Done {
+            say,
+            // Blank or missing means no offer, which is the common case.
+            next: v["next"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
+        }),
         "unsure" => Some(Step::Unsure { say }),
         "reply" => Some(Step::Reply { say }),
         "launch" => Some(Step::Launch {
@@ -221,9 +682,70 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
             submit: v["submit"].as_bool().unwrap_or(false),
             say,
         }),
+        "plan" | "todo" => Some(Step::Plan {
+            todos: v["todos"]
+                .as_array()
+                .map(|items| {
+                    items
+                        .iter()
+                        .map(|t| {
+                            (
+                                t["text"].as_str().unwrap_or_default().to_string(),
+                                t["status"].as_str().unwrap_or("pending").to_string(),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            say,
+        }),
+        "read" => Some(Step::Read {
+            path: v["path"].as_str().unwrap_or_default().to_string(),
+            from: v["from"].as_u64().unwrap_or(1) as usize,
+            lines: v["lines"].as_u64().unwrap_or(0) as usize,
+            say,
+        }),
+        "edit" => Some(Step::Edit {
+            path: v["path"].as_str().unwrap_or_default().to_string(),
+            old: v["old"].as_str().unwrap_or_default().to_string(),
+            new: v["new"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "show" => Some(Step::Show {
+            path: v["path"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "task" => Some(Step::Task {
+            task: v["task"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "search" => Some(Step::Search {
+            query: v["query"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "fetch" => Some(Step::Fetch {
+            url: v["url"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "write" => Some(Step::Write {
+            path: v["path"].as_str().unwrap_or_default().to_string(),
+            content: v["content"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "run" => Some(Step::Run {
+            command: v["command"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "press" => Some(Step::Press {
+            keys: v["keys"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
         "agent" => Some(Step::Agent {
             title: v["title"].as_str().unwrap_or("Working").to_string(),
             say,
+            // Absent means foreground. A card that appears when it was not asked
+            // for is worse than one that never appears.
+            background: v["background"].as_bool().unwrap_or(false),
         }),
         "ask" | "question" => Some(Step::Question {
             question: v["question"].as_str().unwrap_or(&say).to_string(),
@@ -241,7 +763,10 @@ pub(crate) fn act_from(raw: Option<&str>) -> Act {
 }
 
 pub(crate) fn no_point(provider: &'static str, detail: impl Into<String>) -> Error {
-    Error::NoPoint { provider, detail: detail.into() }
+    Error::NoPoint {
+        provider,
+        detail: detail.into(),
+    }
 }
 
 #[cfg(test)]
@@ -258,7 +783,145 @@ mod tests {
     }
 
     fn ask<'a>(goal: &'a str, done: &'a [String], stalled: bool) -> Ask<'a> {
-        Ask { goal, done, stalled }
+        Ask {
+            goal,
+            done,
+            stalled,
+            agent: false,
+            facts: Default::default(),
+        }
+    }
+
+    /// The bug this guards: the agent was handed guide mode's prompt, which
+    /// offers "answer with agent for a whole job". So on turn one it answered
+    /// `agent` -- delegating the task to itself -- and nothing ever happened.
+    #[test]
+    fn an_agent_is_never_told_it_can_hand_the_job_to_an_agent() {
+        let mut a = ask("play bohemian rhapsody on youtube", &[], false);
+        a.agent = true;
+        let p = prompt(&a);
+        // Matched on the routing sentence itself. "answer with agent" is too
+        // loose -- the agent prompt says "Never answer with agent", and a
+        // substring test cannot tell a prohibition from an offer.
+        assert!(!p.contains("it is agent work"), "offered itself a delegate");
+        assert!(
+            !p.contains("Not every request is a task"),
+            "offered to chat at nobody"
+        );
+        assert!(p.contains("YOURSELF"), "never told it is the one acting");
+        assert!(
+            p.contains("Never answer with agent"),
+            "not forbidden from forking"
+        );
+
+        // Guide mode still gets both -- there is a person reading it.
+        let g = prompt(&ask("play bohemian rhapsody on youtube", &[], false));
+        assert!(
+            g.contains("it is agent work"),
+            "guide mode lost its routing"
+        );
+        assert!(
+            g.contains("Not every request is a task"),
+            "guide mode lost its chat path"
+        );
+        assert!(
+            !g.contains("YOURSELF"),
+            "guide mode told it is acting alone"
+        );
+    }
+
+    /// Nineteen turns of one run were spent clicking the same YouTube link while
+    /// the song was already playing. The guard that should have caught it
+    /// compared sentences, and the model rewords every single turn.
+    #[test]
+    fn the_same_action_is_recognised_through_different_words() {
+        let here = |x: f64, y: f64, say: &str| Step::Point {
+            at: Point { x, y },
+            say: say.into(),
+            act: Act::Click,
+        };
+        // Re-aiming at one link drifts a few pixels a turn.
+        assert!(
+            here(1106.0, 385.0, "Let's hit play on that first track").same_action(&here(
+                1115.0,
+                386.0,
+                "Let's click that first track in the sidebar"
+            ))
+        );
+        // A genuinely different control is not a repeat.
+        assert!(!here(1106.0, 385.0, "a").same_action(&here(1106.0, 460.0, "a")));
+
+        let url = |u: &str, say: &str| Step::Open {
+            url: u.into(),
+            say: say.into(),
+        };
+        assert!(url("https://youtube.com/x", "Heading straight to YouTube")
+            .same_action(&url("https://YouTube.com/X", "Let's teleport to YouTube")));
+        assert!(!url("https://youtube.com/x", "a").same_action(&url("https://youtube.com/y", "a")));
+    }
+
+    /// Told only the sentence, the model cannot tell that five turns aimed at the
+    /// same pixel and none of them worked.
+    #[test]
+    fn history_says_where_it_clicked() {
+        let s = Step::Point {
+            at: Point {
+                x: 1106.4,
+                y: 385.9,
+            },
+            say: "Let's hit play".into(),
+            act: Act::Click,
+        };
+        assert_eq!(s.recap(), "Click at (1106, 386) -- Let's hit play");
+    }
+
+    /// Rules that were replaced must actually be gone.
+    ///
+    /// The absolute "never launch an application to look something up" was
+    /// rewritten as an ordering, because there are facts no fetch can reach --
+    /// their mail, their calendar. The replacement went in and the original
+    /// stayed, four lines above it, so the prompt carried both and the wrong one
+    /// won: a run opened the Weather app to read one number and then failed
+    /// trying to drive it.
+    #[test]
+    fn no_rule_survives_the_rule_that_replaced_it() {
+        for mode in [true, false] {
+            let mut a = ask("what is the weather", &[], false);
+            a.agent = mode;
+            let p = prompt(&a);
+            assert!(
+                !p.contains("Never launch an application to look something up"),
+                "the absolute survived its own replacement (agent = {mode})"
+            );
+            assert!(
+                p.contains("cheapest thing that can ACTUALLY answer"),
+                "and the ordering that replaced it is missing"
+            );
+            // Both halves, or it becomes an absolute again by omission.
+            assert!(p.contains("is on the web: fetch it"));
+            assert!(p.contains("not on the web at all"));
+        }
+    }
+
+    /// Each tool is described once. Saying the same thing twice in one prompt is
+    /// how two versions of a rule drift apart.
+    #[test]
+    fn nothing_is_said_twice() {
+        let mut a = ask("x", &[], false);
+        a.agent = true;
+        let p = prompt(&a);
+        for once in [
+            "A still frame cannot show motion",
+            "never launch one first",
+            "TAKE THE NARROW ONE",
+            "cheapest thing that can ACTUALLY answer",
+        ] {
+            assert_eq!(
+                p.matches(once).count(),
+                1,
+                "{once:?} appears more than once"
+            );
+        }
     }
 
     #[test]
@@ -272,8 +935,11 @@ mod tests {
     fn prompt_names_the_apps_that_actually_exist() {
         // Guessing at an app that is not installed is the failure this prevents.
         let p = prompt(&ask("open something", &[], false));
-        assert!(p.contains("Applications installed on this machine:"));
-        assert!(p.contains("Safari"), "a Mac always has Safari; got a short list?");
+        assert!(p.contains("Applications this machine can launch"));
+        assert!(
+            p.contains("Safari"),
+            "a Mac always has Safari; got a short list?"
+        );
     }
 
     #[test]

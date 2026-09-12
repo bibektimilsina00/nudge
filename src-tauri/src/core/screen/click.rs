@@ -5,11 +5,9 @@
 //! pointed at, so the ring can stay up until then rather than guessing.
 //!
 //! Posting events needs Accessibility permission. Reading button state does not.
-use crate::core::capture::Point;
+use crate::core::screen::capture::Point;
 use crate::error::{Error, Result};
-use core_graphics::event::{
-    CGEvent, CGEventTapLocation, CGEventType, CGMouseButton, EventField,
-};
+use core_graphics::event::{CGEvent, CGEventTapLocation, CGEventType, CGMouseButton, EventField};
 use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
 use core_graphics::geometry::CGPoint;
 
@@ -21,6 +19,8 @@ extern "C" {
     fn CGRequestPostEventAccess() -> bool;
     fn CGEventSourceButtonState(state: i32, button: u32) -> bool;
     fn CGEventSourceSecondsSinceLastEventType(state: i32, event: u32) -> f64;
+    fn CGEventSourceFlagsState(state: i32) -> u64;
+    fn CGEventSourceKeyState(state: i32, key: u16) -> bool;
 }
 
 // CGEventType values we care about.
@@ -33,6 +33,49 @@ const SCROLL: u32 = 22;
 fn since(event: u32) -> f64 {
     const COMBINED: i32 = 0;
     unsafe { CGEventSourceSecondsSinceLastEventType(COMBINED, event) }
+}
+
+/// Where the pointer is, in logical screen points.
+///
+/// The app gets this from Tauri; the bench harness has no Tauri, and needs it to
+/// record where a human clicked when authoring a test case.
+pub fn cursor() -> Option<Point> {
+    let source = CGEventSource::new(CGEventSourceStateID::CombinedSessionState).ok()?;
+    let p = CGEvent::new(source).ok()?.location();
+    Some(Point { x: p.x, y: p.y })
+}
+
+/// Is Escape held right now?
+///
+/// Polled, not listened for. Escape used to be a `keydown` handler in the
+/// overlay webview, which stopped working the moment the overlay became
+/// permanently non-focusable -- a window that never takes focus never sees a
+/// key. Reading the hardware state needs no focus and no permission.
+pub fn escape_down() -> bool {
+    const COMBINED: i32 = 0;
+    /// `kVK_Escape`.
+    const ESCAPE: u16 = 53;
+    unsafe { CGEventSourceKeyState(COMBINED, ESCAPE) }
+}
+
+/// Is Control -- and nothing but Control -- held right now?
+///
+/// Push-to-talk is a bare modifier, which no global-shortcut API can register:
+/// they all want a key code. Reading the flags needs no permission and the
+/// pointer loop already runs sixty times a second, so it costs one getter.
+///
+/// "Nothing but" matters. Control is half of a dozen real shortcuts -- ctrl+arrow
+/// switches Spaces, ctrl+click is a right click -- and a hold that fired on those
+/// too would record constantly. Requiring it alone leaves the combinations to the
+/// OS. Device-dependent bits are masked off: macOS sets both the generic Control
+/// bit and a left/right one, and we do not care which key it was.
+pub fn control_alone() -> bool {
+    const COMBINED: i32 = 0;
+    // CGEventFlags: the modifiers, minus the device-side left/right bits.
+    const CONTROL: u64 = 0x0004_0000;
+    const MODIFIERS: u64 = 0x00FF_0000;
+    let flags = unsafe { CGEventSourceFlagsState(COMBINED) } & MODIFIERS;
+    flags == CONTROL
 }
 
 /// Has macOS hidden the pointer because the user is typing?

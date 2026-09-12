@@ -3,10 +3,49 @@ use crate::core::voice;
 
 /// Screen geometry in points -- the space the overlay draws in -- plus the Retina
 /// factor. The only place physical pixels are allowed to appear.
+/// The overlay's own geometry: the union of every display, in logical points.
+///
+/// One window spanning all screens rather than one per screen. The companion has
+/// to follow the pointer across a monitor boundary without teleporting, and a
+/// ring has to be able to land anywhere -- both are free with one big window and
+/// both need bookkeeping with several.
 pub struct Screen {
     pub w: f64,
+    /// Kept for symmetry with `w` and because the union's height is the thing
+    /// a future per-display check will want; not read today.
+    #[allow(dead_code)]
     pub h: f64,
     pub scale: f64,
+    /// Top-left of the union, in global points. Negative when a display sits
+    /// above or to the left of the main one.
+    pub origin: (f64, f64),
+}
+
+impl Screen {
+    /// Global screen point to a position inside the overlay window.
+    ///
+    /// Zero-cost on a single display, where the union starts at the origin --
+    /// which is exactly why the old code could get away with never doing it.
+    pub fn to_overlay(
+        &self,
+        p: crate::core::screen::capture::Point,
+    ) -> crate::core::screen::capture::Point {
+        crate::core::screen::capture::Point {
+            x: p.x - self.origin.0,
+            y: p.y - self.origin.1,
+        }
+    }
+}
+
+/// Files the user has agreed to have replaced, and the one being asked about.
+///
+/// Per path and per grant: saying yes to one file is not saying yes to the next.
+/// Held here rather than in the prompt because a permission a model can grant
+/// itself is not a permission.
+#[derive(Default)]
+pub struct Grants {
+    pub granted: std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>,
+    pub asking: std::sync::Mutex<Option<std::path::PathBuf>>,
 }
 
 /// A setting the menu bar can flip at runtime. The config value is only ever the
@@ -30,9 +69,6 @@ impl Flag {
 /// Undocking is how you put it to work; docking is how you get your screen back
 /// without quitting.
 pub struct Docked(pub Flag);
-
-/// Whether Nudge clicks for you, or only points.
-pub struct Auto(pub Flag);
 
 /// How Nudge speaks. Three states rather than a checkbox, because "off" is a
 /// genuinely different choice from "which voice" -- folding it into the engine

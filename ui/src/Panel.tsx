@@ -81,6 +81,23 @@ export default function Panel() {
     if (!open) setView("home");
   }, [open]);
 
+  // Keep the hover region the same shape as what is on screen. Held at the
+  // tallest view's size, the panel stayed open far below anything visible.
+  useEffect(() => {
+    const [w, h] = open
+      ? [540, view === "home" ? 266 : view === "agents" ? 320 : 640]
+      : [248, 33];
+    void invoke("set_open_size", { w: w + 30, h: h + 12 });
+  }, [open, view]);
+
+  // The docked pill is the notch, so it is sized by the hardware rather than by a
+  // number we picked. Measured once -- the notch does not change while we run.
+  useEffect(() => {
+    void invoke<number>("notch_height").then((h) =>
+      document.documentElement.style.setProperty("--notch-h", `${h}px`),
+    );
+  }, []);
+
   // Busy takes over the closed pill; the open panel keeps its own header.
   const busy = status !== "idle";
 
@@ -88,16 +105,30 @@ export default function Panel() {
     <div className="flex w-full justify-center">
       <div
         className={[
-          "overflow-hidden rounded-b-[20px] bg-black text-white select-none",
-          "shadow-[0_10px_30px_rgba(0,0,0,0.6)]",
+          "overflow-hidden bg-black text-white select-none",
+          // The busy pill is a strip in the menu bar, not a panel: a big radius
+          // on something 34px tall reads as a lozenge stuck to the notch.
+          // Matching the notch exactly is what makes the pill read as part of the
+          // hardware. The open panel is far bigger than the notch and carries a
+          // slightly larger radius, or 12px on a 500px sheet looks like a mistake.
+          open ? "rounded-b-[20px]" : "notch-corner",
+          // No shadow while open. The panel is black on a dark menu bar, so the
+          // drop shadow never read as depth -- it read as a grey smear along the
+          // bottom edge. The resting pill keeps a faint one so it separates from
+          // the wallpaper behind the menu bar.
+          open ? "" : "shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
           // One curve for both dimensions, so it unfolds rather than growing in
           // two directions at slightly different rates.
           "transition-[width,height] duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           open
             ? `${HEIGHT[view]} w-[540px]`
             : busy
-              ? "h-[38px] w-[420px]"
-              : "h-[38px] w-[200px]",
+              // Both pills are the notch's own height, so the strip reads as the
+              // hardware getting wider rather than as a bar hanging below it.
+              ? "h-(--notch-h) w-[300px]"
+              // At rest it holds only the companion, so it needs to be barely
+              // wider than the notch rather than a bar parked across the menu bar.
+              : "h-(--notch-h) w-[220px]",
         ].join(" ")}
       >
         {busy && !open ? <StatusPill status={status} /> : <Pill open={open} />}
@@ -265,11 +296,13 @@ function Pill({ open }: { open: boolean }) {
       // its 38px while open, pushed the panel down, and clipped exactly that much
       // off the bottom.
       className={[
-        "flex items-center justify-end pr-4 transition-opacity duration-200",
-        open ? "pointer-events-none h-0 opacity-0" : "h-[38px] opacity-100 delay-150",
+        "flex items-center justify-end pr-3 transition-opacity duration-200",
+        open ? "pointer-events-none h-0 opacity-0" : "h-(--notch-h) opacity-100 delay-150",
       ].join(" ")}
     >
-      <div className="scale-[0.5]">
+      {/* Nudged up and in from the corner: sitting hard against the right edge
+          it reads as clipped by the pill rather than resting in it. */}
+      <div className="-translate-y-[6px] scale-[0.5]">
         <Companion mode="idle" anchored />
       </div>
     </div>

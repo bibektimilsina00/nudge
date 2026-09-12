@@ -8,7 +8,8 @@
 //!
 //! Run ~20 real goals, count the hits. That number decides the project.
 use nudge_lib::config::Config;
-use nudge_lib::core::{capture, provider};
+use nudge_lib::core::provider;
+use nudge_lib::core::screen::{capture, facts};
 
 fn main() {
     let goal = std::env::args().skip(1).collect::<Vec<_>>().join(" ");
@@ -25,7 +26,10 @@ fn main() {
     if let Ok(m) = std::env::var("NUDGE_MODEL") {
         cfg.model = Some(m);
     }
-    if let Some(e) = std::env::var("NUDGE_MAX_EDGE").ok().and_then(|v| v.parse().ok()) {
+    if let Some(e) = std::env::var("NUDGE_MAX_EDGE")
+        .ok()
+        .and_then(|v| v.parse().ok())
+    {
         cfg.max_edge = e;
     }
 
@@ -43,15 +47,15 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
     // The probe compares models, so it works in image space and skips the
     // overlay mapping -- logical size is irrelevant here.
     // The probe captures too, so it refuses the same things the app does.
-    if let Some((app, title)) = nudge_lib::core::privacy::frontmost() {
-        if let Some(reason) = nudge_lib::core::privacy::blocked_by(&cfg, &app, &title) {
+    if let Some((app, title)) = nudge_lib::core::screen::privacy::frontmost() {
+        if let Some(reason) = nudge_lib::core::screen::privacy::blocked_by(&cfg, &app, &title) {
             println!("{name}: {reason} (frontmost: {app})");
             return Ok(());
         }
     }
 
     let t0 = std::time::Instant::now();
-    let shot = capture::grab(cfg.max_edge, (0.0, 0.0))?;
+    let shot = capture::grab(cfg.max_edge)?;
     let captured = t0.elapsed();
     println!(
         "{name} ({model}): sent {}x{}, {} KB",
@@ -60,7 +64,13 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         shot.bytes.len() / 1024,
     );
 
-    let ask = provider::Ask { goal, done: &[], stalled: false };
+    let ask = provider::Ask {
+        goal,
+        done: &[],
+        stalled: false,
+        agent: false,
+        facts: facts::gather(),
+    };
     let t1 = std::time::Instant::now();
     let step = tauri::async_runtime::block_on(provider.next_step(&shot, &ask))?;
     println!(
@@ -76,11 +86,28 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         // The probe reports the intent; it never actually opens anything.
         provider::Step::Launch { app, .. } => println!("  launch: {app}"),
         provider::Step::Open { url, .. } => println!("  open:   {url}"),
+        provider::Step::Press { keys, .. } => println!("  press:  {keys}"),
+        provider::Step::Run { command, .. } => println!("  run:    {command}"),
+        provider::Step::Fetch { url, .. } => println!("  fetch:  {url}"),
+        provider::Step::Search { query, .. } => println!("  search: {query}"),
+        provider::Step::Task { task, .. } => println!("  task:   {task}"),
+        provider::Step::Show { path, .. } => println!("  show:   {path}"),
+        provider::Step::Read { path, from, .. } => println!("  read:   {path} @{from}"),
+        provider::Step::Edit { path, .. } => println!("  edit:   {path}"),
+        provider::Step::Plan { todos, .. } => println!("  plan:   {} steps", todos.len()),
+        provider::Step::Write { path, content, .. } => {
+            println!("  write:  {path} ({} bytes)", content.len())
+        }
         provider::Step::Reply { .. } => println!("  reply:  (conversation, no action)"),
-        provider::Step::Agent { title, .. } => println!("  agent:  {title:?} (would run unattended)"),
+        provider::Step::Agent { title, .. } => {
+            println!("  agent:  {title:?} (would run unattended)")
+        }
         provider::Step::Question { question } => println!("  ask:    {question:?}"),
         provider::Step::Type { text, submit, .. } => {
-            println!("  type:   {text:?}{}", if submit { " + Return" } else { "" })
+            println!(
+                "  type:   {text:?}{}",
+                if submit { " + Return" } else { "" }
+            )
         }
         provider::Step::Point { at, act, .. } => {
             let out = format!("hit-{name}.png");

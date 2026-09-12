@@ -10,7 +10,12 @@ use crate::error::{Error, Result};
 use base64::Engine;
 use serde_json::json;
 
-pub async fn speech_to_text(cfg: &Config, wav: &[u8]) -> Result<String> {
+/// `None` when there was nothing intelligible in the audio.
+///
+/// Not an error: the recogniser hearing only room noise is the same everyday
+/// non-event as not speaking at all, and being told off for it is worse than it
+/// passing unremarked.
+pub async fn speech_to_text(cfg: &Config, wav: &[u8]) -> Result<Option<String>> {
     let key = cfg
         .key("GEMINI_API_KEY")
         .ok_or_else(|| Error::Voice("voice needs GEMINI_API_KEY (or api_key) set".into()))?;
@@ -44,10 +49,7 @@ pub async fn speech_to_text(cfg: &Config, wav: &[u8]) -> Result<String> {
         .as_str()
         .unwrap_or_default();
     let text = clean(text);
-    if text.is_empty() {
-        return Err(Error::Voice("didn't catch that".into()));
-    }
-    Ok(text)
+    Ok((!text.is_empty()).then_some(text))
 }
 
 /// Models like to answer a transcription request with a sentence about the

@@ -15,20 +15,18 @@ const FOLLOW = 0.2;
 /** Lag converted to stretch. The further behind it is, the more it deforms. */
 const STRETCH = 0.02;
 const MAX_STRETCH = 0.22;
-const WAVE = { x0: 2, x1: 30, mid: 12, points: 13, amplitude: 8 };
 const SNAP = "cubic-bezier(0.23, 1, 0.32, 1)";
 
 /**
- * The companion: a cat that trails the cursor, and a live waveform while you talk.
+ * The companion: a cat that trails the cursor.
  *
  * The cat is a running Rive state machine, not a rendered frame -- it idles and
  * blinks on its own, which is the entire reason to carry a 1.9MB runtime. Freezing
  * it into an image would cost the same and buy a sticker.
  *
- * Listening is shown *around* the cat rather than by replacing it: ripples behind,
- * and a waveform driven by the real microphone level from Rust. Swapping the cat
- * out for a microphone glyph would throw away the one thing that makes the
- * companion recognisable between states.
+ * It does not report state. Listening, thinking and speaking are the notch's job
+ * now, and the ripples and waveform that used to ring the cursor were a second
+ * copy of the same information in the corner of your eye.
  */
 export function Companion({
   mode,
@@ -41,7 +39,6 @@ export function Companion({
   const listening = mode === "listening";
   const shell = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
-  const wave = useRef<SVGPathElement>(null);
 
   const { RiveComponent } = useRive({
     src: cat,
@@ -56,16 +53,11 @@ export function Companion({
     if (anchored) return;
     const target = { x: -200, y: -200 };
     const shown = { x: -200, y: -200 };
-    const level = { raw: 0, shown: 0 };
-    let phase = 0;
     let frame = 0;
 
     const subs = [
       listen<[number, number]>("cursor", (e) => {
         [target.x, target.y] = e.payload;
-      }),
-      listen<number>("level", (e) => {
-        level.raw = Math.min(1, Math.max(0, e.payload));
       }),
       // Fade out while the pointer is at rest -- which is every case where an app
       // hides it: video, presentations, an editor while you type. Written straight
@@ -83,7 +75,9 @@ export function Companion({
       shown.x += dx * FOLLOW;
       shown.y += dy * FOLLOW;
       if (shell.current) {
-        shell.current.style.transform = `translate3d(${shown.x + 20}px, ${shown.y + 20}px, 0)`;
+        // Offset from the pointer, not on it: close enough to belong to the
+        // cursor, clear enough never to cover what you are about to click.
+        shell.current.style.transform = `translate3d(${shown.x + 12}px, ${shown.y + 11}px, 0)`;
       }
 
       // Stretch along travel, pinch across it -- that pairing keeps the volume
@@ -99,24 +93,6 @@ export function Companion({
             : `rotate(${angle}deg) scale(${1 + s}, ${1 - s * 0.6}) rotate(${-angle}deg)`;
       }
 
-      if (wave.current) {
-        // Rises fast, falls slowly -- how a real VU meter behaves, and why it reads
-        // as sound rather than as a slider being dragged.
-        const up = level.raw > level.shown;
-        level.shown += (level.raw - level.shown) * (up ? 0.35 : 0.07);
-        phase += 0.19;
-
-        const { x0, x1, mid, points, amplitude } = WAVE;
-        const step = (x1 - x0) / (points - 1);
-        const amp = level.shown * amplitude;
-        const d = Array.from({ length: points }, (_, i) => {
-          const t = i / (points - 1);
-          // Tapered, so it grows out of a flat line instead of hinging off its ends.
-          const y = mid + Math.sin(phase + i * 0.9) * amp * Math.sin(t * Math.PI);
-          return `${i ? "L" : "M"}${(x0 + i * step).toFixed(2)} ${y.toFixed(2)}`;
-        }).join(" ");
-        wave.current.setAttribute("d", d);
-      }
     };
     frame = requestAnimationFrame(tick);
 
@@ -144,14 +120,6 @@ export function Companion({
       >
         <div className="absolute -translate-x-1/2 -translate-y-1/2">
           <div className="relative grid size-14 place-items-center">
-            {listening && (
-              <>
-                <Ripple />
-                {/* Half a cycle behind, so a ring is always in flight. */}
-                <Ripple className="[animation-delay:950ms]" />
-              </>
-            )}
-
             <div
               style={{ transitionTimingFunction: SNAP }}
               className={[
@@ -165,44 +133,9 @@ export function Companion({
               <RiveComponent className="size-full" />
             </div>
 
-            {/* Sits under the cat, like something it is saying. */}
-            <svg
-              viewBox="0 0 32 24"
-              className="absolute -bottom-5 left-1/2 w-14 -translate-x-1/2 overflow-visible"
-              style={{
-                transition: `opacity 220ms ${SNAP} ${listening ? "120ms" : "0ms"}`,
-                opacity: listening ? 1 : 0,
-              }}
-            >
-              <defs>
-                <linearGradient id="waveInk" x1="0" x2="1">
-                  <stop offset="0%" stopColor="var(--color-accent)" stopOpacity="0.1" />
-                  <stop offset="38%" stopColor="#fff" />
-                  <stop offset="100%" stopColor="var(--color-accent)" stopOpacity="0.1" />
-                </linearGradient>
-              </defs>
-              <path
-                ref={wave}
-                d={`M${WAVE.x0} ${WAVE.mid} L${WAVE.x1} ${WAVE.mid}`}
-                fill="none"
-                stroke="url(#waveInk)"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-                className="[filter:drop-shadow(0_0_5px_rgba(255,45,85,0.85))]"
-              />
-            </svg>
           </div>
         </div>
       </div>
     </div>
-  );
-}
-
-/** Sound leaving the cat: expands and dissipates, never loops back inward. */
-function Ripple({ className = "" }: { className?: string }) {
-  return (
-    <span
-      className={`absolute size-14 rounded-full border border-accent motion-safe:animate-ripple ${className}`}
-    />
   );
 }

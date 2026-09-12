@@ -29,7 +29,7 @@ pub fn fit(app: &AppHandle, height: f64) {
 /// Click-through until something in it is worth clicking.
 pub fn dock_to_notch(app: &AppHandle) {
     let Some(win) = window(app) else { return };
-    let notch = super::notch::measure();
+    let notch = crate::app::ui::notch::measure();
     let (w, h) = SIZE;
 
     let _ = win.set_size(LogicalSize::new(w, h));
@@ -38,7 +38,7 @@ pub fn dock_to_notch(app: &AppHandle) {
     let _ = win.show();
 
     #[cfg(target_os = "macos")]
-    super::native::float_everywhere(&win);
+    crate::app::ui::native::float_everywhere(&win);
 }
 
 /// Let clicks through, or not. Collapsed the pill is decoration over the menu bar

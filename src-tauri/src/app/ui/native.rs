@@ -26,8 +26,8 @@ use objc2_app_kit::{
     NSBackingStoreType, NSColor, NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior,
     NSWindowOrderingMode, NSWindowStyleMask,
 };
-use objc2_foundation::{NSPoint, NSRect, NSSize};
 use objc2_foundation::MainThreadMarker;
+use objc2_foundation::{NSPoint, NSRect, NSSize};
 use std::sync::Mutex;
 use tauri::{AppHandle, Manager};
 

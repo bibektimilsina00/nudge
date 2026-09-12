@@ -3,13 +3,38 @@
 @theme {
   --color-accent: #ff2d55;
 
+  /* The pill's bottom corners.
+   *
+   * One value, and a plain circular corner. An elliptical radius follows the real
+   * notch's superellipse more faithfully on paper, but stretched across a 38px
+   * strip it reads as a skewed ramp rather than a corner -- accurate and wrong
+   * looking at once. A round corner of a sensible size simply looks right, which
+   * is the only test that counts here. */
+  --radius-notch: 14px;
+  /* Overwritten on mount with the display's real notch height. */
+  --notch-h: 32px;
+
   --animate-ring: ring 1.6s ease-out infinite;
-  --animate-ripple: ripple 1.9s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  --animate-halo: halo 2.4s cubic-bezier(0.23, 1, 0.32, 1) infinite;
   --animate-think: think 1.15s ease-in-out infinite;
   --animate-breathe: breathe 5s ease-in-out infinite;
 
   /* Grows and fades outward, so it draws the eye without ever covering the
      control it is pointing at. */
+  /* A working agent, at a glance. Expands and fades rather than spinning: a
+     spinner reads as "waiting for something", and an agent is not waiting. */
+  @keyframes halo {
+    0% {
+      transform: scale(1);
+      opacity: 0.5;
+    }
+    70%,
+    100% {
+      transform: scale(2);
+      opacity: 0;
+    }
+  }
+
   @keyframes ring {
     0%   { transform: scale(0.82); opacity: 0; }
     35%  { opacity: 1; }
@@ -18,14 +43,6 @@
 
   /* Sound leaving the mic. transform + opacity only -- the box-shadow pulse this
      replaced repainted the glow on every frame, at the cursor, forever. */
-  @keyframes ripple {
-    0%   { transform: scale(0.5); opacity: 0; }
-    18%  { opacity: 0.5; }
-    100% { transform: scale(2.4); opacity: 0; }
-  }
-
-  /* Seen constantly, so it is deliberately below conscious notice: five seconds,
-     three percent. Enough that the companion is never completely still. */
   @keyframes breathe {
     0%, 100% { transform: scale(1); }
     50%      { transform: scale(1.03); }
@@ -35,6 +52,22 @@
     0%, 100% { transform: scale(1);    opacity: 0.6; }
     50%      { transform: scale(1.22); opacity: 1; }
   }
+}
+
+/* Apple's corners are squircles -- a superellipse, not an arc -- which is why a
+   matched `border-radius` still pulls in more slowly than the real notch does.
+   `corner-shape` expresses it exactly and costs one line, but as of 2026 it ships
+   only in Chromium; this app renders in WKWebView, so today it is inert and the
+   12px radius is what you see. Left here to switch itself on if WebKit ships it. */
+.notch-corner {
+  /* Bottom two only. The top edge *is* the top of the screen -- rounding it
+     leaves a gap above the pill and breaks the very illusion this exists for.
+     Written as one shorthand rather than a full radius plus a `rounded-t-none`
+     utility, because two competing rules are settled by CSS source order rather
+     than by which one you wrote last.
+     */
+  border-radius: 0 0 var(--radius-notch) var(--radius-notch);
+  corner-shape: squircle;
 }
 
 /* The native window is genuinely see-through; anything opaque here would paint a

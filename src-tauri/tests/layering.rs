@@ -12,7 +12,10 @@ const FORBIDDEN: [&str; 2] = ["tauri", "crate::app"];
 
 #[test]
 fn core_stays_independent_of_the_gui_layer() {
-    let mut walk = vec![PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/src/core"))];
+    let mut walk = vec![PathBuf::from(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/src/core"
+    ))];
     let mut checked = 0;
 
     while let Some(dir) = walk.pop() {
@@ -45,5 +48,8 @@ fn core_stays_independent_of_the_gui_layer() {
     }
 
     // A scanner that silently walks nothing passes forever.
-    assert!(checked >= 5, "only scanned {checked} files -- did core/ move?");
+    assert!(
+        checked >= 5,
+        "only scanned {checked} files -- did core/ move?"
+    );
 }

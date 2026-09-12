@@ -6,7 +6,10 @@ pub enum Error {
     #[error("screenshot failed: {0}")]
     Capture(String),
     #[error("{provider} gave no usable point: {detail}")]
-    NoPoint { provider: &'static str, detail: String },
+    NoPoint {
+        provider: &'static str,
+        detail: String,
+    },
     #[error("config: {0}")]
     Config(String),
     #[error("voice: {0}")]

@@ -107,7 +107,8 @@ pub fn open_app(name: &str) -> Result<()> {
 
 #[cfg(test)]
 mod tests {
-    use super::{is_safe_name, is_safe_url};
+    use super::is_safe_name;
+    use super::is_safe_url;
 
     #[test]
     fn accepts_ordinary_web_pages() {
@@ -128,10 +129,10 @@ mod tests {
             "data:text/html,<script>",
             "ftp://example.com",
             "vscode://file/etc",
-            "tiktok.com",              // no scheme: `open` would treat it as a path
-            "https://",                // no host
-            "https://x.com\nmore",     // embedded newline
-            "https://exa mple.com",    // whitespace
+            "tiktok.com",           // no scheme: `open` would treat it as a path
+            "https://",             // no host
+            "https://x.com\nmore",  // embedded newline
+            "https://exa mple.com", // whitespace
         ] {
             assert!(!is_safe_url(bad), "{bad:?} should be refused");
         }
@@ -139,7 +140,13 @@ mod tests {
 
     #[test]
     fn accepts_ordinary_application_names() {
-        for ok in ["Blender", "Visual Studio Code", "DaVinci Resolve", "Logic Pro X", "Figma"] {
+        for ok in [
+            "Blender",
+            "Visual Studio Code",
+            "DaVinci Resolve",
+            "Logic Pro X",
+            "Figma",
+        ] {
             assert!(is_safe_name(ok), "{ok} should be allowed");
         }
     }
@@ -149,12 +156,12 @@ mod tests {
         for bad in [
             "",
             "   ",
-            "../../../bin/sh",          // path traversal
-            "/Applications/Mail.app",   // absolute path
-            "-W",                       // reads as a flag to `open`
-            "Blender; rm -rf ~",        // shell metacharacters
-            "Terminal\n/bin/sh",        // embedded newline
-            "https://example.com",      // URL, not an app
+            "../../../bin/sh",        // path traversal
+            "/Applications/Mail.app", // absolute path
+            "-W",                     // reads as a flag to `open`
+            "Blender; rm -rf ~",      // shell metacharacters
+            "Terminal\n/bin/sh",      // embedded newline
+            "https://example.com",    // URL, not an app
         ] {
             assert!(!is_safe_name(bad), "{bad:?} should be refused");
         }

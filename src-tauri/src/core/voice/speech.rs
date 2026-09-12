@@ -135,7 +135,10 @@ async fn gemini(cfg: &Config, text: &str) -> Result<Vec<u8>, String> {
     }
     // Returned as headerless PCM (`audio/L16;codec=pcm;rate=24000`), so it needs a
     // container before anything will play it.
-    Ok(wrap_pcm(&pcm, sample_rate(part["mimeType"].as_str().unwrap_or(""))))
+    Ok(wrap_pcm(
+        &pcm,
+        sample_rate(part["mimeType"].as_str().unwrap_or("")),
+    ))
 }
 
 /// The rate lives in the mime type rather than a field of its own. Parsed instead
@@ -232,8 +235,20 @@ fn best_voice() -> &'static Option<String> {
         // compact fallback answers to the same name and simply sounds worse, so
         // quality cannot be detected here -- only preferred by name.
         const GOOD: [&str; 14] = [
-            "Ava", "Allison", "Serena", "Zoe", "Joelle", "Noelle", "Evan", "Nathan",
-            "Tom", "Susan", "Samantha", "Stephanie", "Oliver", "Daniel",
+            "Ava",
+            "Allison",
+            "Serena",
+            "Zoe",
+            "Joelle",
+            "Noelle",
+            "Evan",
+            "Nathan",
+            "Tom",
+            "Susan",
+            "Samantha",
+            "Stephanie",
+            "Oliver",
+            "Daniel",
         ];
         GOOD.iter()
             .find_map(|name| pick(&listing, |line| line.starts_with(name)))
@@ -253,7 +268,9 @@ fn pick(listing: &str, want: impl Fn(&str) -> bool) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::{pick, sample_rate, wrap_pcm};
+    use super::pick;
+    use super::sample_rate;
+    use super::wrap_pcm;
 
     const LISTING: &str = "\
 Albert              en_US    # Hello!
@@ -266,7 +283,10 @@ Anna                de_DE    # Hallo!";
             pick(LISTING, |l| l.starts_with("Samantha")).as_deref(),
             Some("Samantha (English (US))"),
         );
-        assert_eq!(pick(LISTING, |l| l.starts_with("Albert")).as_deref(), Some("Albert"));
+        assert_eq!(
+            pick(LISTING, |l| l.starts_with("Albert")).as_deref(),
+            Some("Albert")
+        );
     }
 
     #[test]

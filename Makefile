@@ -23,7 +23,7 @@ SIGN_ID ?= $(shell cat $(IDENTITY_FILE) 2>/dev/null \
 export APPLE_SIGNING_IDENTITY = $(SIGN_ID)
 
 .DEFAULT_GOAL := help
-.PHONY: help dev build run test lint fmt probe reset-perms clean sign-check tools
+.PHONY: help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools
 
 help: ## Show this list
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -85,3 +85,16 @@ sign-check:
 	  echo 'Building unsigned means macOS re-prompts for Screen Recording after every'; \
 	  echo 'rebuild. Run: make pin-identity ID="..."'; exit 2; }
 	@echo "signing as: $(SIGN_ID)"
+
+# Accuracy: the number that decides the project. `make record GOAL="..."` adds a
+# case by capturing the screen and letting you click the right answer; `make
+# bench` re-scores every case. Change the model or the prompt, run it again, and
+# the two numbers are comparable because the screenshots did not move.
+bench: ## Score every saved case -- the accuracy number
+	cd src-tauri && cargo run --release --bin bench
+
+record: ## Add a case: capture the screen, click the answer -- GOAL="..."
+	cd src-tauri && cargo run --release --bin bench -- record "$(GOAL)"
+
+cases: ## List the saved cases
+	cd src-tauri && cargo run --release --bin bench -- list

@@ -23,7 +23,6 @@ const DWELL_MS = 550;
 export function useNudge() {
   const [phase, setPhase] = useState<Phase>("idle");
   const [message, setMessage] = useState("");
-  const [heard, setHeard] = useState("");
   const [point, setPoint] = useState<Point | null>(null);
   const [act, setAct] = useState<Act>("click");
   /** Text to enter, when the step is a typing one. Shown verbatim so it can be
@@ -46,12 +45,10 @@ export function useNudge() {
     clearDwell();
     setPhase("idle");
     setMessage("");
-    setHeard("");
     setPoint(null);
     setTyping(null);
     target.current = null;
     void api.cancel(silence);
-    void api.setInteractive(false);
   }, []);
 
   const render = useCallback(
@@ -117,48 +114,30 @@ export function useNudge() {
     [render, fail],
   );
 
-  const submit = useCallback(
-    (goal: string) => {
-      void api.setInteractive(false);
-      void run(() => api.start(goal));
-    },
-    [run],
-  );
-
   useEffect(() => {
     // Note: "cursor" and "level" are deliberately absent here. They arrive at 60Hz
     // and 30Hz, and holding them in React state re-rendered the whole overlay on
     // every frame of every mouse movement. Companion subscribes to them itself and
     // writes the DOM directly.
     const subs = [
-      listen("ask", () => {
-        clearTimer();
-        setPoint(null);
-        setHeard("");
-        setMessage("");
-        setPhase("asking");
-        void api.setInteractive(true);
-      }),
       listen("advance", () => void run(() => api.advance())),
       listen("listening", () => {
         clearTimer();
         setPoint(null);
-        setHeard("");
         setPhase("listening");
         setMessage("Listening…");
       }),
       // Always show what was heard before acting on it. A voice UI that mishears
       // in silence is worse than no voice UI.
-      listen<string>("heard", (e) => {
-        setHeard(e.payload);
-        setMessage(`“${e.payload}”`);
-      }),
+      // The transcript is no longer shown on screen -- the notch covers the
+      // state and the step is spoken. Kept as a message so an error can still
+      // say what it thought it heard.
+      listen<string>("heard", (e) => setMessage(`“${e.payload}”`)),
       listen<Step | null>("step", (e) => render(e.payload)),
 
-      // The ring stays up until the thing actually happens -- that is the whole
-      // point of a nudge. Doing it is also how you advance, so guide mode and
-      // "click for me" run down one path; in auto mode the click or move Nudge
-      // posts is indistinguishable from yours here.
+      // Nudge posts its own clicks, and they arrive here indistinguishable from
+      // yours -- which is how a click advances the sequence without a second
+      // code path for "it did it" versus "you did it".
       listen<[number, number]>("click", (e) => {
         const t = target.current;
         // A click on a hover target is the user closing a menu, not progress.
@@ -200,5 +179,5 @@ export function useNudge() {
     };
   }, [run, render, fail, dismiss]);
 
-  return { phase, message, heard, point, act, typing, submit, dismiss };
+  return { phase, message, point, act, typing, dismiss };
 }

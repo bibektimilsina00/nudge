@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
 
-export type Status = "idle" | "listening" | "thinking" | "speaking" | "agent";
+export type Status = "idle" | "listening" | "thinking" | "speaking" | "agent" | "asking";
 
 /**
  * Each state gets its own colour, so the notch is readable from the corner of
@@ -9,6 +9,9 @@ export type Status = "idle" | "listening" | "thinking" | "speaking" | "agent";
  */
 const TONE: Record<Exclude<Status, "idle">, { label: string; glow: string; ink: string }> = {
   agent: { label: "Working", glow: "#0a84ff", ink: "#8ec6ff" },
+  // Its own colour because it is the one state that needs you. Working can be
+  // ignored; a question cannot, and it holds until you answer.
+  asking: { label: "Your turn", glow: "#ff2d55", ink: "#ff9db4" },
   listening: { label: "Listening", glow: "#2ec8c8", ink: "#7fe9e9" },
   thinking: { label: "Thinking", glow: "#a855f7", ink: "#d8b4fe" },
   speaking: { label: "Speaking", glow: "#e8913a", ink: "#f5c48a" },
@@ -25,12 +28,12 @@ const TONE: Record<Exclude<Status, "idle">, { label: string; glow: string; ink: 
 export function StatusPill({ status }: { status: Exclude<Status, "idle"> }) {
   const tone = TONE[status];
   return (
-    <div className="relative flex h-[38px] items-center overflow-hidden px-4">
-      <span className="z-10 text-[13px] font-semibold tracking-tight">{tone.label}</span>
+    <div className="relative flex h-(--notch-h) items-center overflow-hidden px-3">
+      <span className="z-10 text-[10.5px] font-semibold tracking-tight">{tone.label}</span>
       <span className="flex-1" />
       <span
         aria-hidden
-        className="pointer-events-none absolute inset-y-0 right-0 w-[190px]"
+        className="pointer-events-none absolute inset-y-0 right-0 w-[96px]"
         style={{
           background: `radial-gradient(120% 140% at 100% 50%, ${tone.glow}cc 0%, ${tone.glow}55 38%, transparent 72%)`,
         }}
@@ -49,12 +52,18 @@ export function StatusPill({ status }: { status: Exclude<Status, "idle"> }) {
 /** Three dots, staggered -- the shape of waiting. */
 function Dots() {
   return (
-    <span className="flex gap-[5px]">
-      {[0, 1, 2].map((i) => (
+    // Graduated, not identical: each dot a little larger than the last reads as
+    // something building rather than three lights blinking in turn.
+    <span className="flex items-center gap-[5px]">
+      {[4, 5.5, 7].map((size, i) => (
         <span
-          key={i}
-          className="size-[5px] rounded-full bg-current motion-safe:animate-think"
-          style={{ animationDelay: `${i * 140}ms` }}
+          key={size}
+          className="rounded-full bg-current motion-safe:animate-think"
+          style={{
+            width: `${size}px`,
+            height: `${size}px`,
+            animationDelay: `${i * 140}ms`,
+          }}
         />
       ))}
     </span>
@@ -104,14 +113,14 @@ function Bars({ live }: { live: boolean }) {
   }, [live]);
 
   return (
-    <span className="flex h-[15px] items-center gap-[3px]">
+    <span className="flex h-[12px] items-center gap-[2.5px]">
       {[0, 1, 2, 3].map((i) => (
         <span
           key={i}
           ref={(el) => {
             bars.current[i] = el;
           }}
-          className="h-full w-[2.5px] origin-center rounded-full bg-current"
+          className="h-full w-[2px] origin-center rounded-full bg-current"
         />
       ))}
     </span>

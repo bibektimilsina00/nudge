@@ -35,10 +35,13 @@ pub struct Config {
     /// Voice name for the chosen engine -- a Gemini prebuilt voice ("Kore",
     /// "Puck", "Aoede"...) or a macOS one (`say -v ?`). None picks a default.
     pub speech_voice: Option<String>,
-    /// Click the control itself instead of only pointing at it. Off by default:
-    /// moving someone's mouse is a bigger promise than showing them where to aim,
-    /// and it needs Accessibility permission. Toggleable from the menu bar.
-    pub auto_click: bool,
+    /// Where commands run. Defaults to the home folder.
+    ///
+    /// Only read-only commands exist today, so this bounds what can be *seen*
+    /// rather than what can be changed. When writing arrives it becomes the
+    /// thing that keeps it inside one directory, and the default should get
+    /// narrower at that point, not stay here.
+    pub workspace: Option<String>,
     /// Refuse to screenshot password managers and windows that name a secret.
     /// On by default: the cost of being wrong is not symmetric.
     pub privacy_guard: bool,
@@ -54,14 +57,15 @@ impl Default for Config {
             provider: "ollama".into(),
             model: None,
             api_key: None,
-            hotkey: "cmd+shift+space".into(),
+            // A bare modifier: hold Control to talk, tap it for the next step.
+            hotkey: "ctrl".into(),
             max_edge: 1280,
             voice_model: "gemini-3.8-flash".into(),
             speak: true,
             speech_engine: "system".into(),
             speech_model: "gemini-2.5-flash-preview-tts".into(),
             speech_voice: None,
-            auto_click: false,
+            workspace: None,
             privacy_guard: true,
             blocked_apps: Vec::new(),
             blocked_titles: Vec::new(),
@@ -70,6 +74,18 @@ impl Default for Config {
 }
 
 impl Config {
+    /// The directory commands run in, resolved and checked to exist.
+    pub fn workspace_dir(&self) -> PathBuf {
+        self.workspace
+            .as_ref()
+            .map(|w| match w.strip_prefix("~/") {
+                Some(rest) => dirs::home_dir().unwrap_or_default().join(rest),
+                None => PathBuf::from(w),
+            })
+            .filter(|p| p.is_dir())
+            .unwrap_or_else(|| dirs::home_dir().unwrap_or_default())
+    }
+
     /// `~/.config/nudge/config.toml`, spelled out rather than via
     /// `dirs::config_dir()` -- that returns `~/Library/Application Support` on
     /// macOS, so a file written where the docs say silently does nothing and you

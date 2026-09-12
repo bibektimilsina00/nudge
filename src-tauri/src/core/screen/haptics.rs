@@ -29,13 +29,8 @@ pub fn tick() {
     use objc2_app_kit::{
         NSHapticFeedbackManager, NSHapticFeedbackPerformanceTime, NSHapticFeedbackPerformer,
     };
-    let performer = unsafe { NSHapticFeedbackManager::defaultPerformer() };
-    unsafe {
-        performer.performFeedbackPattern_performanceTime(
-            PATTERN,
-            NSHapticFeedbackPerformanceTime::Now,
-        )
-    };
+    let performer = NSHapticFeedbackManager::defaultPerformer();
+    performer.performFeedbackPattern_performanceTime(PATTERN, NSHapticFeedbackPerformanceTime::Now);
 }
 
 #[cfg(not(target_os = "macos"))]

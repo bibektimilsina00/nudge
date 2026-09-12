@@ -1,9 +1,10 @@
 //! Running an agent: the loop, the window, and putting the cursor back.
 use super::commands;
-use super::state::{Auto, Screen};
-use crate::core::agent::{Agents, State, MAX_STEPS};
-use crate::core::session::Nudge;
-use crate::core::{agent, click};
+use super::state::Screen;
+use crate::core::run::agent;
+use crate::core::run::agent::{Agents, State, MAX_STEPS};
+use crate::core::run::session::Nudge;
+use crate::core::screen::click;
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Between turns. Long enough that a runaway loop is not a spin, short enough
@@ -11,16 +12,72 @@ use tauri::{AppHandle, Emitter, Manager};
 /// either way.
 const BEAT: std::time::Duration = std::time::Duration::from_millis(120);
 
+/// Extra grace when the model asks for the same thing twice -- whatever it is
+/// looking at has not finished becoming the next screen.
+const SETTLE_AGAIN: std::time::Duration = std::time::Duration::from_millis(1500);
+
+/// How many times the same action may be asked for before we call it a loop.
+///
+/// Two is a page that had not finished loading. Three is a model that cannot see
+/// the thing it keeps aiming at, and no number of further tries will change that
+/// -- one run spent nineteen turns clicking the same YouTube link while the song
+/// it was trying to start was already playing.
+const SAME_ACTION_LIMIT: usize = 3;
+
+/// How many actions may fail outright before the run is called off.
+///
+/// One failure is information, not an ending: an app that is not installed, a
+/// control that moved, a page that was not ready. Asked to open Photoshop on a
+/// machine without it, the agent died on the raw error instead of saying "you
+/// do not have Photoshop" -- which it could only do if it were told what went
+/// wrong and given another turn.
+const FAILURE_LIMIT: usize = 3;
+
+/// How many turns in a row may do nothing at all before giving up.
+///
+/// `unsure` and `reply` perform no action, so the screen cannot change and the
+/// next turn sees exactly what this one saw. Without a limit that is a loop with
+/// a model call in it: one run burned twelve turns repeating the same sentence.
+const IDLE_LIMIT: usize = 3;
+
+/// How long a finished task holds the line after offering a next step.
+///
+/// An offer is not a question the task depends on -- the work is already done --
+/// so silence has to mean "no thanks" rather than leaving it waiting forever.
+/// Long enough to hear it, think, and reach for the key.
+const OFFER_WINDOW: std::time::Duration = std::time::Duration::from_secs(25);
+
 /// Tell every window what the agents are doing. The list is a handful of small
 /// structs; diffing it would be machinery bought for nothing.
 pub fn publish(app: &AppHandle) {
     let agents = app.state::<Agents>();
     let list = agents.list();
+    // Shown while anything is running, collapsed to a square per agent.
+    //
+    // Not the same as the full card it used to be: that was a progress bar for a
+    // three-second task and it was rightly unwanted. A 38px tile that says "this
+    // is still going, and here is how to stop it" is worth the corner -- an agent
+    // owns the real cursor while it works, and that should never be invisible.
+    // The card is one click away, and finished work lives in the Agents tab.
+    let (visible, running) = (agents.running(), agents.running());
     app.emit("agents", &list).ok();
-    show_window(app, !list.is_empty());
+
+    // Onto the main thread, always.
+    //
+    // `publish` is called from inside the agent's async task, which tokio runs on
+    // a worker thread, and `show_window` reaches through to `NSWindow`. AppKit
+    // windows may only be touched from the main thread -- doing it anywhere else
+    // is not a race that might bite, it is an assertion that fires immediately.
+    // Starting an agent killed the app on the first call.
+    let handle = app.clone();
+    let _ = app.run_on_main_thread(move || show_window(&handle, visible));
     // The notch shows blue while an agent is alive, and goes back to whatever the
     // foreground is doing once none are.
-    if agents.running() {
+    if agents.waiting().is_some() {
+        // Waiting on an answer outranks both: the notch has to keep saying so
+        // until the user speaks, or the question looks like it was withdrawn.
+        app.emit("status", "asking").ok();
+    } else if running {
         app.emit("status", "agent").ok();
     } else {
         app.emit("status", "idle").ok();
@@ -29,8 +86,13 @@ pub fn publish(app: &AppHandle) {
 
 /// Park the card under the menu bar on the right, clear of the status items.
 pub fn place_window(app: &AppHandle) {
-    let Some(win) = app.get_webview_window("agents") else { return };
-    let (w, h) = (360.0, 220.0);
+    let Some(win) = app.get_webview_window("agents") else {
+        return;
+    };
+    // Tall enough for a few stacked cards, wide enough for one. The window never
+    // resizes -- the content lays out from the top-right inside it -- because a
+    // window resize cannot be animated and tears on a Retina display.
+    let (w, h) = (360.0, 520.0);
     let screen = app.state::<Screen>();
     let _ = win.set_size(tauri::LogicalSize::new(w, h));
     let _ = win.set_position(tauri::LogicalPosition::new(screen.w - w - 16.0, 34.0));
@@ -38,34 +100,51 @@ pub fn place_window(app: &AppHandle) {
 }
 
 fn show_window(app: &AppHandle, visible: bool) {
-    let Some(win) = app.get_webview_window("agents") else { return };
+    let Some(win) = app.get_webview_window("agents") else {
+        return;
+    };
     if visible {
         let _ = win.show();
         #[cfg(target_os = "macos")]
-        super::native::float_everywhere(&win);
+        crate::app::ui::native::float_everywhere(&win);
     } else {
         let _ = win.hide();
     }
 }
 
 /// Start an agent and let it run. Returns immediately.
-pub fn spawn(app: &AppHandle, goal: String, title: String, say: String) {
+pub fn spawn(app: &AppHandle, goal: String, title: String, say: String, background: bool) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        let id = app.state::<Agents>().start(goal.clone(), title, say);
+        let Some(id) = app
+            .state::<Agents>()
+            .start(goal.clone(), title, say, background)
+        else {
+            // Already busy. Say so rather than silently dropping it -- the user
+            // spoke again because they thought nothing was happening, and
+            // starting a second agent is how one WhatsApp chat got two sets of
+            // clicks and sent a voice note to a real person.
+            let doing = app
+                .state::<Agents>()
+                .current()
+                .map(|a| a.title)
+                .unwrap_or_else(|| "that".into());
+            eprintln!("agent refused: already running {doing:?}");
+            commands::speak(
+                &app,
+                &format!("I'm still on {doing}. Press escape to stop me."),
+            );
+            return;
+        };
+        eprintln!("agent#{id} started: {goal:?}");
         publish(&app);
 
-        // An agent that only points is not an agent. The switch is forced on for
-        // the duration and put back afterwards, so a user who deliberately left
-        // it off does not find it silently changed.
-        let was_auto = app.state::<Auto>().0.on();
+        // There is no longer a switch to force: Nudge always acts. A ring that
+        // waits for the user to click is not what anyone asked an agent for, and
+        // the toggle only ever existed to make that the default.
         let may_act = click::may_click();
-        if may_act {
-            app.state::<Auto>().0.set(true);
-        }
 
         let end = run(&app, id, goal).await;
-        app.state::<Auto>().0.set(was_auto);
 
         let end = if may_act {
             end
@@ -74,6 +153,7 @@ pub fn spawn(app: &AppHandle, goal: String, title: String, say: String) {
                 why: "Clicking needs Accessibility — System Settings › Privacy & Security".into(),
             }
         };
+        eprintln!("agent#{id} ended: {end:?}");
         app.state::<Agents>().set_state(id, end);
         app.state::<Nudge>().end();
         publish(&app);
@@ -82,7 +162,13 @@ pub fn spawn(app: &AppHandle, goal: String, title: String, say: String) {
 
 /// The loop. Each turn: stop? blocked? settle, step, act, report.
 async fn run(app: &AppHandle, id: u64, goal: String) -> State {
-    app.state::<Nudge>().begin(goal);
+    app.state::<Nudge>().begin_agent(goal);
+    let mut last: Option<crate::core::provider::Step> = None;
+    let mut repeats = 0usize;
+    let mut failures = 0usize;
+    let mut idle = 0usize;
+    // Set when the wait is a post-completion offer rather than a real blocker.
+    let mut offered: Option<std::time::Instant> = None;
 
     loop {
         // Checked every turn, not once at the top: a stop that waits for the
@@ -98,32 +184,105 @@ async fn run(app: &AppHandle, id: u64, goal: String) -> State {
             .iter()
             .any(|a| a.id == id && matches!(a.state, State::Waiting { .. }));
         if blocked {
+            // An offer lapses; a genuine question does not. Being asked "shall I
+            // also do X?" and walking away has to end the task, not hang it.
+            if let Some(since) = offered {
+                if since.elapsed() > OFFER_WINDOW {
+                    eprintln!("agent#{id}: offer went unanswered -- finishing");
+                    return State::Done;
+                }
+            }
             tokio::time::sleep(BEAT).await;
             continue;
         }
+        // Answered, so we are past the offer.
+        offered = None;
 
-        if app.state::<Agents>().list().iter().any(|a| a.id == id && a.step >= MAX_STEPS) {
+        if app
+            .state::<Agents>()
+            .list()
+            .iter()
+            .any(|a| a.id == id && a.step >= MAX_STEPS)
+        {
             return State::Failed {
                 why: format!("Gave up after {MAX_STEPS} steps — this isn't converging."),
             };
         }
 
-        let (w, h) = {
-            let s = app.state::<Screen>();
-            (s.w, s.h)
-        };
-        let step = match app.state::<Nudge>().step((w, h)).await {
-            Ok(Some(step)) => step,
+        // Let whatever we just did finish happening before photographing it.
+        //
+        // The foreground path has always done this and the agent never did, so
+        // every agent screenshot was taken 120ms after the click that was meant
+        // to change it -- a blank page, a menu mid-animation, a video that had
+        // not started. It then reasoned about that stale picture and acted on it.
+        // This is the single largest source of the flailing in the test runs.
+        if let Some(wait) = app.state::<super::state::Settle>().remaining() {
+            tokio::time::sleep(wait).await;
+        }
+
+        // A trace, not logging machinery. An agent that fails silently is an agent
+        // you cannot debug, and every turn is one model call -- a line each is
+        // nothing next to that. Run the app from a terminal to watch it.
+        let turn = app
+            .state::<Agents>()
+            .list()
+            .iter()
+            .find(|a| a.id == id)
+            .map_or(0, |a| a.step);
+        let began = std::time::Instant::now();
+
+        let step = match app.state::<Nudge>().step().await {
+            Ok(Some(step)) => {
+                eprintln!(
+                    "agent#{id} turn {turn} ({:.1}s): {step:?}",
+                    began.elapsed().as_secs_f32()
+                );
+                step
+            }
             // The session ended under us -- cancelled, or the privacy guard shut
             // it down mid-task.
-            Ok(None) => return State::Done,
-            Err(e) => return State::Failed { why: e.to_string() },
+            Ok(None) => {
+                eprintln!("agent#{id} turn {turn}: session ended");
+                return State::Done;
+            }
+            Err(e) => {
+                eprintln!("agent#{id} turn {turn}: FAILED {e}");
+                return State::Failed { why: e.to_string() };
+            }
         };
 
         app.state::<Agents>().advanced(id, step.say().to_string());
+
+        // Out loud, every turn -- the foreground path has always done this and
+        // the agent never did. The final sentence is the one that matters: for
+        // a question like "what's the weather", the answer only exists here, and
+        // writing it to a log the user cannot see is not answering them.
+        //
+        // Said before acting, because acting changes the screen and an
+        // explanation arriving after that is just noise.
+        if !matches!(agent::outcome(&step), Some(State::Waiting { .. })) {
+            commands::speak(app, step.say());
+        }
         if let Some(state) = agent::outcome(&step) {
             app.state::<Agents>().set_state(id, state.clone());
             publish(app);
+            // A question nobody hears is a hang. There is no card for foreground
+            // work and no typed prompt anywhere, so the voice is the whole
+            // interface: Nudge asks out loud and listens for the answer.
+            if let State::Waiting { question } = &state {
+                // A finished task that offered a next step says both halves: what
+                // it did, then what it could do. Two sentences, one breath.
+                let line = match &step {
+                    crate::core::provider::Step::Done { say, .. } => {
+                        offered = Some(std::time::Instant::now());
+                        format!("{say} {question}")
+                    }
+                    _ => question.clone(),
+                };
+                eprintln!("agent#{id} turn {turn}: asking -- {line}");
+                commands::speak(app, &line);
+                app.emit("status", "asking").ok();
+            }
             // A question pauses; anything else here is the end of the road.
             if matches!(state, State::Waiting { .. }) {
                 continue;
@@ -131,8 +290,86 @@ async fn run(app: &AppHandle, id: u64, goal: String) -> State {
             return state;
         }
 
-        if let Err(e) = commands::perform(app, &step) {
-            return State::Failed { why: e.to_string() };
+        // A turn that performs nothing leaves the next turn looking at the same
+        // screen, so it will decide the same thing. Two is thinking; three is a
+        // loop.
+        if matches!(step, crate::core::provider::Step::Unsure { .. }) {
+            idle += 1;
+            if idle >= IDLE_LIMIT {
+                return State::Failed {
+                    why: format!(
+                        "Went {idle} turns without being able to do anything. {}",
+                        step.say()
+                    ),
+                };
+            }
+        } else {
+            idle = 0;
+        }
+
+        // The same action twice means the screen has not caught up -- a page still
+        // loading, a window still opening. Re-issuing does not help and can undo
+        // the first one; wait and look again instead.
+        //
+        // Compared by action, not by sentence. The model rewords every turn, so
+        // the first version of this guard caught almost nothing: "Heading
+        // straight to YouTube" and "Let's teleport straight to YouTube" were the
+        // same Open, one after the other, and both fired.
+        if last.as_ref().is_some_and(|l| l.same_action(&step)) {
+            repeats += 1;
+            eprintln!("agent#{id} turn {turn}: same action again (x{repeats}) -- waiting");
+            if repeats >= SAME_ACTION_LIMIT {
+                return State::Failed {
+                    why: format!(
+                        "Tried the same thing {repeats} times and the screen never \
+                         changed. It may already be done, or I cannot see the \
+                         right control."
+                    ),
+                };
+            }
+            tokio::time::sleep(SETTLE_AGAIN).await;
+            continue;
+        }
+        repeats = 0;
+        last = Some(step.clone());
+
+        // The prompt tells it not to, but a model that answers `agent` from inside
+        // an agent must not be allowed to fork one: burn the turn and look again.
+        if matches!(step, crate::core::provider::Step::Agent { .. }) {
+            eprintln!("agent#{id} turn {turn}: answered `agent` from inside an agent -- ignoring");
+            tokio::time::sleep(BEAT).await;
+            continue;
+        }
+
+        // Checked again, immediately before acting.
+        //
+        // The check at the top of the turn is not enough: the model call between
+        // them takes two seconds, so a stop pressed during it still let one more
+        // click through. From the user's side that is "Escape gave me the cursor
+        // back and then it grabbed it again and carried on typing".
+        if app.state::<Agents>().stopping() {
+            return State::Stopped;
+        }
+
+        let outcome = match commands::perform(app, &step) {
+            Ok(()) => commands::perform_async(app, &step).await,
+            Err(e) => Err(e),
+        };
+        if let Err(e) = outcome {
+            failures += 1;
+            eprintln!("agent#{id} turn {turn}: could not perform it -- {e} (x{failures})");
+            if failures >= FAILURE_LIMIT {
+                return State::Failed { why: e.to_string() };
+            }
+            // Hand the failure back as something that happened, so the next turn
+            // can route around it or explain it. The model cannot react to an
+            // error it is never shown.
+            app.state::<Nudge>().note(format!(
+                "That did not work: {e}. Try another way, or say so."
+            ));
+            last = None;
+            tokio::time::sleep(BEAT).await;
+            continue;
         }
         publish(app);
         tokio::time::sleep(BEAT).await;

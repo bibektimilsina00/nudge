@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import type { Agent } from "../Agent";
+import { Artifacts, Commands, Plan, type Agent } from "../Agent";
 import { Section } from "./parts";
 
 /**
@@ -75,12 +75,29 @@ function Card({ agent }: { agent: Agent }) {
         <div className="mt-2 h-[2px] overflow-hidden rounded-full bg-white/10">
           <div
             className="h-full rounded-full bg-[#0a84ff] transition-[width] duration-500 ease-out"
-            style={{ width: `${Math.min(0.97, agent.step / 40) * 100}%` }}
+            style={{ width: `${progress(agent) * 100}%` }}
           />
         </div>
       )}
+      <Plan plan={agent.plan} />
+      <Artifacts made={agent.made} />
+      <Commands ran={agent.ran} />
     </div>
   );
+}
+
+/**
+ * How far along, honestly.
+ *
+ * The plan when there is one; the step budget only as a fallback. A bar creeping
+ * toward forty turns tells you how patient the runtime is, not how close the
+ * task is -- and mirrors `Agent::progress` in Rust so the card and the tab agree.
+ */
+function progress(a: Agent) {
+  if (a.state === "done") return 1;
+  const done = a.plan.filter((t) => t.status === "done").length;
+  if (a.plan.length > 0) return Math.min(0.97, done / a.plan.length);
+  return Math.min(0.97, a.step / 40);
 }
 
 function Empty() {

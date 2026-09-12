@@ -46,7 +46,11 @@ fn main() {
 
         let line = format!(
             "front={front:<18} floating: {}",
-            if floating.is_empty() { "(none)".into() } else { floating.join("  ") }
+            if floating.is_empty() {
+                "(none)".into()
+            } else {
+                floating.join("  ")
+            }
         );
         if line != last {
             println!("{line}");

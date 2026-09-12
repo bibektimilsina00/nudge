@@ -64,6 +64,9 @@ pub fn request_access() {}
 /// A name here that disagrees with what is recorded would be worse than no name.
 pub fn input_name() -> Option<String> {
     use cpal::traits::{DeviceTrait, HostTrait};
+    // `description()` is the modern call but returns the full device blurb;
+    // settings wants the short name, which is what `name()` gives.
+    #[allow(deprecated)]
     cpal::default_host().default_input_device()?.name().ok()
 }
 
@@ -71,7 +74,7 @@ pub fn input_name() -> Option<String> {
 /// thread that built it -- the handle talks to that thread instead of owning it.
 pub struct Recording {
     stop: Arc<AtomicBool>,
-    done: mpsc::Receiver<Result<Vec<u8>>>,
+    done: mpsc::Receiver<Result<Option<Vec<u8>>>>,
     level: Arc<AtomicU32>,
 }
 
@@ -96,8 +99,12 @@ impl Recording {
         f32::from_bits(self.level.load(Ordering::Relaxed))
     }
 
-    /// Stops capture and returns a WAV. Blocks briefly while the stream drains.
-    pub fn finish(self) -> Result<Vec<u8>> {
+    /// Stops capture and returns a WAV, or `None` when there was nothing worth
+    /// sending -- the key was tapped, or nobody spoke.
+    ///
+    /// Not an error. Saying nothing is a perfectly ordinary thing to do, and
+    /// being told off for it every time is worse than silence being ignored.
+    pub fn finish(self) -> Result<Option<Vec<u8>>> {
         self.stop.store(true, Ordering::Relaxed);
         self.done
             .recv()
@@ -109,7 +116,7 @@ impl Recording {
 /// flat. Tuned by ear against the built-in microphone.
 const METER_GAIN: f32 = 9.0;
 
-fn record(stop: &AtomicBool, meter: &Arc<AtomicU32>) -> Result<Vec<u8>> {
+fn record(stop: &AtomicBool, meter: &Arc<AtomicU32>) -> Result<Option<Vec<u8>>> {
     let device = cpal::default_host()
         .default_input_device()
         .ok_or_else(|| Error::Voice("no microphone".into()))?;
@@ -152,8 +159,10 @@ fn record(stop: &AtomicBool, meter: &Arc<AtomicU32>) -> Result<Vec<u8>> {
     drop(stream); // flushes the last callbacks before we read the buffer
 
     let mut buf = samples.lock().unwrap().clone();
-    check_and_normalise(&mut buf, rate)?;
-    to_wav(&buf, rate)
+    if !check_and_normalise(&mut buf, rate)? {
+        return Ok(None);
+    }
+    to_wav(&buf, rate).map(Some)
 }
 
 /// Below this there is no signal at all -- not "quiet", *nothing*.
@@ -177,36 +186,36 @@ const TARGET_PEAK: f32 = 0.95;
 /// denied, macOS does not fail the stream, it feeds it **zeros**. Without this,
 /// that is indistinguishable from a working mic in a quiet room, and the only
 /// symptom is a transcript that is confidently wrong.
-fn check_and_normalise(samples: &mut [f32], rate: u32) -> Result<()> {
+fn check_and_normalise(samples: &mut [f32], rate: u32) -> Result<bool> {
+    // Too short to be speech: a tap, or a slipped key. Nothing to report.
     if (samples.len() as f32) < MIN_SECONDS * rate as f32 {
-        return Err(Error::Voice("hold the key a moment longer".into()));
+        return Ok(false);
     }
     let peak = samples.iter().fold(0.0f32, |m, s| m.max(s.abs()));
     if peak < SILENCE {
-        // A working microphone always has a noise floor, so this is not a quiet
-        // room -- it is no microphone. Deciding *why* is the OS's job, not ours.
-        return Err(Error::Voice(match access() {
+        // Permission problems are worth saying out loud, because only the user can
+        // fix them. Everything else is just quiet, and quiet is not a failure.
+        match access() {
             Access::Denied => {
                 open_privacy_settings();
-                "Microphone access is off for Nudge -- I have opened the settings".into()
+                return Err(Error::Voice(
+                    "Microphone access is off for Nudge -- I have opened the settings".into(),
+                ));
             }
             Access::Unasked => {
                 request_access();
-                "Allow microphone access, then hold the key again".into()
+                return Err(Error::Voice(
+                    "Allow microphone access, then hold again".into(),
+                ));
             }
-            // Permission is fine, so the signal is genuinely absent: usually the
-            // wrong input selected, or a headset that is connected but muted.
-            Access::Granted => format!(
-                "No sound reached the microphone (peak {peak:.4}) -- check the input \
-                 device in System Settings > Sound"
-            ),
-        }));
+            Access::Granted => return Ok(false),
+        }
     }
     let gain = TARGET_PEAK / peak;
     for s in samples.iter_mut() {
         *s *= gain;
     }
-    Ok(())
+    Ok(true)
 }
 
 fn to_wav(samples: &[f32], rate: u32) -> Result<Vec<u8>> {
@@ -218,8 +227,8 @@ fn to_wav(samples: &[f32], rate: u32) -> Result<Vec<u8>> {
     };
     let mut out = std::io::Cursor::new(Vec::new());
     {
-        let mut w = hound::WavWriter::new(&mut out, spec)
-            .map_err(|e| Error::Voice(e.to_string()))?;
+        let mut w =
+            hound::WavWriter::new(&mut out, spec).map_err(|e| Error::Voice(e.to_string()))?;
         for &s in samples {
             w.write_sample((s.clamp(-1.0, 1.0) * i16::MAX as f32) as i16)
                 .map_err(|e| Error::Voice(e.to_string()))?;
@@ -231,7 +240,9 @@ fn to_wav(samples: &[f32], rate: u32) -> Result<Vec<u8>> {
 
 #[cfg(test)]
 mod tests {
-    use super::{check_and_normalise, to_wav, MIN_SECONDS};
+    use super::check_and_normalise;
+    use super::to_wav;
+    use super::MIN_SECONDS;
 
     #[test]
     fn writes_a_readable_wav_with_a_real_header() {
@@ -249,28 +260,33 @@ mod tests {
     }
 
     #[test]
-    fn quiet_speech_is_levelled_up() {
+    fn ordinary_speech_passes_and_is_levelled_up() {
         let rate = 16_000;
         let mut buf = vec![0.02f32; seconds(1.0, rate)];
         buf[0] = 0.05; // peak
-        check_and_normalise(&mut buf, rate).unwrap();
-        assert!((buf[0] - 0.95).abs() < 1e-5, "peak should hit target, got {}", buf[0]);
+        assert!(check_and_normalise(&mut buf, rate).unwrap());
+        assert!(
+            (buf[0] - 0.95).abs() < 1e-5,
+            "peak should hit target, got {}",
+            buf[0]
+        );
     }
 
     #[test]
-    fn a_denied_microphone_is_reported_not_transcribed() {
+    fn silence_is_nothing_to_send_not_something_to_complain_about() {
         // macOS feeds zeros rather than failing when permission is denied, so
         // silence has to be caught here or it reaches the recogniser as "audio".
+        // With permission granted it simply means nobody spoke.
         let rate = 16_000;
         let mut buf = vec![0.0f32; seconds(1.0, rate)];
-        assert!(check_and_normalise(&mut buf, rate).is_err());
+        assert_eq!(check_and_normalise(&mut buf, rate).ok(), Some(false));
     }
 
     #[test]
     fn a_slipped_key_is_not_a_sentence() {
         let rate = 16_000;
         let mut buf = vec![0.5f32; seconds(MIN_SECONDS / 2.0, rate)];
-        assert!(check_and_normalise(&mut buf, rate).is_err());
+        assert_eq!(check_and_normalise(&mut buf, rate).ok(), Some(false));
     }
 
     #[test]

@@ -1,9 +1,14 @@
 //! The accuracy ceiling, and the reference the free providers get measured against.
 //! No official Rust SDK exists, so this is raw HTTP -- which is why "support any
 //! model" stayed three request shapes instead of three SDK abstractions.
-use super::{no_point, prompt, Act, Ask, Provider, Step};
-use crate::core::capture::{Point, Shot};
+use super::no_point;
+use super::prompt;
+use super::Act;
+use super::Ask;
+use super::Provider;
+use super::Step;
 use crate::config::Config;
+use crate::core::screen::capture::{Point, Shot};
 use crate::error::{Error, Result};
 use async_trait::async_trait;
 use serde_json::json;
@@ -103,7 +108,7 @@ impl Provider for Anthropic {
             ],
             "messages": [{"role": "user", "content": [
                 {"type": "image", "source": {
-                    "type": "base64", "media_type": crate::core::capture::MIME, "data": shot.b64(),
+                    "type": "base64", "media_type": crate::core::screen::capture::MIME, "data": shot.b64(),
                 }},
                 {"type": "text", "text": format!(
                     "{}\n\nUse the computer tool's left_click action to show exactly where, \
@@ -155,27 +160,44 @@ fn read_step(resp: &serde_json::Value) -> Option<Step> {
     };
 
     if let Some(q) = tool("ask_user").and_then(|b| b["input"]["question"].as_str()) {
-        return Some(Step::Question { question: q.to_string() });
+        return Some(Step::Question {
+            question: q.to_string(),
+        });
     }
 
     if let Some(title) = tool("run_agent").and_then(|b| b["input"]["title"].as_str()) {
         return Some(Step::Agent {
             title: title.to_string(),
-            say: if say.is_empty() { format!("Starting: {title}") } else { say },
+            say: if say.is_empty() {
+                format!("Starting: {title}")
+            } else {
+                say
+            },
+            background: tool("run_agent")
+                .and_then(|b| b["input"]["background"].as_bool())
+                .unwrap_or(false),
         });
     }
 
     if let Some(url) = tool("open_url").and_then(|b| b["input"]["url"].as_str()) {
         return Some(Step::Open {
             url: url.to_string(),
-            say: if say.is_empty() { "Opening that page.".into() } else { say },
+            say: if say.is_empty() {
+                "Opening that page.".into()
+            } else {
+                say
+            },
         });
     }
 
     if let Some(app) = tool("launch_app").and_then(|b| b["input"]["app"].as_str()) {
         return Some(Step::Launch {
             app: app.to_string(),
-            say: if say.is_empty() { format!("Opening {app}.") } else { say },
+            say: if say.is_empty() {
+                format!("Opening {app}.")
+            } else {
+                say
+            },
         });
     }
 
@@ -192,13 +214,22 @@ fn read_step(resp: &serde_json::Value) -> Option<Step> {
             // The tool has no "submit" of its own; a separate key press would be
             // the model's next step.
             submit: false,
-            say: if say.is_empty() { format!("Type “{text}”.") } else { say },
+            say: if say.is_empty() {
+                format!("Type “{text}”.")
+            } else {
+                say
+            },
         });
     }
 
     let point = computer
         .and_then(|b| b["input"]["coordinate"].as_array())
-        .and_then(|c| Some(Point { x: c.first()?.as_f64()?, y: c.get(1)?.as_f64()? }));
+        .and_then(|c| {
+            Some(Point {
+                x: c.first()?.as_f64()?,
+                y: c.get(1)?.as_f64()?,
+            })
+        });
     // The computer tool names the action itself, so it is read from there rather
     // than asked for twice.
     let act = match computer.map(|b| &b["input"]["action"]) {
@@ -211,7 +242,7 @@ fn read_step(resp: &serde_json::Value) -> Option<Step> {
     Some(match point {
         Some(at) => Step::Point { at, say, act },
         None if reads_as_unsure(&say) => Step::Unsure { say },
-        None => Step::Done { say },
+        None => Step::Done { say, next: None },
     })
 }
 
@@ -220,9 +251,17 @@ fn read_step(resp: &serde_json::Value) -> Option<Step> {
 /// message and nothing else breaks.
 fn reads_as_unsure(say: &str) -> bool {
     let s = say.to_lowercase();
-    ["can't", "cannot", "not visible", "no ", "don't see", "unable", "not on"]
-        .iter()
-        .any(|n| s.contains(n))
+    [
+        "can't",
+        "cannot",
+        "not visible",
+        "no ",
+        "don't see",
+        "unable",
+        "not on",
+    ]
+    .iter()
+    .any(|n| s.contains(n))
 }
 
 #[cfg(test)]
@@ -262,7 +301,10 @@ mod tests {
         ]});
         assert!(matches!(
             read_step(&r).unwrap(),
-            super::Step::Point { act: super::Act::DoubleClick, .. }
+            super::Step::Point {
+                act: super::Act::DoubleClick,
+                ..
+            }
         ));
     }
 
@@ -276,7 +318,10 @@ mod tests {
         ]});
         assert!(matches!(
             read_step(&r).unwrap(),
-            super::Step::Point { act: super::Act::Hover, .. }
+            super::Step::Point {
+                act: super::Act::Hover,
+                ..
+            }
         ));
     }
 

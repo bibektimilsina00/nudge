@@ -1,8 +1,13 @@
 //! Local, free, offline, no key. The default -- and the privacy story: for a tool
 //! that screenshots your work, "nothing leaves this machine" is a feature.
-use super::{first_json, no_point, prompt, Ask, Provider, Step};
-use crate::core::capture::{Point, Shot};
+use super::first_json;
+use super::no_point;
+use super::prompt;
+use super::Ask;
+use super::Provider;
+use super::Step;
 use crate::config::Config;
+use crate::core::screen::capture::{Point, Shot};
 use crate::error::Result;
 use async_trait::async_trait;
 use serde_json::json;
@@ -17,8 +22,7 @@ impl Ollama {
     pub fn new(cfg: &Config) -> Self {
         Self {
             model: cfg.model.clone().unwrap_or_else(|| "qwen3-vl:4b".into()),
-            host: std::env::var("OLLAMA_HOST")
-                .unwrap_or_else(|_| "http://localhost:11434".into()),
+            host: std::env::var("OLLAMA_HOST").unwrap_or_else(|_| "http://localhost:11434".into()),
             // Local inference on a laptop is slow; the default 30s timeout is not enough.
             http: reqwest::Client::builder()
                 .timeout(std::time::Duration::from_secs(180))
@@ -47,12 +51,22 @@ impl Provider for Ollama {
                      {{\"kind\":\"point\",\"x\":<pixels>,\"y\":<pixels>,\"act\":\"click|doubleClick|hover\",\"say\":\"...\"}}\n\
                      {{\"kind\":\"done\",\"say\":\"...\"}}\n\
                      {{\"kind\":\"unsure\",\"say\":\"...\"}}\n\
-                     {{\"kind\":\"launch\",\"app\":\"Blender\",\"say\":\"...\"}}\n\
+                     {{\"kind\":\"launch\",\"app\":\"...\",\"say\":\"...\"}}\n\
                      {{\"kind\":\"open\",\"url\":\"https://...\",\"say\":\"...\"}}\n\
                      {{\"kind\":\"reply\",\"say\":\"...\"}}\n\
                      {{\"kind\":\"agent\",\"title\":\"Playing the song\",\"say\":\"...\"}}\n\
                      {{\"kind\":\"ask\",\"question\":\"...\"}}\n\
                      {{\"kind\":\"type\",\"text\":\"...\",\"submit\":true,\"say\":\"...\"}}\n\
+             {{\"kind\":\"press\",\"keys\":\"cmd+shift+n\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"run\",\"command\":\"find . -name '*.ts' | wc -l\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"fetch\",\"url\":\"https://...\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"search\",\"query\":\"...\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"task\",\"task\":\"...\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"show\",\"path\":\"index.html\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"write\",\"path\":\"index.html\",\"content\":\"...\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"read\",\"path\":\"...\",\"from\":1,\"lines\":200,\"say\":\"...\"}}\n\
+             {{\"kind\":\"plan\",\"todos\":[{{\"text\":\"...\",\"status\":\"active\"}}],\"say\":\"...\"}}\n\
+             {{\"kind\":\"edit\",\"path\":\"...\",\"old\":\"...\",\"new\":\"...\",\"say\":\"...\"}}\n\
                      Coordinates are pixels in this {w}x{h} image, origin top-left.",
                     prompt(ask)
                 ),

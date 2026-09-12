@@ -1,19 +1,17 @@
-//! Everything Nudge actually does, with no Tauri in sight: take a screenshot, ask a
-//! model where to click, record speech, turn it into text, track a session.
+//! Everything Nudge does, with no Tauri in it.
 //!
-//! Nothing here may depend on `crate::app`. That one rule is what keeps this layer
-//! unit-testable without spawning a window, and it is why the tests in here run in
-//! milliseconds.
-
-pub mod agent;
-pub mod capture;
-pub mod click;
-pub mod haptics;
-pub mod keyboard;
-pub mod launch;
-pub mod privacy;
+//! The split is enforced by `tests/layering.rs`, not by convention: nothing here
+//! may import the GUI layer. That keeps the interesting parts testable without a
+//! window, and it is why the harnesses in `bin/` can drive the same code the app
+//! does.
+//!
+//! - [`run`] -- the loop, and who is driving it
+//! - [`provider`] -- the models, one file each
+//! - [`screen`] -- capture and input; everything that needs a permission
+//! - [`voice`] -- microphone, transcription, speech
+//! - [`tools`] -- commands, files and the web
 pub mod provider;
-pub mod session;
-pub mod speech;
-pub mod transcribe;
+pub mod run;
+pub mod screen;
+pub mod tools;
 pub mod voice;

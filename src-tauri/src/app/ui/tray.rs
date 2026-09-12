@@ -1,21 +1,20 @@
 //! The menu bar item. Nudge has no Dock icon and no window, so this is the only
 //! place it visibly exists when idle.
-use super::state::{Auto, Voice, VoiceMode};
-use crate::core::click;
+use crate::app::state::{Voice, VoiceMode};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
-use tauri::{AppHandle, Emitter, Manager};
+use tauri::{AppHandle, Manager};
 
 pub fn install(app: &AppHandle, hotkey: &str) -> tauri::Result<()> {
-    let ask = MenuItem::with_id(app, "ask", &format!("Ask Nudge  ({hotkey})"), true, None::<&str>)?;
-    let auto = CheckMenuItem::with_id(
-        app,
-        "auto",
-        "Click for me",
-        true,
-        app.state::<Auto>().0.on(),
-        None::<&str>,
-    )?;
+    // A bare modifier is held, not pressed, and the menu should say so.
+    let label = if crate::app::input::hotkey::is_bare_modifier(hotkey) {
+        "Ask Nudge  (hold \u{2303})".to_string()
+    } else {
+        format!("Ask Nudge  ({hotkey})")
+    };
+    // Disabled on purpose: it states the shortcut rather than offering a click.
+    // There is nothing to click any more -- speaking is the only way in.
+    let ask = MenuItem::with_id(app, "ask", &label, false, None::<&str>)?;
     // Checkboxes behaving as a radio group: macOS menus have no native radio item,
     // so exclusivity is kept by hand in the handler below.
     let current = app.state::<Voice>().get();
@@ -27,29 +26,29 @@ pub fn install(app: &AppHandle, hotkey: &str) -> tauri::Result<()> {
             CheckMenuItem::with_id(app, id, label, true, *mode == current, None::<&str>)
         })
         .collect::<tauri::Result<_>>()?;
-    let refs: Vec<&dyn tauri::menu::IsMenuItem<_>> =
-        options.iter().map(|i| i as &dyn tauri::menu::IsMenuItem<_>).collect();
+    let refs: Vec<&dyn tauri::menu::IsMenuItem<_>> = options
+        .iter()
+        .map(|i| i as &dyn tauri::menu::IsMenuItem<_>)
+        .collect();
     let voice = Submenu::with_items(app, "Voice", true, &refs)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Nudge", true, None::<&str>)?;
     let menu = Menu::with_items(
         app,
-        &[&ask, &auto, &voice, &PredefinedMenuItem::separator(app)?, &quit],
+        &[&ask, &voice, &PredefinedMenuItem::separator(app)?, &quit],
     )?;
-    let toggle = auto.clone();
 
     TrayIconBuilder::with_id("nudge")
         // A template icon is rendered from its alpha channel alone, so this is a
         // transparent PNG with an opaque glyph -- the app icon would come out as a
         // solid blob. Embedded rather than bundled as a resource: one less path to
         // get wrong at runtime.
-        .icon(tauri::image::Image::from_bytes(include_bytes!("../../icons/tray.png"))?)
+        .icon(tauri::image::Image::from_bytes(include_bytes!(
+            "../../../icons/tray.png"
+        ))?)
         .icon_as_template(true) // follows the light/dark menu bar like a native item
         .tooltip("Nudge")
         .menu(&menu)
         .on_menu_event(move |app, event| match event.id.as_ref() {
-            "ask" => {
-                app.emit("ask", ()).ok();
-            }
             id if id.starts_with("voice:") => {
                 let Some((_, mode)) = VoiceMode::ALL.iter().find(|(k, _)| *k == id) else {
                     return;
@@ -59,24 +58,6 @@ pub fn install(app: &AppHandle, hotkey: &str) -> tauri::Result<()> {
                 // selected is worse than one showing none.
                 for (item, (_, m)) in options.iter().zip(VoiceMode::ALL) {
                     item.set_checked(m == *mode).ok();
-                }
-            }
-            "auto" => {
-                let want = !app.state::<Auto>().0.on();
-                // Posting input events needs Accessibility permission. Ask on the
-                // way in, and refuse to show the box ticked if it was not granted --
-                // a toggle that claims to be on while silently doing nothing is
-                // worse than one that will not turn on.
-                let allowed = !want || click::may_click() || click::request_click_permission();
-                app.state::<Auto>().0.set(want && allowed);
-                toggle.set_checked(want && allowed).ok();
-                if want && !allowed {
-                    app.emit(
-                        "error",
-                        "Clicking needs Accessibility: System Settings > Privacy & \
-                         Security > Accessibility, then reopen Nudge.",
-                    )
-                    .ok();
                 }
             }
             "quit" => app.exit(0),
