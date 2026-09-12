@@ -186,12 +186,34 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
     let cfg: Config = app.state::<Nudge>().cfg.clone();
 
     app.emit("status", "thinking").ok();
+
+    // The picture does not depend on the words, so it need not wait for them.
+    // Started here and collected below, it is taken *during* the transcription
+    // instead of after it -- about half a second that now costs nothing.
+    //
+    // It is also taken before we say anything, which matters for a second
+    // reason: this is the only moment on this path where the output device is
+    // quiet, so it is the only moment the audio fact is about the world rather
+    // than about us.
+    let early = tokio::task::spawn_blocking({
+        let cfg = cfg.clone();
+        move || crate::core::screen::look(&cfg)
+    });
+
     let Some(heard) = transcribe::speech_to_text(&cfg, &wav).await? else {
         // Room noise, or a cough. Nothing was said, so say nothing back.
         app.emit("status", "idle").ok();
         return Ok(());
     };
     app.state::<Nudge>().mark("heard");
+
+    // A refusal or a failed capture is dropped here rather than reported.
+    // `step` looks again for itself when there is nothing stashed, and that is
+    // the place that can refuse properly -- it has a session to end and a
+    // sentence to say. Reporting it twice would mean saying no twice.
+    if let Ok(Ok(look)) = early.await {
+        app.state::<Nudge>().stash(look);
+    }
     app.emit("heard", &heard).ok();
 
     // Answer before thinking.

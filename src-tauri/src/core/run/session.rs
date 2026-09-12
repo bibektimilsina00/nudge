@@ -5,7 +5,7 @@
 use crate::config::Config;
 use crate::core::provider::{self, Ask, Provider, Step};
 use crate::core::screen::capture::{self, Shot};
-use crate::core::screen::privacy;
+use crate::core::screen::{self, Look};
 use crate::error::{Error, Result};
 use std::sync::Mutex;
 
@@ -28,6 +28,13 @@ const SETTLE_MAX: std::time::Duration = std::time::Duration::from_secs(6);
 /// Most sentences are done inside this, and the settle wait overlaps it, so it
 /// usually costs nothing at all.
 const HUSH_MAX: std::time::Duration = std::time::Duration::from_secs(4);
+
+/// How long a look taken ahead of time still describes the screen.
+///
+/// Generous, because the thing it is racing is a transcription that normally
+/// takes about a second -- and mean, because a screenshot is a claim about what
+/// is in front of you right now. Past this we photograph again and pay for it.
+const EARLY_MAX: std::time::Duration = std::time::Duration::from_secs(3);
 
 pub struct Session {
     pub goal: String,
@@ -57,6 +64,8 @@ pub struct Nudge {
     moved: Mutex<Option<std::path::PathBuf>>,
     /// Where this turn's time is going. See [`crate::core::laps`].
     laps: Mutex<crate::core::laps::Laps>,
+    /// A look taken before the turn that will use it. See [`Nudge::stash`].
+    early: Mutex<Option<Look>>,
 }
 
 impl Nudge {
@@ -68,6 +77,7 @@ impl Nudge {
             session: Mutex::new(None),
             moved: Mutex::new(None),
             laps: Mutex::default(),
+            early: Mutex::new(None),
         })
     }
 
@@ -217,6 +227,31 @@ impl Nudge {
         self.laps.lock().unwrap().mark(stage);
     }
 
+    /// Keep a look taken ahead of the turn that will use it.
+    ///
+    /// The picture does not depend on the words. Photographing the screen while
+    /// the transcription is still in flight costs nothing extra and is finished
+    /// well before the answer comes back -- so the first turn arrives at the
+    /// model with its screenshot already taken.
+    ///
+    /// Only the first turn may use it, and only briefly: see [`Nudge::step`].
+    pub fn stash(&self, look: Look) {
+        *self.early.lock().unwrap() = Some(look);
+    }
+
+    /// The look taken ahead of this turn, if it may still be used.
+    ///
+    /// Empties the stash either way. A picture belonging to a turn that never
+    /// happened must not be sitting there waiting for the next one, and the
+    /// cheapest way to guarantee that is to take it out before deciding.
+    fn take_early(&self, first_turn: bool) -> Option<Look> {
+        self.early
+            .lock()
+            .unwrap()
+            .take()
+            .filter(|look| first_turn && look.taken.elapsed() < EARLY_MAX)
+    }
+
     pub async fn step(&self) -> Result<Option<Step>> {
         // Printed however this returns, refusals included. A turn that ended
         // early has still spent its clock, and leaving it running would hand its
@@ -251,15 +286,6 @@ impl Nudge {
             return Ok(Some(Step::Unsure {
                 say: format!("Stopping after {MAX_STEPS} steps -- this isn't converging."),
             }));
-        }
-
-        // Before the capture. There is no un-sending a screenshot, so the check
-        // has to happen while the only thing that exists is a window title.
-        if let Some((app, title)) = privacy::frontmost() {
-            if let Some(reason) = privacy::blocked_by(&self.cfg, &app, &title) {
-                self.end();
-                return Err(Error::Blocked(reason));
-            }
         }
 
         // Nothing has happened yet, so there is nothing to wait for.
@@ -313,10 +339,11 @@ impl Nudge {
         // It now plays over the model call instead, which is the gap it was
         // written to fill.
         //
-        // The cost, stated rather than discovered later: `facts.audio` reads
-        // unknown on a first turn, because we are still talking through it. So
-        // "is something playing" gets answered from the picture that once, and
-        // from the device on every turn after.
+        // This used to cost the audio fact on a first turn -- we are still
+        // talking through it, so the device is busy by definition and the honest
+        // answer is "cannot tell". It does not any more, because the look is now
+        // taken before we speak at all. The fact is only lost when that early
+        // look was missing or too old and we photograph again here, talking.
         if !first_turn {
             let quiet = std::time::Instant::now();
             while crate::core::voice::speech::is_playing() && quiet.elapsed() < HUSH_MAX {
@@ -325,10 +352,24 @@ impl Nudge {
         }
         self.mark("hush");
 
-        // Before the capture, so the two describe the same moment.
-        let facts = crate::core::screen::facts::gather();
-        self.mark("facts");
-        let shot: Shot = capture::grab(self.cfg.max_edge)?;
+        // Taken while the transcription was still in flight, if it was taken at
+        // all and still describes this screen.
+        let early = self.take_early(first_turn);
+
+        let Look { facts, shot, .. } = match early {
+            Some(look) => look,
+            // `look` checks before it photographs, so a refusal happens while the
+            // only thing that exists is a window title.
+            None => screen::look(&self.cfg).map_err(|e| {
+                // A refusal ends the session. The answer is no, and asking again
+                // from the same screen would get the same no.
+                if matches!(e, Error::Blocked(_)) {
+                    self.end();
+                }
+                e
+            })?,
+        };
+        let shot: Shot = shot;
         self.mark("shot");
         let now = shot.fingerprint();
         // Only meaningful once something has been tried.
@@ -370,6 +411,42 @@ mod tests {
         let mut cfg = Config::default();
         cfg.provider = "ollama".into(); // never called; just needs to build
         Nudge::new(cfg).unwrap()
+    }
+
+    /// Three ways an early picture stops being the truth, and the one way it is.
+    #[test]
+    fn an_early_look_is_used_once_and_only_while_it_is_still_true() {
+        let n = nudge();
+        let look = || Look {
+            facts: Default::default(),
+            shot: Shot {
+                bytes: vec![1],
+                sent: (1, 1),
+                logical: (1.0, 1.0),
+                origin: (0.0, 0.0),
+            },
+            taken: std::time::Instant::now(),
+        };
+
+        n.stash(look());
+        assert!(n.take_early(true).is_some(), "a fresh look on a first turn is the whole point");
+        assert!(n.take_early(true).is_none(), "the same picture cannot answer two turns");
+
+        // Not the first turn: something has happened since, and this is a
+        // photograph of before it happened.
+        n.stash(look());
+        assert!(n.take_early(false).is_none());
+        assert!(
+            n.take_early(true).is_none(),
+            "a look we refused must not be left waiting for the next turn to accept it"
+        );
+
+        // Old enough that the screen may have moved on without us.
+        let stale = std::time::Instant::now()
+            .checked_sub(EARLY_MAX * 2)
+            .expect("this machine has been up for a few seconds");
+        n.stash(Look { taken: stale, ..look() });
+        assert!(n.take_early(true).is_none());
     }
 
     /// The boundary still holds after it moves -- it is the user who says where,
