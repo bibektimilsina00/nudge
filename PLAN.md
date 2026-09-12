@@ -202,12 +202,31 @@ one, because that is where the negative origins are.
 ### 5.3 Then, in order
 
 1. ~~**Background processes.**~~ **Done** -- see §3.3.
-2. ~~**Orchestrating an external agent.**~~ **Done.** Nudge finds which coding
-   agents are on the machine and knows how to run each one unattended -- the
-   flag meaning "do not ask me anything" differs per agent, and a wrong one
-   hangs waiting for a person who is not there. The job goes through `start`, so
-   it runs in the same workspace, its whole output is readable, and it is killed
-   when the task ends. **Not yet tested against a real agent run.**
+2. **Orchestrating an external agent — built, not yet proven.**
+
+   Nudge finds which coding agents are on the machine, knows the name people
+   call each one by, and knows how to run it unattended. The job goes through
+   `start`, so it runs in the same workspace, its output is read a piece at a
+   time, its exit code is reported, and it is killed when the task ends.
+
+   Verified by execution rather than memory, which mattered: two of the three
+   invocations written from memory were wrong, and both failed in the way that
+   looks like nothing happening. `claude -p` alone stops dead the first time it
+   wants to edit a file, and `agy -p --mode ...` swallows the next flag as its
+   prompt, runs, exits zero and does nothing that was asked.
+
+   **What is left, and why it is parked rather than finished:**
+
+   - **No end-to-end run yet.** Section I of `results.md` has the four tests. The
+     one that matters most is I4 -- whether it knows *not* to delegate a one-line
+     change, which is the failure nobody notices because it still works.
+   - **`opencode` and `aider` are unverified.** Not installed here, so their forms
+     come from documentation. Marked as such in the code.
+   - **Nothing reads the diff.** The agent reports what it did and Nudge believes
+     it. `git diff` is one `run` away and would turn a claim into a check.
+   - **Turns were 12-14 seconds** in the last run, against 4.5s measured on the
+     same model in the bench. The live prompt is much longer than the bench's.
+     Worth finding before more is built on top.
 3. **Memory.** Per-app notes, written from failure, injected only when that app is
    in front: *"CapCut: the timeline view means a project is open."* Earned once
    the loop is known to work -- memory that records a broken loop's habits is
