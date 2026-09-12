@@ -462,17 +462,32 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             super::super::agent::publish(app);
         }
         Step::Output { id, .. } => {
-            let (text, alive) = app.state::<Background>().read(*id)?;
-            let status = if alive { "still running" } else { "finished" };
-            eprintln!("output of {id} ({status}, {} chars)", text.len());
+            // Waits rather than returning nothing. A turn costs a model call and
+            // several seconds, so polling an agent that takes two minutes would
+            // burn thirty of them saying "still nothing".
+            const PATIENCE: std::time::Duration = std::time::Duration::from_secs(20);
+            let p = app.state::<Background>().read(*id, PATIENCE)?;
+
+            let status = match (p.alive, p.code) {
+                (true, _) => "still running".to_string(),
+                (false, Some(0)) => "finished successfully".to_string(),
+                (false, Some(c)) => format!("failed with code {c}"),
+                (false, None) => "stopped".to_string(),
+            };
+            eprintln!("output of {id} ({status}, {} new chars)", p.fresh.len());
             app.state::<Nudge>().note(format!(
-                "Process {id} is {status}, and has printed:\n{}",
-                if text.trim().is_empty() {
-                    "(nothing yet)"
+                "Process {id} is {status}. New output since last time:\n{}",
+                if p.fresh.trim().is_empty() {
+                    "(nothing new)"
                 } else {
-                    &text
+                    &p.fresh
                 }
             ));
+            if !p.fresh.trim().is_empty() {
+                app.state::<Agents>()
+                    .record_run(format!("output {id}"), p.fresh.clone());
+                super::super::agent::publish(app);
+            }
         }
         Step::Kill { id, .. } => {
             app.state::<Background>().stop(*id)?;

@@ -85,13 +85,53 @@ const KEEP: usize = 16_000;
 /// How many may run at once. More than this is not orchestration, it is a leak.
 const MAX_RUNNING: usize = 4;
 
+/// Longest anything may run before it is stopped.
+///
+/// A coding agent can legitimately take minutes; nothing here should take
+/// twenty. Generous enough not to cut real work short, short enough that a
+/// process everybody forgot about does not outlive the afternoon.
+const MAX_LIFETIME: std::time::Duration = std::time::Duration::from_secs(15 * 60);
+
 pub struct Process {
     pub id: u64,
     pub command: String,
     child: std::process::Child,
     /// Filled by a reader thread; the child's pipes would otherwise fill and
     /// block it once nobody drained them.
-    output: Arc<Mutex<String>>,
+    output: Arc<Mutex<Buffer>>,
+    started: std::time::Instant,
+    /// What the process said when it ended, once it has.
+    finished: Option<std::process::ExitStatus>,
+}
+
+/// The output so far, and how much of it has already been reported.
+///
+/// Reporting everything on every read would put the whole of an agent's run
+/// into the history several times over -- and an agent prints a lot. Each read
+/// returns only what is new, which is also what a person watching a log sees.
+#[derive(Default)]
+pub struct Buffer {
+    text: String,
+    /// How many bytes of `text` have been handed over already.
+    reported: usize,
+}
+
+impl Buffer {
+    fn take_new(&mut self) -> String {
+        let fresh = self.text[self.reported..].to_string();
+        self.reported = self.text.len();
+        fresh
+    }
+}
+
+/// What a read comes back with.
+pub struct Progress {
+    /// Only what is new since the last read.
+    pub fresh: String,
+    pub alive: bool,
+    /// `None` while running, then the exit code -- 0 is success, and an agent
+    /// that failed needs to be told apart from one that finished.
+    pub code: Option<i32>,
 }
 
 #[derive(Default)]
@@ -138,7 +178,7 @@ impl Running {
             .stderr(std::process::Stdio::piped())
             .spawn()?;
 
-        let output = Arc::new(Mutex::new(String::new()));
+        let output = Arc::new(Mutex::new(Buffer::default()));
         // One thread per pipe. Without draining them the child blocks as soon as
         // it has printed a pipe buffer's worth, which for a dev server is about
         // the moment it starts.
@@ -159,19 +199,55 @@ impl Running {
             command: command.to_string(),
             child,
             output,
+            started: std::time::Instant::now(),
+            finished: None,
         });
         Ok(id)
     }
 
     /// What it has printed, and whether it is still going.
-    pub fn read(&self, id: u64) -> Result<(String, bool)> {
-        let mut items = self.items.lock().unwrap();
-        let Some(p) = items.iter_mut().find(|p| p.id == id) else {
-            return Err(Error::Click(format!("nothing running with id {id}")));
-        };
-        let alive = matches!(p.child.try_wait(), Ok(None));
-        let text = p.output.lock().unwrap().clone();
-        Ok((text, alive))
+    /// What it has printed since last time.
+    ///
+    /// Waits up to `patience` for something to happen rather than returning
+    /// nothing straight away. A turn costs a model call and several seconds, so
+    /// polling an agent that takes two minutes would burn thirty turns saying
+    /// "still nothing" -- this makes it two or three.
+    pub fn read(&self, id: u64, patience: std::time::Duration) -> Result<Progress> {
+        let until = std::time::Instant::now() + patience;
+        loop {
+            {
+                let mut items = self.items.lock().unwrap();
+                let Some(p) = items.iter_mut().find(|p| p.id == id) else {
+                    return Err(Error::Click(format!("nothing running with id {id}")));
+                };
+                if p.finished.is_none() {
+                    p.finished = p.child.try_wait().ok().flatten();
+                }
+                // Killed for running too long rather than left forever. A model
+                // that starts something and stops asking should not leave it.
+                if p.finished.is_none() && p.started.elapsed() > MAX_LIFETIME {
+                    let _ = p.child.kill();
+                    let _ = p.child.wait();
+                    return Err(Error::Click(format!(
+                        "{} ran for {} minutes without finishing, so I stopped it",
+                        p.command,
+                        MAX_LIFETIME.as_secs() / 60
+                    )));
+                }
+                let fresh = p.output.lock().unwrap().take_new();
+                let done = p.finished;
+                // Come back the moment there is something to say, or it ended.
+                if !fresh.trim().is_empty() || done.is_some() || std::time::Instant::now() >= until
+                {
+                    return Ok(Progress {
+                        fresh,
+                        alive: done.is_none(),
+                        code: done.and_then(|s| s.code()),
+                    });
+                }
+            }
+            std::thread::sleep(std::time::Duration::from_millis(200));
+        }
     }
 
     /// Everything running, for the card and for the model.
@@ -219,7 +295,7 @@ enum Pipe {
 }
 
 impl Pipe {
-    fn drain_into(self, sink: Arc<Mutex<String>>) {
+    fn drain_into(self, sink: Arc<Mutex<Buffer>>) {
         let mut buf = [0u8; 4096];
         let mut reader: Box<dyn Read> = match self {
             Pipe::Out(o) => Box::new(o),
@@ -230,16 +306,21 @@ impl Pipe {
                 return;
             }
             let mut held = sink.lock().unwrap();
-            held.push_str(&String::from_utf8_lossy(&buf[..n]));
+            held.text.push_str(&String::from_utf8_lossy(&buf[..n]));
             // Keep the tail. The end of a build is where the error is.
-            if held.len() > KEEP {
-                let cut = held.len() - KEEP;
+            if held.text.len() > KEEP {
+                let cut = held.text.len() - KEEP;
                 let boundary = held
+                    .text
                     .char_indices()
                     .map(|(i, _)| i)
                     .find(|i| *i >= cut)
-                    .unwrap_or(held.len());
-                *held = held[boundary..].to_string();
+                    .unwrap_or(held.text.len());
+                held.text = held.text[boundary..].to_string();
+                // The cursor moves with the text it points into, or a read after
+                // a truncation returns the wrong slice -- or panics on a
+                // character boundary.
+                held.reported = held.reported.saturating_sub(boundary);
             }
         }
     }
@@ -291,20 +372,34 @@ mod tests {
             .start(&tmp(), "node -e 'console.log(\"listening on 3000\")'")
             .expect("should start");
 
-        // Give the reader thread a moment; the process is tiny.
-        for _ in 0..40 {
-            if r.read(id).unwrap().0.contains("listening") {
-                break;
-            }
-            std::thread::sleep(std::time::Duration::from_millis(25));
-        }
-        let (text, _) = r.read(id).unwrap();
-        assert!(text.contains("listening on 3000"), "got: {text:?}");
+        // The read waits for something to happen rather than returning nothing.
+        let wait = std::time::Duration::from_secs(3);
+        let first = r.read(id, wait).unwrap();
+        assert!(
+            first.fresh.contains("listening on 3000"),
+            "got: {:?}",
+            first.fresh
+        );
+
+        // And only what is new: reading again returns nothing, not the same text
+        // a second time. Repeating it would put the whole run into the history
+        // once per read.
+        let again = r.read(id, std::time::Duration::from_millis(200)).unwrap();
+        assert!(
+            again.fresh.trim().is_empty(),
+            "repeated itself: {:?}",
+            again.fresh
+        );
+        assert_eq!(
+            again.code,
+            Some(0),
+            "a finished process reports how it went"
+        );
 
         assert_eq!(r.list().len(), 1);
         r.stop(id).unwrap();
         assert_eq!(r.list().len(), 0, "stopping removes it");
-        assert!(r.read(id).is_err(), "and it is no longer askable");
+        assert!(r.read(id, wait).is_err(), "and it is no longer askable");
     }
 
     /// Something left running after Nudge forgets about it is something nobody
@@ -330,6 +425,36 @@ mod tests {
     fn it_refuses_more_than_it_strictly_needs_to() {
         assert!(Running::refuse("node -e 'x => x'").is_some());
         assert!(Running::refuse("npm run build").is_none());
+    }
+
+    /// A failing agent has to be distinguishable from a finished one, or the
+    /// task reports success on a build that did not compile.
+    #[test]
+    fn a_failure_says_so() {
+        let r = Running::default();
+        let id = r.start(&tmp(), "node -e 'process.exit(3)'").unwrap();
+        let p = r.read(id, std::time::Duration::from_secs(3)).unwrap();
+        assert!(!p.alive);
+        assert_eq!(p.code, Some(3));
+        r.stop_all();
+    }
+
+    /// The tail is kept, and the cursor into it moves with the text -- otherwise
+    /// a read after a truncation returns the wrong slice, or panics part-way
+    /// through a character.
+    #[test]
+    fn the_cursor_survives_the_buffer_being_trimmed() {
+        let mut b = Buffer::default();
+        b.text = "a".repeat(10);
+        assert_eq!(b.take_new().len(), 10);
+        assert_eq!(b.take_new().len(), 0, "nothing new the second time");
+
+        // Simulate the trim the reader thread does.
+        b.text.push_str(&"b".repeat(10));
+        let cut = 5;
+        b.text = b.text[cut..].to_string();
+        b.reported = b.reported.saturating_sub(cut);
+        assert_eq!(b.take_new(), "b".repeat(10), "only the unreported part");
     }
 
     #[test]
