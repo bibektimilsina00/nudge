@@ -70,8 +70,44 @@ struct Case {
     name: String,
     goal: String,
     /// The right answer, in the saved image's pixel space.
-    target: Point,
+    ///
+    /// A point for something small, a box for something wide. A click anywhere
+    /// inside the address bar opens the address bar, so scoring that by distance
+    /// from wherever the recorder happened to click marks a perfectly good
+    /// answer wrong -- one run called a click 171px along a 600px-wide bar a
+    /// miss.
+    target: Target,
     image: std::path::PathBuf,
+}
+
+enum Target {
+    /// Somewhere near here, within `TOLERANCE`.
+    Spot(Point),
+    /// Anywhere in here.
+    Box { x1: f64, y1: f64, x2: f64, y2: f64 },
+}
+
+impl Target {
+    /// How far outside the answer this point is. Zero means correct.
+    fn miss_by(&self, p: Point) -> f64 {
+        match self {
+            Target::Spot(t) => ((p.x - t.x).hypot(p.y - t.y) - TOLERANCE).max(0.0),
+            Target::Box { x1, y1, x2, y2 } => {
+                let dx = (x1 - p.x).max(0.0).max(p.x - x2);
+                let dy = (y1 - p.y).max(0.0).max(p.y - y2);
+                dx.max(0.0).hypot(dy.max(0.0))
+            }
+        }
+    }
+
+    fn describe(&self) -> String {
+        match self {
+            Target::Spot(t) => format!("({:.0},{:.0})", t.x, t.y),
+            Target::Box { x1, y1, x2, y2 } => {
+                format!("the box ({x1:.0},{y1:.0})-({x2:.0},{y2:.0})")
+            }
+        }
+    }
 }
 
 fn dir() -> std::path::PathBuf {
@@ -93,21 +129,48 @@ fn load() -> std::io::Result<Vec<Case>> {
         }
         let body = std::fs::read_to_string(&path)?;
         let mut goal = String::new();
-        let (mut x, mut y) = (0.0, 0.0);
+        let (mut x, mut y): (f64, f64) = (0.0, 0.0);
+        let (mut x2, mut y2): (Option<f64>, Option<f64>) = (None, None);
         for line in body.lines() {
-            match line.split_once('=') {
-                Some(("goal", v)) => goal = v.trim().to_string(),
-                Some(("x", v)) => x = v.trim().parse().unwrap_or(0.0),
-                Some(("y", v)) => y = v.trim().parse().unwrap_or(0.0),
+            // Both sides trimmed. `goal = x` splits into "goal " and " x", and
+            // matching on the untrimmed key silently matched nothing -- so every
+            // case ran with an empty goal and a target of (0,0), and the whole
+            // first run scored 0/10 against a model that had been asked nothing.
+            let Some((key, value)) = line.split_once('=') else {
+                continue;
+            };
+            match (key.trim(), value.trim()) {
+                ("goal", v) => goal = v.to_string(),
+                ("x", v) => x = v.parse().unwrap_or(0.0),
+                ("y", v) => y = v.parse().unwrap_or(0.0),
+                ("x2", v) => x2 = v.parse().ok(),
+                ("y2", v) => y2 = v.parse().ok(),
                 _ => {}
             }
         }
+        // A case that did not parse is worse than no case: it scores a miss
+        // against a target of nothing.
+        assert!(
+            !goal.is_empty() && (x, y) != (0.0, 0.0),
+            "{} did not parse -- goal {goal:?}, target ({x},{y})",
+            path.display()
+        );
         let name = path.file_stem().unwrap().to_string_lossy().to_string();
+        // Two corners means a box; one point means a spot.
+        let target = match (x2, y2) {
+            (Some(x2), Some(y2)) => Target::Box {
+                x1: x.min(x2),
+                y1: y.min(y2),
+                x2: x.max(x2),
+                y2: y.max(y2),
+            },
+            _ => Target::Spot(Point { x, y }),
+        };
         cases.push(Case {
             image: path.with_extension("jpg"),
             name,
             goal,
-            target: Point { x, y },
+            target,
         });
     }
     Ok(cases)
@@ -116,8 +179,10 @@ fn load() -> std::io::Result<Vec<Case>> {
 fn list() -> nudge_lib::error::Result<()> {
     for c in load()? {
         println!(
-            "{:<24} ({:>5.0},{:>5.0})  {}",
-            c.name, c.target.x, c.target.y, c.goal
+            "{:<40} {:<28} {}",
+            c.name,
+            c.target.describe(),
+            c.goal
         );
     }
     Ok(())
@@ -131,14 +196,25 @@ fn record(cfg: &Config, goal: &str) -> nudge_lib::error::Result<()> {
         eprintln!("usage: bench record \"click the settings gear\"");
         std::process::exit(2);
     }
-    print!("Set the screen up, then press Return to capture... ");
+    println!("Goal: {goal}");
+    print!("Press Return, then bring the right window forward. ");
     std::io::stdout().flush().ok();
     let mut line = String::new();
     std::io::stdin().read_line(&mut line).ok();
 
+    // A countdown, because the capture used to happen the instant Return was
+    // pressed -- which photographed the terminal the command was typed into,
+    // rather than the application the case is about.
+    for n in (1..=5).rev() {
+        print!("\rCapturing in {n}... ");
+        std::io::stdout().flush().ok();
+        std::thread::sleep(std::time::Duration::from_secs(1));
+    }
+    println!("\rcapturing now          ");
+
     let shot = capture::grab(cfg.max_edge)?;
     println!("captured {}x{}", shot.sent.0, shot.sent.1);
-    println!("Now CLICK the control this goal means. Waiting...");
+    println!("Now CLICK the control that goal means -- the answer you want scored.");
 
     // Wait for a press, then for the release, so the recorded point is where the
     // click finished rather than wherever the pointer was on the way there.
@@ -152,10 +228,16 @@ fn record(cfg: &Config, goal: &str) -> nudge_lib::error::Result<()> {
 
     // The click is in logical points; the case is stored in the image's space so
     // it stays valid whatever max_edge was used to capture it.
+    // Global point -> this display -> the image. The middle step is the one that
+    // is easy to forget: a capture is of one display now, not of the whole desk,
+    // so a click has to lose that display's origin before it means anything in
+    // the picture. Zero on the main screen, which is exactly why it would have
+    // gone unnoticed until someone recorded a case on a second monitor.
     let (lw, lh) = shot.logical;
+    let (ox, oy) = shot.origin;
     let target = Point {
-        x: at.x * shot.sent.0 as f64 / lw,
-        y: at.y * shot.sent.1 as f64 / lh,
+        x: (at.x - ox) * shot.sent.0 as f64 / lw,
+        y: (at.y - oy) * shot.sent.1 as f64 / lh,
     };
 
     std::fs::create_dir_all(dir())?;
@@ -199,7 +281,7 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
         let bytes = match std::fs::read(&c.image) {
             Ok(b) => b,
             Err(e) => {
-                println!("  {:<24} SKIP  {e}", c.name);
+                println!("  {:<40} SKIP  {e}", c.name);
                 continue;
             }
         };
@@ -229,19 +311,19 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
 
         match step {
             Ok(Step::Point { at, .. }) => {
-                let d = (at.x - c.target.x).hypot(at.y - c.target.y);
-                if d <= TOLERANCE {
+                let off = c.target.miss_by(at);
+                if off == 0.0 {
                     hits += 1;
-                    println!(
-                        "  {:<24} HIT   {d:>5.0}px  {:>5}ms",
-                        c.name,
-                        took.as_millis()
-                    );
+                    println!("  {:<40} HIT           {:>5}ms", c.name, took.as_millis());
                 } else {
                     misses += 1;
                     println!(
-                        "  {:<24} MISS  {d:>5.0}px  {:>5}ms  said ({:.0},{:.0}) wanted ({:.0},{:.0})",
-                        c.name, took.as_millis(), at.x, at.y, c.target.x, c.target.y
+                        "  {:<40} MISS {off:>5.0}px  {:>5}ms  said ({:.0},{:.0}) wanted {}",
+                        c.name,
+                        took.as_millis(),
+                        at.x,
+                        at.y,
+                        c.target.describe()
                     );
                 }
             }
@@ -251,14 +333,14 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
             Ok(other) => {
                 refused += 1;
                 println!(
-                    "  {:<24} ----  {:>5}ms  {other:?}",
+                    "  {:<40} ----          {:>5}ms  {other:?}",
                     c.name,
                     took.as_millis()
                 );
             }
             Err(e) => {
                 misses += 1;
-                println!("  {:<24} ERR   {e}", c.name);
+                println!("  {:<40} ERR   {e}", c.name);
             }
         }
     }

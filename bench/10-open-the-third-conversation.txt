@@ -1,0 +1,3 @@
+goal = open the third conversation
+x = 451
+y = 345

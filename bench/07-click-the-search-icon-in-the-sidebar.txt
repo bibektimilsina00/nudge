@@ -1,0 +1,3 @@
+goal = click the search icon in the sidebar
+x = 19
+y = 108
