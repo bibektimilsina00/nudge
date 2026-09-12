@@ -150,6 +150,9 @@ const DEFAULT_LINES: usize = 1_000;
 /// Truncating per line means the shape of the file survives even when its
 /// contents do not.
 const MAX_LINE: usize = 2_000;
+/// How much of a file to hand back when an edit misses. Enough to find the line
+/// that was meant, bounded so a big file does not arrive as an error message.
+const SHOW_ON_MISS: usize = 3_000;
 
 /// Read part of a file, with line numbers.
 ///
@@ -238,11 +241,19 @@ pub fn edit(
 
     match body.matches(old).count() {
         1 => {}
+        // The file comes back with the refusal.
+        //
+        // Telling it to go and read the file costs a turn, and it guesses again
+        // anyway -- one run spent three turns on a one-line change that way.
+        // Handing over the text makes the failed edit the read.
         0 => {
+            let mut shown = body.clone();
+            shown.truncate(SHOW_ON_MISS);
             return Err(Error::Click(format!(
-                "that text is not in {} -- read it first, and match it exactly",
+                "that text is not in {}. Here is what it actually contains -- match \
+                 something from this exactly:\n{shown}",
                 path.display()
-            )))
+            )));
         }
         n => {
             return Err(Error::Click(format!(
@@ -443,6 +454,17 @@ mod tests {
             std::fs::read_to_string(w.join("a.txt")).unwrap(),
             "one\ntwo\nuno\n"
         );
+    }
+
+    /// A miss that says only "not found" costs a turn and gets guessed at again.
+    #[test]
+    fn a_missed_edit_hands_back_the_file() {
+        let w = workspace("edit-miss");
+        write(&w, "a.html", "<h1>Real Heading</h1>", false).unwrap();
+        let why = edit(&w, "a.html", "<h1>Guessed</h1>", "x", false)
+            .unwrap_err()
+            .to_string();
+        assert!(why.contains("Real Heading"), "did not show the file: {why}");
     }
 
     /// An edit keeps a copy like a write does, so a wrong one is recoverable.

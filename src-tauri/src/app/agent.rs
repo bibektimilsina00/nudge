@@ -113,7 +113,14 @@ fn show_window(app: &AppHandle, visible: bool) {
 }
 
 /// Start an agent and let it run. Returns immediately.
-pub fn spawn(app: &AppHandle, goal: String, title: String, say: String, background: bool) {
+pub fn spawn(
+    app: &AppHandle,
+    goal: String,
+    title: String,
+    say: String,
+    background: bool,
+    carried: Vec<String>,
+) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
         let Some(id) = app
@@ -144,7 +151,7 @@ pub fn spawn(app: &AppHandle, goal: String, title: String, say: String, backgrou
         // the toggle only ever existed to make that the default.
         let may_act = click::may_click();
 
-        let end = run(&app, id, goal).await;
+        let end = run(&app, id, goal, carried).await;
 
         let end = if may_act {
             end
@@ -161,8 +168,8 @@ pub fn spawn(app: &AppHandle, goal: String, title: String, say: String, backgrou
 }
 
 /// The loop. Each turn: stop? blocked? settle, step, act, report.
-async fn run(app: &AppHandle, id: u64, goal: String) -> State {
-    app.state::<Nudge>().begin_agent(goal);
+async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> State {
+    app.state::<Nudge>().begin_agent(goal, carried);
     let mut last: Option<crate::core::provider::Step> = None;
     let mut repeats = 0usize;
     let mut failures = 0usize;

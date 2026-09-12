@@ -35,12 +35,16 @@ pub struct Config {
     /// Voice name for the chosen engine -- a Gemini prebuilt voice ("Kore",
     /// "Puck", "Aoede"...) or a macOS one (`say -v ?`). None picks a default.
     pub speech_voice: Option<String>,
-    /// Where commands run. Defaults to the home folder.
+    /// Where commands run and files are written.
     ///
-    /// Only read-only commands exist today, so this bounds what can be *seen*
-    /// rather than what can be changed. When writing arrives it becomes the
-    /// thing that keeps it inside one directory, and the default should get
-    /// narrower at that point, not stay here.
+    /// This is the boundary that makes shell access and file writing acceptable
+    /// at all: nothing outside it is read, written or run. Point it at a folder
+    /// for work Nudge produces, not at a source repository -- generated pages
+    /// landing among tracked files is a mess, and the first test that wrote one
+    /// dropped it straight into this project's root.
+    ///
+    /// Defaults to the home folder when unset, which is deliberately too broad
+    /// to be comfortable; set it.
     pub workspace: Option<String>,
     /// Refuse to screenshot password managers and windows that name a secret.
     /// On by default: the cost of being wrong is not symmetric.

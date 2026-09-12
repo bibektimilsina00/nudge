@@ -250,5 +250,5 @@ audio is playing instead of asking a model to look at a still frame.
 None of those are features. They are the difference between something that works
 and something that demos.
 
-The running log of what each test run taught is in [VALIDATE.md](VALIDATE.md),
+The running log of what each test run taught is in [FINDINGS.md](FINDINGS.md),
 and the test passes themselves are in [results.md](results.md).

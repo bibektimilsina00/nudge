@@ -81,10 +81,10 @@ H3 depends on H6 having made a file.
 
 | # | Say | Should | Watch for |
 |---|-----|--------|-----------|
-| H1 | "what's the newest version of Rust" | Speaks the answer **and its sources**. No browser window. | `search` — it should not fetch or open anything |
-| H2 | "make me a landing page for a bakery and show it to me" | Writes a file, then **opens it**. An artifact chip appears on the card. | `write` + `show` — the second half is the new part |
-| H3 | "change the heading on that page to Sweet Crust" | An **edit**, not a rewrite. It should read the file first. | `read` then `edit`. A `write` here is a fail — that is the whole point of `edit` |
-| H4 | "make me a landing page with a menu, an about section and a contact form" | A **plan** on the card: three or four steps, ticking off as it goes. | `plan` — and the bar should follow the list, not creep |
+| H1 | "what's the newest version of Rust" | Speaks the answer **and its sources**. No browser window. | **passes** — took two fixes: nine tools were missing from the hand-over list, and the hand-over discarded what the first turn had found |
+| H2 | "make me a landing page for a bakery and show it to me" | Writes a file, then **opens it**. An artifact chip appears on the card. | **passes** — 4 turns: question, write, show, done |
+| H3 | "change the heading on that page to Sweet Crust" | An **edit**, not a rewrite. It should read the file first. | **passes** — used `edit`, kept a backup. Wasted two turns guessing text it had not read, so a missed edit now hands back the file |
+| H4 | "read the README of this project, summarise it, and save the summary to notes.md" | A **plan** on the card: three steps, ticking off as it goes. | `plan` — the bar follows the list, not the turn count. *The first version of this test asked for a page with three sections, which is three sections in one write, not three steps — it correctly skipped the plan and the test was wrong.* |
 | H5 | "look through this project and tell me which files handle the keyboard" | Goes away, reads several files, comes back with **one answer**. | `task` — the subagent's turns should NOT fill the main history |
 | H6 | "what's in the README of this project" | Reads the file. | `read` on its own |
 

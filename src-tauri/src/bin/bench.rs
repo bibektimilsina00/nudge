@@ -216,6 +216,7 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
             done: &[],
             stalled: false,
             agent: false,
+            workspace: cfg.workspace_dir().display().to_string(),
             // A saved screenshot has no live frontmost app or audio to report,
             // and inventing some would measure something other than grounding.
             facts: facts::Facts::default(),

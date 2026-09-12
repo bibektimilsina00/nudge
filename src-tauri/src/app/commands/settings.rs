@@ -18,12 +18,22 @@ pub fn set_docked(app: AppHandle, docked: bool) {
     app.state::<Docked>().0.set(docked);
     // Both windows draw the companion, so both need to know which of them owns it.
     app.emit("docked", docked).ok();
-    if !docked {
-        // Releasing it is the point of pressing the button; the panel has done its
-        // job and standing in front of the screen is the opposite of helping.
-        if let Some(panel) = crate::app::ui::panel::window(&app) {
-            let _ = panel.hide();
-        }
+
+    // The panel window is not a panel: it is the notch, and the notch is the only
+    // way back into Nudge.
+    //
+    // Releasing the companion used to hide this window, which read as "get the
+    // settings sheet out of the way" and actually meant "delete the dock". The
+    // pill went with it, docking again never called `show`, and the companion had
+    // nowhere to sit -- so it vanished from the cursor and from the notch at
+    // once, with nothing left to click.
+    //
+    // The sheet collapsing is the frontend's job and it already does it. This
+    // window stays.
+    if let Some(panel) = crate::app::ui::panel::window(&app) {
+        let _ = panel.show();
+        #[cfg(target_os = "macos")]
+        crate::app::ui::native::float_everywhere(&panel);
     }
 }
 

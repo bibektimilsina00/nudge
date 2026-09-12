@@ -130,6 +130,8 @@ pub enum Step {
     /// have no way to show it -- which is most of what "make me a landing page"
     /// is asking for.
     Show { path: String, say: String },
+    /// Work somewhere else from now on.
+    Workspace { path: String, say: String },
     /// A whole task rather than a next click: Nudge takes it away and finishes
     /// it on its own.
     ///
@@ -186,6 +188,7 @@ impl Step {
             | Step::Search { say, .. }
             | Step::Task { say, .. }
             | Step::Show { say, .. }
+            | Step::Workspace { say, .. }
             | Step::Agent { say, .. }
             | Step::Question { question: say }
             | Step::Reply { say } => say,
@@ -269,6 +272,7 @@ impl Step {
             Step::Search { query, .. } => format!("Searched for {query:?}"),
             Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
             Step::Show { path, .. } => format!("Showed {path}"),
+            Step::Workspace { path, .. } => format!("Working in {path} now"),
             Step::Plan { todos, .. } => {
                 let done = todos.iter().filter(|(_, s)| s == "done").count();
                 format!("Plan: {done} of {} done", todos.len())
@@ -314,6 +318,12 @@ pub struct Ask<'a> {
     /// What macOS reports about the machine right now -- frontmost app, window
     /// title, whether sound is coming out. Facts a screenshot cannot settle.
     pub facts: crate::core::screen::facts::Facts,
+    /// Where commands run and files are written.
+    ///
+    /// Told, not guessed. Without it a subagent asked to search "this project"
+    /// spent eleven turns rephrasing greps against a folder it had never looked
+    /// at, because nothing said which folder that was or what was in it.
+    pub workspace: String,
     /// Nudge is doing this itself, with nobody watching. The model must act
     /// rather than delegate or chat -- there is no one to read a reply, and
     /// answering `agent` from inside an agent is how it delegated to itself.
@@ -428,6 +438,10 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          then one line on why the original is out.\n\n\
          ## The goal\n\n{goal}\n\n\
          ## What is true right now\n\n\
+         Commands run and files are written in {workspace}, and nowhere else. \
+         Paths are relative to it. If you need to know what is in there, look \
+         before you search -- a listing costs one turn and a blind grep can cost \
+         ten.\n\n\
          {facts}\
          Steps already completed:\n{history}{stalled}\n\n\
          ## Every reply starts with what you see\n\n\
@@ -503,6 +517,10 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Launching one to write a file is the same mistake as opening Terminal \
          to run a command: a window the user did not ask for, and a slower route \
          to the same place.\n\
+         **workspace** moves where commands run and files are written. Use it \
+         the moment they name a folder or a project to work in -- and only then; \
+         it is theirs to choose, not yours. Everything afterwards is relative to \
+         it, and nothing outside it is ever touched.\n\
          **show** opens a file you made, in whatever application owns that kind \
          of file -- a page in the browser, an image in Preview. Finish with it \
          whenever you have made something meant to be looked at: writing a file \
@@ -546,6 +564,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          what they named is absent, the answer is its website, not a substitute \
          from here.\n\n{apps}",
         goal = ask.goal,
+        workspace = ask.workspace,
         facts = ask.facts.brief(),
         apps = crate::core::screen::launch::installed_apps().join(", "),
     )
@@ -711,6 +730,10 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
             new: v["new"].as_str().unwrap_or_default().to_string(),
             say,
         }),
+        "workspace" => Some(Step::Workspace {
+            path: v["path"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
         "show" => Some(Step::Show {
             path: v["path"].as_str().unwrap_or_default().to_string(),
             say,
@@ -789,6 +812,7 @@ mod tests {
             stalled,
             agent: false,
             facts: Default::default(),
+            workspace: "/tmp/workspace".into(),
         }
     }
 

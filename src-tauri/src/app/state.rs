@@ -45,7 +45,14 @@ impl Screen {
 #[derive(Default)]
 pub struct Grants {
     pub granted: std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>,
-    pub asking: std::sync::Mutex<Option<std::path::PathBuf>>,
+    /// The file being asked about, and what was going to be written to it.
+    ///
+    /// The content is kept because otherwise a yes means "write it again", and
+    /// again is not the same: asked to replace a page, one run produced a
+    /// careful dark-themed layout, waited for permission, and then regenerated a
+    /// plainer one from scratch. The user agreed to the first page and got the
+    /// second. Holding the bytes means yes writes exactly what was offered.
+    pub asking: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
 }
 
 /// A setting the menu bar can flip at runtime. The config value is only ever the

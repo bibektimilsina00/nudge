@@ -69,6 +69,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         done: &[],
         stalled: false,
         agent: false,
+        workspace: cfg.workspace_dir().display().to_string(),
         facts: facts::gather(),
     };
     let t1 = std::time::Instant::now();
@@ -92,6 +93,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         provider::Step::Search { query, .. } => println!("  search: {query}"),
         provider::Step::Task { task, .. } => println!("  task:   {task}"),
         provider::Step::Show { path, .. } => println!("  show:   {path}"),
+        provider::Step::Workspace { path, .. } => println!("  cd:     {path}"),
         provider::Step::Read { path, from, .. } => println!("  read:   {path} @{from}"),
         provider::Step::Edit { path, .. } => println!("  edit:   {path}"),
         provider::Step::Plan { todos, .. } => println!("  plan:   {} steps", todos.len()),

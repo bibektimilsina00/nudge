@@ -50,7 +50,12 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
     // have clicked.
     static BUSY: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
     if BUSY.swap(true, std::sync::atomic::Ordering::SeqCst) {
+        // Say so. Dropping it silently is the same mistake as the agent refusing
+        // a second goal without a word -- the user spoke, nothing happened, and
+        // the natural response is to say it again, which is how one WhatsApp
+        // chat ended up with three agents in it.
         eprintln!("foreground: already thinking, ignoring");
+        speak(&app, "One moment, still working on the last one.");
         return Ok(None);
     }
     struct Done;
@@ -128,8 +133,9 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
     }) = &step
     {
         let goal = app.state::<Nudge>().goal();
+        let carried = app.state::<Nudge>().history();
         app.state::<Nudge>().end();
-        crate::app::agent::spawn(&app, goal, title.clone(), say.clone(), *background);
+        crate::app::agent::spawn(&app, goal, title.clone(), say.clone(), *background, carried);
         return Ok(step);
     }
 
@@ -143,11 +149,41 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
     //
     // `Point` is deliberately not here. That is guide mode -- the user asked
     // where something is, and the ring waits for them.
-    if let Some(s @ (Step::Launch { .. } | Step::Open { .. } | Step::Type { .. })) = &step {
+    // Named by what ENDS a turn, not by what continues one.
+    //
+    // The old list named the four steps that hand over, and every tool added
+    // afterwards was missing from it -- a foreground `search` found the answer,
+    // wrote it into the session, and stopped, because nothing drove the turn
+    // that would have said it out loud. Listing the terminal cases instead means
+    // the next tool is handled the day it is written.
+    //
+    // `Point` is terminal here on purpose: that is guide mode, where the ring
+    // waits for the user to do it.
+    let carries_on = !matches!(
+        &step,
+        None | Some(
+            Step::Done { .. }
+                | Step::Reply { .. }
+                | Step::Unsure { .. }
+                | Step::Question { .. }
+                | Step::Point { .. }
+                | Step::Agent { .. }
+        )
+    );
+    if let Some(s) = step.as_ref().filter(|_| carries_on) {
         let goal = app.state::<Nudge>().goal();
         if !goal.is_empty() {
+            // Carried over, not discarded -- see `Nudge::begin_agent`.
+            let carried = app.state::<Nudge>().history();
             app.state::<Nudge>().end();
-            crate::app::agent::spawn(&app, goal.clone(), goal, s.say().to_string(), false);
+            crate::app::agent::spawn(
+                &app,
+                goal.clone(),
+                goal,
+                s.say().to_string(),
+                false,
+                carried,
+            );
         }
     }
 
@@ -251,12 +287,12 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
 ///
 /// Returns the error to raise when there is no agent to hold -- the foreground
 /// has nowhere to wait, so there it stays a refusal.
-fn ask_to_replace(app: &AppHandle, path: &std::path::Path) -> Result<()> {
+fn ask_to_replace(app: &AppHandle, path: &std::path::Path, content: String) -> Result<()> {
     app.state::<Grants>()
         .asking
         .lock()
         .unwrap()
-        .replace(path.to_path_buf());
+        .replace((path.to_path_buf(), content));
     let name = path
         .file_name()
         .map(|n| n.to_string_lossy().to_string())
@@ -305,14 +341,16 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             app.state::<Settle>().after(AFTER_CLICK);
         }
         Step::Write { path, content, .. } => {
-            let workspace = app.state::<Nudge>().cfg.workspace_dir();
+            let workspace = app.state::<Nudge>().workspace();
             let grants = app.state::<Grants>();
             let target = files::resolve(&workspace, path)?;
             let permitted = grants.granted.lock().unwrap().contains(&target);
 
             match files::write(&workspace, path, content, permitted)? {
                 // Asked on the model's behalf; the task waits for the answer.
-                files::Wrote::NeedsPermission { path } => return ask_to_replace(app, &path),
+                files::Wrote::NeedsPermission { path } => {
+                    return ask_to_replace(app, &path, content.clone())
+                }
                 files::Wrote::Done { path, backup } => {
                     // Spent: agreeing once is not agreeing forever.
                     grants.granted.lock().unwrap().remove(&path);
@@ -354,10 +392,16 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                 .map_err(crate::error::Error::Click)?;
             crate::app::agent::publish(app);
         }
+        Step::Workspace { path, .. } => {
+            let moved = app.state::<Nudge>().move_to(path)?;
+            eprintln!("workspace is now {}", moved.display());
+            app.state::<Nudge>()
+                .note(format!("Working in {} from now on.", moved.display()));
+        }
         Step::Show { path, .. } => {
             // The same boundary as writing: a path from a model is a path that
             // has to be proven, and `open` on a file is a real action.
-            let workspace = app.state::<Nudge>().cfg.workspace_dir();
+            let workspace = app.state::<Nudge>().workspace();
             let target = files::resolve(&workspace, path)?;
             if !target.is_file() {
                 return Err(crate::error::Error::Click(format!(
@@ -374,23 +418,20 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         Step::Read {
             path, from, lines, ..
         } => {
-            let text = files::read(
-                &app.state::<Nudge>().cfg.workspace_dir(),
-                path,
-                *from,
-                *lines,
-            )?;
+            let text = files::read(&app.state::<Nudge>().workspace(), path, *from, *lines)?;
             eprintln!("read {path} @{from} ({} chars)", text.len());
             app.state::<Nudge>().note(format!("Read {path}:\n{text}"));
         }
         Step::Edit { path, old, new, .. } => {
-            let workspace = app.state::<Nudge>().cfg.workspace_dir();
+            let workspace = app.state::<Nudge>().workspace();
             let grants = app.state::<Grants>();
             let target = files::resolve(&workspace, path)?;
             let permitted = grants.granted.lock().unwrap().contains(&target);
 
             match files::edit(&workspace, path, old, new, permitted)? {
-                files::Wrote::NeedsPermission { path } => return ask_to_replace(app, &path),
+                files::Wrote::NeedsPermission { path } => {
+                    return ask_to_replace(app, &path, String::new())
+                }
                 files::Wrote::Done { path, backup } => {
                     grants.granted.lock().unwrap().remove(&path);
                     let note = match &backup {
@@ -414,7 +455,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             // The output is the point, so it goes into the session's history
             // where the next turn reads it -- the same channel a screenshot uses
             // to report what happened.
-            let out = shell::run(&app.state::<Nudge>().cfg.workspace_dir(), command)?;
+            let out = shell::run(&app.state::<Nudge>().workspace(), command)?;
             eprintln!("$ {command}\n{out}");
             app.state::<Nudge>()
                 .note(format!("Ran `{command}`, which printed:\n{out}"));

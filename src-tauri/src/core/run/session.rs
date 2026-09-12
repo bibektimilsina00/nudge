@@ -23,6 +23,12 @@ const MAX_STEPS: usize = 12;
 /// costs a whole turn and sends the model down the wrong path.
 const SETTLE_MAX: std::time::Duration = std::time::Duration::from_secs(6);
 
+/// Longest to wait for Nudge's own voice to stop before reading the room.
+///
+/// Most sentences are done inside this, and the settle wait overlaps it, so it
+/// usually costs nothing at all.
+const HUSH_MAX: std::time::Duration = std::time::Duration::from_secs(4);
+
 pub struct Session {
     pub goal: String,
     /// What we have already told the user, fed back so the model advances.
@@ -38,6 +44,17 @@ pub struct Nudge {
     pub cfg: Config,
     provider: Box<dyn Provider>,
     session: Mutex<Option<Session>>,
+    /// Where work happens, when it has been changed by voice.
+    ///
+    /// One setting was being asked to do two jobs: where generated files go,
+    /// and which project Nudge may look at. Those want different answers -- a
+    /// scratch folder for one, whatever you are working on for the other -- and
+    /// switching meant editing a TOML file and restarting.
+    ///
+    /// Held here rather than written back to the config: a spoken "work in my
+    /// nudge project" is for now, and a setting that silently rewrites itself is
+    /// worse than one you have to change on purpose.
+    moved: Mutex<Option<std::path::PathBuf>>,
 }
 
 impl Nudge {
@@ -47,7 +64,36 @@ impl Nudge {
             cfg,
             provider,
             session: Mutex::new(None),
+            moved: Mutex::new(None),
         })
+    }
+
+    /// Where commands run and files are written.
+    pub fn workspace(&self) -> std::path::PathBuf {
+        self.moved
+            .lock()
+            .unwrap()
+            .clone()
+            .unwrap_or_else(|| self.cfg.workspace_dir())
+    }
+
+    /// Work somewhere else from now on.
+    ///
+    /// Refuses anything that is not a directory that exists. The boundary is
+    /// still a boundary -- it has just moved, because the user said where to.
+    pub fn move_to(&self, path: &str) -> Result<std::path::PathBuf> {
+        let expanded = match path.trim().strip_prefix("~/") {
+            Some(rest) => dirs::home_dir().unwrap_or_default().join(rest),
+            None => std::path::PathBuf::from(path.trim()),
+        };
+        if !expanded.is_dir() {
+            return Err(Error::Config(format!(
+                "{} is not a folder I can find",
+                expanded.display()
+            )));
+        }
+        *self.moved.lock().unwrap() = Some(expanded.clone());
+        Ok(expanded)
     }
 
     pub fn provider_name(&self) -> &'static str {
@@ -59,8 +105,17 @@ impl Nudge {
     }
 
     /// Same session, run by the agent runtime rather than by the user's taps.
-    pub fn begin_agent(&self, goal: String) {
+    ///
+    /// `carried` is what the turn that handed over had already done. Starting
+    /// empty threw that away: a foreground search found the answer, the handover
+    /// wiped the session, and the agent searched again for the same thing. What
+    /// happened on screen the agent can see for itself; what a command printed
+    /// or a search returned exists nowhere else.
+    pub fn begin_agent(&self, goal: String, carried: Vec<String>) {
         self.open(goal, true);
+        if let Some(s) = self.session.lock().unwrap().as_mut() {
+            s.done = carried;
+        }
     }
 
     fn open(&self, goal: String, agent: bool) {
@@ -88,7 +143,7 @@ impl Nudge {
         F: FnMut(Step) -> Fut,
         Fut: std::future::Future<Output = Result<String>>,
     {
-        crate::core::run::subagent::run(self.provider.as_ref(), &self.cfg, task, act).await
+        crate::core::run::subagent::run(self.provider.as_ref(), &self.workspace(), task, act).await
     }
 
     /// The most recent thing recorded against this session.
@@ -96,6 +151,16 @@ impl Nudge {
     /// How a subagent's step reports its own output: `perform` writes what a
     /// command printed into the session, and this reads it straight back out,
     /// rather than every action growing a second way to return a value.
+    /// What this session has done so far, for handing on.
+    pub fn history(&self) -> Vec<String> {
+        self.session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|s| s.done.clone())
+            .unwrap_or_default()
+    }
+
     pub fn last_note(&self) -> String {
         self.session
             .lock()
@@ -177,6 +242,24 @@ impl Nudge {
         // and this covers the rest, which is unbounded and unguessable.
         capture::wait_until_still(SETTLE_MAX).await;
 
+        // Let our own voice finish before listening.
+        //
+        // `facts.audio` reports unknown while Nudge is speaking, because its own
+        // voice comes out of the same device. That was right, and it made the
+        // fact useless: the agent speaks every step, a sentence runs two or three
+        // seconds, and that is exactly the window in which the next turn gathers
+        // its facts. So the one turn that most needs to know whether the video
+        // started -- the turn straight after clicking it -- was always told
+        // "cannot tell", and went back to guessing from a still frame. Which is
+        // how it clicked play on something already playing and stopped it.
+        //
+        // Capped, because a long sentence should not hold up the work; past this
+        // the answer stays unknown, which is at least honest.
+        let quiet = std::time::Instant::now();
+        while crate::core::voice::speech::is_playing() && quiet.elapsed() < HUSH_MAX {
+            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+        }
+
         // Before the capture, so the two describe the same moment.
         let facts = crate::core::screen::facts::gather();
         let shot: Shot = capture::grab(self.cfg.max_edge)?;
@@ -189,6 +272,7 @@ impl Nudge {
             stalled,
             agent,
             facts,
+            workspace: self.workspace().display().to_string(),
         };
         let step = self.provider.next_step(&shot, &ask).await?;
 
@@ -207,5 +291,36 @@ impl Nudge {
         session.seen = now;
 
         Ok(Some(step.map_point(|p| shot.to_global(p))))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn nudge() -> Nudge {
+        let mut cfg = Config::default();
+        cfg.provider = "ollama".into(); // never called; just needs to build
+        Nudge::new(cfg).unwrap()
+    }
+
+    /// The boundary still holds after it moves -- it is the user who says where,
+    /// and a folder that does not exist is not somewhere to work.
+    #[test]
+    fn the_workspace_moves_only_to_somewhere_real() {
+        let n = nudge();
+        let home = dirs::home_dir().unwrap();
+        assert_eq!(n.workspace(), home, "defaults to home when unset");
+
+        let tmp = std::env::temp_dir();
+        let moved = n.move_to(tmp.to_str().unwrap()).expect("a real folder");
+        assert_eq!(moved, tmp);
+        assert_eq!(n.workspace(), tmp, "and stays moved");
+
+        assert!(n.move_to("/nowhere/at/all").is_err());
+        assert_eq!(n.workspace(), tmp, "a refusal leaves it where it was");
+
+        // `~` is how people say it out loud, so it has to be understood.
+        assert!(n.move_to("~/").is_ok());
     }
 }

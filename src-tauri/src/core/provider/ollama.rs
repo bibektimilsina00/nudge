@@ -63,6 +63,7 @@ impl Provider for Ollama {
              {{\"kind\":\"search\",\"query\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"task\",\"task\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"show\",\"path\":\"index.html\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"workspace\",\"path\":\"~/projects/thing\",\"say\":\"...\"}}\n\
              {{\"kind\":\"write\",\"path\":\"index.html\",\"content\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"read\",\"path\":\"...\",\"from\":1,\"lines\":200,\"say\":\"...\"}}\n\
              {{\"kind\":\"plan\",\"todos\":[{{\"text\":\"...\",\"status\":\"active\"}}],\"say\":\"...\"}}\n\

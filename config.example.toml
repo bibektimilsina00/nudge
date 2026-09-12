@@ -46,3 +46,8 @@ auto_click = false
 privacy_guard = true
 blocked_apps = []
 blocked_titles = []
+
+# Where Nudge runs commands and writes files. Nothing outside it is touched.
+# A folder for work it produces -- not a source repository, or generated pages
+# end up among your tracked files.
+workspace = "~/Nudge"

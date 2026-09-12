@@ -17,31 +17,55 @@ pub fn answer_agent(app: AppHandle, id: u64, text: String) {
     // A question about replacing a file is answered here like any other, and
     // this is the only place a grant can come from -- the model cannot give
     // itself one, and "yes" only ever applies to the file that was asked about.
-    if let Some(path) = app.state::<Grants>().asking.lock().unwrap().take() {
+    if let Some((path, content)) = app.state::<Grants>().asking.lock().unwrap().take() {
         let yes = files::is_yes(&text);
         eprintln!(
             "replace {}: {}",
             path.display(),
             if yes { "granted" } else { "refused" }
         );
-        if yes {
-            app.state::<Grants>()
-                .granted
-                .lock()
-                .unwrap()
-                .insert(path.clone());
-            // Said plainly in the history, because the next turn has to know to
-            // try the write again -- "they answered: yes" on its own does not
-            // say what to do with it.
-            app.state::<Nudge>().note(format!(
-                "They agreed to replace {}. Write it again now.",
-                path.display()
-            ));
-        } else {
+        if !yes {
             app.state::<Nudge>().note(format!(
                 "They did not want {} replaced. Leave it alone and find another way.",
                 path.display()
             ));
+        } else {
+            // Written here, with the bytes that were offered.
+            //
+            // Telling the model to write it again costs a call and gets a
+            // different file: it regenerates rather than remembers. One run
+            // produced a careful dark-themed page, waited for permission, and
+            // then wrote a plainer one -- the user agreed to the first and got
+            // the second.
+            let workspace = app.state::<Nudge>().workspace();
+            let written = (!content.is_empty())
+                .then(|| files::write(&workspace, &path.display().to_string(), &content, true));
+
+            match written {
+                Some(Ok(_)) => {
+                    eprintln!("wrote {} as agreed", path.display());
+                    app.state::<Nudge>().note(format!(
+                        "They agreed, and {} is now written.",
+                        path.display()
+                    ));
+                    app.state::<Agents>()
+                        .record_file(path.display().to_string());
+                }
+                // Nothing was held, or writing failed. Fall back to granting and
+                // letting the next turn do it, which is what used to happen
+                // every time.
+                _ => {
+                    app.state::<Grants>()
+                        .granted
+                        .lock()
+                        .unwrap()
+                        .insert(path.clone());
+                    app.state::<Nudge>().note(format!(
+                        "They agreed to replace {}. Do it now.",
+                        path.display()
+                    ));
+                }
+            }
         }
     }
     app.state::<Agents>().answer(id, text.clone());

@@ -73,6 +73,7 @@ impl Provider for Gemini {
              {{\"kind\":\"search\",\"query\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"task\",\"task\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"show\",\"path\":\"index.html\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"workspace\",\"path\":\"~/projects/thing\",\"say\":\"...\"}}\n\
              {{\"kind\":\"write\",\"path\":\"index.html\",\"content\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"read\",\"path\":\"...\",\"from\":1,\"lines\":200,\"say\":\"...\"}}\n\
              {{\"kind\":\"plan\",\"todos\":[{{\"text\":\"...\",\"status\":\"active\"}}],\"say\":\"...\"}}\n\
@@ -291,8 +292,26 @@ mod shape_tests {
         let src = include_str!("gemini.rs");
         let shapes = src.split("shapes:").nth(1).expect("the shape list moved");
         for kind in [
-            "point", "done", "unsure", "launch", "open", "reply", "agent", "ask", "type", "press",
-            "run", "write", "fetch", "read", "edit", "plan", "search", "task", "show",
+            "point",
+            "done",
+            "unsure",
+            "launch",
+            "open",
+            "reply",
+            "agent",
+            "ask",
+            "type",
+            "press",
+            "run",
+            "write",
+            "fetch",
+            "read",
+            "edit",
+            "plan",
+            "search",
+            "task",
+            "show",
+            "workspace",
         ] {
             assert!(
                 shapes.contains(&format!("kind\\\":\\\"{kind}")),

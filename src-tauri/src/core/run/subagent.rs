@@ -12,7 +12,6 @@
 //! several can run at once without any of them fighting. That distinction lives
 //! in the type rather than in a convention: this one cannot point, press, type,
 //! launch or open, because it is never given those shapes to answer with.
-use crate::config::Config;
 use crate::core::provider::{Ask, Provider, Step};
 use crate::error::Result;
 
@@ -35,7 +34,7 @@ pub struct Found {
 /// of Tauri and of anything that touches a screen.
 pub async fn run<F, Fut>(
     provider: &dyn Provider,
-    cfg: &Config,
+    workspace: &std::path::Path,
     task: &str,
     mut act: F,
 ) -> Result<Found>
@@ -43,7 +42,6 @@ where
     F: FnMut(Step) -> Fut,
     Fut: std::future::Future<Output = Result<String>>,
 {
-    let _ = cfg;
     let mut done: Vec<String> = Vec::new();
     let mut steps: Vec<String> = Vec::new();
 
@@ -56,6 +54,7 @@ where
             // No screen, so nothing to report about one. `facts` describes what
             // is in front of the user, and a subagent is not looking at it.
             facts: Default::default(),
+            workspace: workspace.display().to_string(),
         };
         let step = provider.next_step_blind(&ask).await?;
         eprintln!("  task turn {turn}: {step:?}");
@@ -127,9 +126,12 @@ mod tests {
                 next: None,
             },
         ]));
-        let found = run(&p, &Config::default(), "count the files", |_| async {
-            Ok("a\nb\nc\nd".into())
-        })
+        let found = run(
+            &p,
+            std::path::Path::new("/tmp"),
+            "count the files",
+            |_| async { Ok("a\nb\nc\nd".into()) },
+        )
         .await
         .unwrap();
 
@@ -156,7 +158,7 @@ mod tests {
                 next: None,
             },
         ]));
-        let found = run(&p, &Config::default(), "x", |_| async {
+        let found = run(&p, std::path::Path::new("/tmp"), "x", |_| async {
             Err(crate::error::Error::Click("rm is not allowed".into()))
         })
         .await
@@ -174,9 +176,11 @@ mod tests {
             })
             .collect();
         let p = Scripted(std::sync::Mutex::new(forever));
-        let found = run(&p, &Config::default(), "x", |_| async { Ok(String::new()) })
-            .await
-            .unwrap();
+        let found = run(&p, std::path::Path::new("/tmp"), "x", |_| async {
+            Ok(String::new())
+        })
+        .await
+        .unwrap();
         assert!(found.answer.contains("Gave up"));
         assert_eq!(found.steps.len(), MAX_TURNS);
     }

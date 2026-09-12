@@ -1,55 +1,18 @@
-# Does Nudge work?
+# What the runs taught
 
-Nudge has never finished a task on its own. Not once. The grounding is verified
-on a single gear icon, one time. Everything else in this repo — the notch, the
-companion, the voice, the settings sheet — is chrome on top of two claims that
-have never been tested:
+A record of every time Nudge was pointed at something real and failed, and what
+that failure turned out to be. Newest sections at the bottom.
 
-1. **A vision model can find the right pixel, reliably.**
-2. **A loop of those can finish a real task without a human.**
+It is kept because the same lesson kept arriving in different costumes, and
+because most of these bugs were invisible from the code. They were found by
+running the thing, reading the log, and noticing that a sentence did not match
+what was on the screen.
 
-This document is the test of those two claims, and nothing else. No UI work
-until it is finished. The UI is the cheap, fun, infinitely available work, and
-reaching for it is how a project spends six months without ever learning whether
-it works.
+**For what to do next, see [PLAN.md](PLAN.md).** This file has no plan in it -- it
+used to, and having two documents with two sets of phase numbers meant "what is
+next" had two answers.
 
----
-
-## Phase 0 — make it observable  ✅
-
-The agent loop logged nothing, so a failure looked identical to a hang.
-
-- One trace line per turn: the step the model chose, how long the call took,
-  and why it stopped. `src-tauri/src/app/agent.rs`.
-- Run the app from a terminal, or read `/tmp/nudge.log`.
-
----
-
-## Phase 1 — one real agent run
-
-**The test.** Hold Control, say: *"play bohemian rhapsody on youtube"*.
-
-Watch for: the notch turning blue · the card appearing · a browser opening ·
-YouTube loading · the search typed and submitted · a result clicked · the card
-saying Done.
-
-**Record for each attempt** — in `results.md`, one line each:
-
-| # | Goal | Turns | Outcome | Where it broke |
-|---|------|-------|---------|----------------|
-
-Run it **five times**. Once is an anecdote.
-
-**What counts as a break** — note which, they need different fixes:
-
-- *Wrong pixel.* The model named a target and it was somewhere else. → grounding.
-- *Right pixel, wrong idea.* It clicked accurately on the wrong thing. → prompt.
-- *Never converged.* Burned 40 turns going in circles. → stall detection.
-- *Crashed or hung.* → ours.
-
-**Known problem to watch for:** Nudge still photographs its own overlay, so the
-model sees the companion and the ring in every screenshot. If it starts pointing
-at its own UI, that is this, and it needs ScreenCaptureKit with window exclusion.
+The test passes themselves are in [results.md](results.md).
 
 ---
 
@@ -587,87 +550,3 @@ streaming TTS, cosmetic for latency and large for feel.
 
 ---
 
-## Phase 2 — the two flows nobody has tried
-
-Cheap, and both are load-bearing.
-
-- **Stop.** Start an agent, press Stop mid-run. The cursor must come back
-  *immediately*, not at the end of the current model call. Also try Escape.
-- **Question.** *"send a whatsapp message"* — with no recipient and no message,
-  on purpose. Expect it to ask **who**, then ask **what**, one at a time and
-  spoken aloud, with the notch red and saying "Your turn". Hold Control and
-  answer by voice each time; it must carry on with the answer in context rather
-  than starting over. Then the same for *"play a song on youtube"* with no song
-  named.
-
----
-
-## Phase 3 — the accuracy count
-
-Five agent runs tell you whether the loop holds together. They do not tell you
-the hit rate, because a 40-turn run hides twenty individual groundings.
-
-Build a harness — `src-tauri/tests/` or an example binary:
-
-- 20 screenshots, saved once, covering what people actually do: menu bars,
-  toolbars, dense settings panes, browser chrome, a file dialog, a dark app and
-  a light one, a Retina and a non-Retina capture.
-- Each with a goal and the expected target rectangle.
-- For each: call the provider, score a hit if the returned point lands inside
-  the rectangle.
-- Report: **hit rate**, median and p95 latency, cost per call.
-
-This is the number that decides the project. It is also the number to re-run
-whenever the model or the prompt changes — which is the real reason to build it
-rather than counting by hand.
-
----
-
-## Phase 4 — the decision gate
-
-Look at the numbers, not at how much work went in.
-
-| | Hit rate | Agent runs finished |
-|---|---|---|
-| **Build it** | > 85% | 4+ of 5 |
-| **Fixable** | 70–85% | 2–3 of 5 |
-| **Stop** | < 70% | 0–1 of 5 |
-
-- **Build it.** Real product. Go to Phase 5.
-- **Fixable.** The failures will cluster. Fix the top cluster, re-run Phase 3.
-  Give it three rounds. If the number will not move, treat it as Stop.
-- **Stop.** That is a genuine result, and worth more after two weeks than after
-  six months. It also tells you something about the competition that their
-  marketing will not: this problem is hard, and "it does everything perfectly"
-  is probably not quite true of anyone.
-
----
-
-## Phase 5 — only if it passes: build the part that is not a clone
-
-Feature parity with an established product is the losing side of every fight.
-They ship faster in their own codebase, they have users telling them what is
-broken, and their audience is not clonable. "Same but mine" is not a reason for
-anyone to switch.
-
-What is defensible, because a funded closed-source competitor cannot match it
-without cannibalising themselves:
-
-- **Your screenshots never leave your machine.** Local model, whole pipeline.
-  This app watches your screen — for anyone under an NDA, in healthcare, or in
-  finance, "where do the screenshots go?" is a hard blocker a closed binary
-  cannot answer.
-- **Free, on your own key.** Already works on Gemini's free tier.
-- **Auditable refusals.** The privacy guard refuses password managers and
-  windows whose title names a secret. That is a real position, and it means
-  something only because the source is there to check.
-
-Everything in Phase 5 is a separate piece of work. None of it matters until
-Phases 1–4 are done.
-
----
-
-## Not in scope until Phase 4 says so
-
-Notch geometry · companion polish · multi-monitor · notarisation ·
-integrations · skills · dictation · the settings sheet.
