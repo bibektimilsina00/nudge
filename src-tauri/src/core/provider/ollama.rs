@@ -59,6 +59,9 @@ impl Provider for Ollama {
                      {{\"kind\":\"type\",\"text\":\"...\",\"submit\":true,\"say\":\"...\"}}\n\
              {{\"kind\":\"press\",\"keys\":\"cmd+shift+n\",\"say\":\"...\"}}\n\
              {{\"kind\":\"run\",\"command\":\"find . -name '*.ts' | wc -l\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"start\",\"command\":\"npm run dev\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"output\",\"id\":1,\"say\":\"...\"}}\n\
+             {{\"kind\":\"kill\",\"id\":1,\"say\":\"...\"}}\n\
              {{\"kind\":\"fetch\",\"url\":\"https://...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"search\",\"query\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"task\",\"task\":\"...\",\"say\":\"...\"}}\n\

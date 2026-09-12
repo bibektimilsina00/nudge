@@ -5,7 +5,7 @@
 //! which is what makes the shell allow-list, the workspace boundary and
 //! ask-before-replacing hold everywhere rather than in whichever caller
 //! remembered them.
-use crate::app::state::{Grants, Screen, Settle, Voice};
+use crate::app::state::{Background, Grants, Screen, Settle, Voice};
 use crate::core::provider::{Act, Step};
 use crate::core::run::agent::Agents;
 use crate::core::run::session::Nudge;
@@ -450,6 +450,34 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                     crate::app::agent::publish(app);
                 }
             }
+        }
+        Step::Start { command, .. } => {
+            let workspace = app.state::<Nudge>().workspace();
+            let id = app.state::<Background>().start(&workspace, command)?;
+            let note = format!("Started `{command}` as {id}. Read its output with output.");
+            eprintln!("{note}");
+            app.state::<Nudge>().note(note.clone());
+            app.state::<Agents>()
+                .record_run(format!("start {command}"), note);
+            super::super::agent::publish(app);
+        }
+        Step::Output { id, .. } => {
+            let (text, alive) = app.state::<Background>().read(*id)?;
+            let status = if alive { "still running" } else { "finished" };
+            eprintln!("output of {id} ({status}, {} chars)", text.len());
+            app.state::<Nudge>().note(format!(
+                "Process {id} is {status}, and has printed:\n{}",
+                if text.trim().is_empty() {
+                    "(nothing yet)"
+                } else {
+                    &text
+                }
+            ));
+        }
+        Step::Kill { id, .. } => {
+            app.state::<Background>().stop(*id)?;
+            eprintln!("stopped {id}");
+            app.state::<Nudge>().note(format!("Stopped process {id}."));
         }
         Step::Run { command, .. } => {
             // The output is the point, so it goes into the session's history

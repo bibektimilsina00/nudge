@@ -9,7 +9,7 @@ mod ui;
 
 use crate::config::Config;
 use crate::core::run::session::Nudge;
-use state::{Docked, Flag, Grants, Mic, Screen, Settle, Voice, VoiceMode};
+use state::{Background, Docked, Flag, Grants, Mic, Screen, Settle, Voice, VoiceMode};
 use tauri::Manager;
 
 pub fn run() {
@@ -49,6 +49,7 @@ pub fn run() {
             app.manage(voice);
             app.manage(Settle(std::sync::Mutex::new(None)));
             app.manage(Grants::default());
+            app.manage(Background::default());
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));

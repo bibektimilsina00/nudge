@@ -132,6 +132,12 @@ pub enum Step {
     Show { path: String, say: String },
     /// Work somewhere else from now on.
     Workspace { path: String, say: String },
+    /// Start something that keeps going, and get an id to ask about it by.
+    Start { command: String, say: String },
+    /// What a running process has printed so far.
+    Output { id: u64, say: String },
+    /// Stop one.
+    Kill { id: u64, say: String },
     /// A whole task rather than a next click: Nudge takes it away and finishes
     /// it on its own.
     ///
@@ -189,6 +195,9 @@ impl Step {
             | Step::Task { say, .. }
             | Step::Show { say, .. }
             | Step::Workspace { say, .. }
+            | Step::Start { say, .. }
+            | Step::Output { say, .. }
+            | Step::Kill { say, .. }
             | Step::Agent { say, .. }
             | Step::Question { question: say }
             | Step::Reply { say } => say,
@@ -215,6 +224,10 @@ impl Step {
             (Step::Type { text: a, .. }, Step::Type { text: b, .. }) => a == b,
             (Step::Press { keys: a, .. }, Step::Press { keys: b, .. }) => a.eq_ignore_ascii_case(b),
             (Step::Run { command: a, .. }, Step::Run { command: b, .. }) => a == b,
+            (Step::Start { command: a, .. }, Step::Start { command: b, .. }) => a == b,
+            // Reading the same process twice is how you wait for it, so it is
+            // never a repeat -- the output is different each time by definition.
+            (Step::Kill { id: a, .. }, Step::Kill { id: b, .. }) => a == b,
             (Step::Fetch { url: a, .. }, Step::Fetch { url: b, .. }) => a.eq_ignore_ascii_case(b),
             (Step::Search { query: a, .. }, Step::Search { query: b, .. }) => {
                 a.eq_ignore_ascii_case(b)
@@ -268,6 +281,9 @@ impl Step {
             Step::Open { url, .. } => format!("Opened {url}"),
             Step::Press { keys, .. } => format!("Pressed {keys}"),
             Step::Run { command, .. } => format!("Ran `{command}`"),
+            Step::Start { command, .. } => format!("Started `{command}`"),
+            Step::Output { id, .. } => format!("Read what {id} has printed"),
+            Step::Kill { id, .. } => format!("Stopped {id}"),
             Step::Fetch { url, .. } => format!("Read {url}"),
             Step::Search { query, .. } => format!("Searched for {query:?}"),
             Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
@@ -490,6 +506,15 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          **fetch** reads a web page as text and hands it to you next turn. No \
          window appears and nothing is screenshotted. Open a page instead only \
          when they want to SEE it, or the task needs something done on it.\n\
+         **start** launches something that keeps going -- a dev server, a build, \
+         a watcher, another agent -- and hands back an id. **output** reads what \
+         it has printed since it began, and **kill** stops it. Use these when a \
+         command will not finish: run waits for twenty seconds and then gives \
+         up, which is right for counting files and wrong for everything that \
+         serves, watches or streams. Start it, do something else, come back and \
+         read. Everything you start is stopped when the task ends, so nothing is \
+         left running behind you -- but stop it yourself when you are done with \
+         it rather than leaving it to be cleaned up.\n\
          **run** executes a read-only shell command and returns its output: count \
          files, search a repo, check what is installed. It needs no Terminal \
          window and opens none. Reading only -- nothing that creates, deletes, \
@@ -753,6 +778,18 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
         "write" => Some(Step::Write {
             path: v["path"].as_str().unwrap_or_default().to_string(),
             content: v["content"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "start" => Some(Step::Start {
+            command: v["command"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "output" => Some(Step::Output {
+            id: v["id"].as_u64().unwrap_or(0),
+            say,
+        }),
+        "kill" => Some(Step::Kill {
+            id: v["id"].as_u64().unwrap_or(0),
             say,
         }),
         "run" => Some(Step::Run {

@@ -37,6 +37,9 @@ impl Screen {
     }
 }
 
+/// Long-running processes Nudge started, and did not wait for.
+pub type Background = crate::core::tools::running::Running;
+
 /// Files the user has agreed to have replaced, and the one being asked about.
 ///
 /// Per path and per grant: saying yes to one file is not saying yes to the next.

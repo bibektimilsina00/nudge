@@ -6,4 +6,5 @@
 //! asked for in a prompt.
 pub mod fetch;
 pub mod files;
+pub mod running;
 pub mod shell;

@@ -129,11 +129,21 @@ machine's certificate. Nobody else can run this.
 
 *Fix:* Developer ID signing and notarisation in CI, before any public link exists.
 
-### 3.3 No background processes
+### 3.3 Background processes — **done**
 
-`run` blocks for twenty seconds and returns. Nothing can start a dev server, tail
-a log, or drive a long-running agent. Niche until the moment you ask for
-something that needs `npm run dev`, and then it is the whole story -- see §2.1.
+`start`, `output` and `kill`. Something that does not finish -- a dev server, a
+build, a watcher, another agent -- is launched and left running, and read from on
+a later turn.
+
+A different boundary from `run`, not a relaxed one. `run` is read-only because a
+model tried `rm` to get around a refusal; this cannot be, because writing is what
+a dev server is for. So the rule changes shape: a short list of what may be
+*started*, rather than a promise about what it does once running. Same syntax
+rules, same workspace, at most four at once.
+
+Everything started is killed when the task ends. A process nobody is watching is
+the whole risk of being able to start one, and a dev server still holding port
+3000 tomorrow would be Nudge's fault.
 
 ---
 
@@ -191,8 +201,7 @@ one, because that is where the negative origins are.
 
 ### 5.3 Then, in order
 
-1. **Background processes.** The blocker for §2.1, and the last real gap in the
-   tool set.
+1. ~~**Background processes.**~~ **Done** -- see §3.3.
 2. **Orchestrating an external agent.** Hand a job to whatever is installed, with
    its own boundary and its whole output visible.
 3. **Memory.** Per-app notes, written from failure, injected only when that app is

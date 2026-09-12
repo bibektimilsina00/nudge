@@ -160,6 +160,10 @@ pub fn spawn(
                 why: "Clicking needs Accessibility — System Settings › Privacy & Security".into(),
             }
         };
+        // Nothing outlives the task that started it. A dev server still holding
+        // port 3000 tomorrow is Nudge's fault, not the user's -- and a process
+        // nobody is watching is the whole risk of being able to start one.
+        app.state::<crate::app::state::Background>().stop_all();
         eprintln!("agent#{id} ended: {end:?}");
         app.state::<Agents>().set_state(id, end);
         app.state::<Nudge>().end();

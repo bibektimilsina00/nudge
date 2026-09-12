@@ -98,6 +98,10 @@ pub(crate) const SECRETS: &[&str] = &[
 /// `grep x | wc -l` is half the value here. Everything that chains, redirects,
 /// substitutes or backgrounds is refused: each one is a way to smuggle a second
 /// command past a check made on the first.
+/// Scanned against the raw string, so these are refused inside quotes too -- an
+/// arrow function in a `node -e` is enough to trip it. Conservative on purpose:
+/// telling the difference means parsing the shell, and a refusal costs a
+/// rephrase while a missed `;` costs whatever came after it.
 const FORBIDDEN: &[&str] = &[">", "<", ";", "&", "`", "$(", "${", "\n", "\r"];
 
 /// Longest a command may run before it is killed.
@@ -106,12 +110,13 @@ const TIMEOUT: std::time::Duration = std::time::Duration::from_secs(20);
 /// bounded so a runaway `find /` cannot fill a prompt.
 const MAX_OUTPUT: usize = 4000;
 
-/// Is this command read-only, by the rules above?
+/// Shell syntax that would smuggle a second command past a check on the first.
 ///
-/// Returns the reason it was refused, so the model is told what it did wrong and
-/// can try another way -- a silent refusal looks identical to a command that ran
-/// and printed nothing.
-pub fn refuse(command: &str) -> Option<String> {
+/// Shared with `running`, which starts long-lived processes under a different
+/// allow-list but the same syntax rules -- `npm run dev; rm -rf .` has to be
+/// refused whichever door it comes through, and a second copy of this list is a
+/// second place for one of them to go missing.
+pub(crate) fn syntax_refusal(command: &str) -> Option<String> {
     let trimmed = command.trim();
     if trimmed.is_empty() {
         return Some("empty command".into());
@@ -121,6 +126,23 @@ pub fn refuse(command: &str) -> Option<String> {
             "{bad:?} is not allowed -- only plain commands and pipes, nothing that \
              redirects, chains or substitutes"
         ));
+    }
+    let lower = trimmed.to_lowercase();
+    if let Some(secret) = SECRETS.iter().find(|s| lower.contains(&s.to_lowercase())) {
+        return Some(format!("that path looks like a secret ({secret})"));
+    }
+    None
+}
+
+/// Is this command read-only, by the rules above?
+///
+/// Returns the reason it was refused, so the model is told what it did wrong and
+/// can try another way -- a silent refusal looks identical to a command that ran
+/// and printed nothing.
+pub fn refuse(command: &str) -> Option<String> {
+    let trimmed = command.trim();
+    if let Some(why) = syntax_refusal(trimmed) {
+        return Some(why);
     }
     let lower = trimmed.to_lowercase();
     if let Some(secret) = SECRETS.iter().find(|s| lower.contains(&s.to_lowercase())) {

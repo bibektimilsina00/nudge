@@ -191,12 +191,7 @@ fn load() -> std::io::Result<Vec<Case>> {
 
 fn list() -> nudge_lib::error::Result<()> {
     for c in load()? {
-        println!(
-            "{:<40} {:<28} {}",
-            c.name,
-            c.target.describe(),
-            c.goal
-        );
+        println!("{:<40} {:<28} {}", c.name, c.target.describe(), c.goal);
     }
     Ok(())
 }
