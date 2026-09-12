@@ -46,6 +46,40 @@ next begins:
 
 ---
 
+## The whole picture, stage by stage
+
+Read this as the working document. Everything else here is an argument for one of
+these rows.
+
+**M** = measured. **E** = estimated, and the reason Phase 0 exists. Anything
+marked E is a guess until the instrumentation lands, including the ones that look
+obviously right.
+
+| Stage | Us, now | Them | Us, planned | Cost now | What it affects |
+|---|---|---|---|---|---|
+| **Speech in** | record to a WAV, upload after you release | streamed over a socket **while you talk** | on-device, streaming while you talk | ~0.1s (E) | gates the whole transcription stage |
+| **Transcribe** | Gemini, one round trip, starts after release | `gpt-4o-transcribe`, already finishing as you release | `SFSpeechRecognizer`, text ready at release | 1.0-1.5s (E) | time until anything at all can happen |
+| **Connection** | a fresh TLS handshake per utterance | pooled | one shared client | 0.15-0.4s (E) | every voice call, both directions |
+| **Settle** | always 2 screen composites + 120ms | no per-turn settle | skip it when nothing was performed | 0.2-0.4s (E) | every turn, including the first |
+| **Hush** | wait for our own acknowledgement to finish | nothing to wait for | capture before speaking | ~1.0s (E) | every turn |
+| **Capture** | `CGWindowListCreateImage`, resize, JPEG, base64, per shot | `SCStream` always running, a frame is already there | overlap with transcription on turn 1 | 0.3-0.5s (E) | every turn |
+| **Brain** | `gemini-3.6-flash`, wait for the whole JSON | `claude-sonnet-4-6`, streamed, acts on early tokens | stream, fire on the first complete field | **4.5s median, 9.0s p95 (M)** | the dominant cost; everything else is rounding next to this |
+| **Grounding** | a vision model finds the pixel | a vision model finds the pixel | AX tree where exposed, vision as the fallback | inside the brain cost | the ceiling -- the only row that can go to ~0 |
+| **Prompt size** | newest step whole, older ones trimmed | n/a | **done** | was 70k chars by turn 3, now 21k (M) | turns 3 and later; nothing on turn 1 |
+| **Speech out** | `say`, after the full sentence is known | ElevenLabs, streamed | streamed | ~0 to latency | feel, not clock |
+| **Feedback gap** | "Sure, one sec.", then silence | tokens start arriving immediately | keep it, but off the critical path | -- | perceived speed, which is most of the complaint |
+
+### What each phase buys
+
+| Phase | What it buys | Effort | Risk | How we know |
+|---|---|---|---|---|
+| **0** Measure + shared client | the real split; 0.15-0.4s | hours | none | the log line exists |
+| **1** Delete self-inflicted waits | ~1.2s off every turn | hours | none -- it is removal | settle and hush drop out of the line |
+| **2** Overlap capture with transcribe | 0.3-0.5s, turn 1 only | hours | **`Settle`'s assumption** -- see the warning in Phase 2 | capture no longer appears in the serial sum |
+| **3** On-device STT | 1.0-1.5s, and no network | days | a new `objc2` binding; accuracy of the local recogniser is unmeasured | transcribe drops to ~0 and the accuracy number holds |
+| **4** Stream the brain | the largest remaining win against a 4.5s median | days | partial-object parsing has to be exactly right or we act on half a decision | time-to-first-motion, not total |
+| **5** AX grounding | turns the dominant row into ~0 for apps that expose it | weeks | a different project; AX coverage varies per app | a click lands with no model call at all |
+
 ## Two waits we inflict on ourselves
 
 Both are free to fix. Neither needs streaming, a new dependency, or a rewrite.
