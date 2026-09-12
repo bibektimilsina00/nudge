@@ -262,13 +262,32 @@ impl Nudge {
             }
         }
 
+        // Nothing has happened yet, so there is nothing to wait for.
+        //
+        // Both waits below guard against the *previous* action: one lets the
+        // screen finish becoming whatever that action made it, the other lets our
+        // own voice finish describing it. On the first turn of a session there is
+        // no previous action, and we were paying for both anyway -- two screen
+        // composites and 120ms, then up to a second of listening to ourselves.
+        //
+        // ponytail: `done` is also filled by tools that never touch the screen --
+        // a `read`, a `fetch`, a command's output -- so the turn after one of
+        // those still settles for nothing. Knowing which steps actually move the
+        // screen is the upgrade. Worth doing when `still` shows up large in the
+        // timing line on a tool-heavy turn, and not before: guessing "inert" for
+        // a step that did move the screen photographs it mid-change, which is the
+        // most expensive class of bug this project has had.
+        let first_turn = done.is_empty();
+
         // Let the screen finish becoming whatever the last step made it.
         //
         // Every caller wants this and none of them should have to remember it,
         // so it lives here rather than in the two loops. The per-action waits in
         // `Settle` still set a floor -- some things take a moment to *begin* --
         // and this covers the rest, which is unbounded and unguessable.
-        capture::wait_until_still(SETTLE_MAX).await;
+        if !first_turn {
+            capture::wait_until_still(SETTLE_MAX).await;
+        }
         self.mark("still");
 
         // Let our own voice finish before listening.
@@ -284,9 +303,25 @@ impl Nudge {
         //
         // Capped, because a long sentence should not hold up the work; past this
         // the answer stays unknown, which is at least honest.
-        let quiet = std::time::Instant::now();
-        while crate::core::voice::speech::is_playing() && quiet.elapsed() < HUSH_MAX {
-            tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+        // Not on the first turn, where the only thing playing is the
+        // acknowledgement we speak to cover this very wait. Two features working
+        // against each other: one says a short line so the pause feels shorter,
+        // the other made the pause a second longer by waiting for the line to
+        // finish. Each was right when it was written and neither author could
+        // have seen the other -- they are months and three files apart.
+        //
+        // It now plays over the model call instead, which is the gap it was
+        // written to fill.
+        //
+        // The cost, stated rather than discovered later: `facts.audio` reads
+        // unknown on a first turn, because we are still talking through it. So
+        // "is something playing" gets answered from the picture that once, and
+        // from the device on every turn after.
+        if !first_turn {
+            let quiet = std::time::Instant::now();
+            while crate::core::voice::speech::is_playing() && quiet.elapsed() < HUSH_MAX {
+                tokio::time::sleep(std::time::Duration::from_millis(80)).await;
+            }
         }
         self.mark("hush");
 
