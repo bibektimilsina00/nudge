@@ -232,6 +232,13 @@ one, because that is where the negative origins are.
      model on the same screenshots. The newest step is now kept whole and older
      ones cut to what was done rather than what it said: 70,000 back down to
      21,000.
+   - **The rest of the latency is structural, and has its own plan:
+     [SPEED.md](SPEED.md).** The prompt fix addressed a turn getting *slower
+     through a task*; it did nothing about the first turn, which is serial from
+     the key coming up to the cursor moving. Two self-inflicted waits are
+     confirmed and free to remove; after that it is streaming, and then the
+     accessibility tree instead of vision. Measurement comes first -- the
+     ordering in FINDINGS went stale the day the brain model changed.
 3. **Memory.** Per-app notes, written from failure, injected only when that app is
    in front: *"CapCut: the timeline view means a project is open."* Earned once
    the loop is known to work -- memory that records a broken loop's habits is
