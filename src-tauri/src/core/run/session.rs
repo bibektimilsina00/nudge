@@ -55,6 +55,8 @@ pub struct Nudge {
     /// nudge project" is for now, and a setting that silently rewrites itself is
     /// worse than one you have to change on purpose.
     moved: Mutex<Option<std::path::PathBuf>>,
+    /// Where this turn's time is going. See [`crate::core::laps`].
+    laps: Mutex<crate::core::laps::Laps>,
 }
 
 impl Nudge {
@@ -65,6 +67,7 @@ impl Nudge {
             provider,
             session: Mutex::new(None),
             moved: Mutex::new(None),
+            laps: Mutex::default(),
         })
     }
 
@@ -202,7 +205,32 @@ impl Nudge {
     /// Points come back in *global* screen coordinates -- see `Shot::to_global`,
     /// which is what makes a second display work. Which display gets captured is
     /// decided per call by where the pointer is, not fixed at startup.
+    /// A turn began. Safe to call twice -- see [`crate::core::laps::Laps::start`],
+    /// because a spoken turn is started by the hotkey and passes through
+    /// `advance`, which believes it is starting one too.
+    pub fn clock_in(&self) {
+        self.laps.lock().unwrap().start();
+    }
+
+    /// That stage of the current turn is over.
+    pub fn mark(&self, stage: &'static str) {
+        self.laps.lock().unwrap().mark(stage);
+    }
+
     pub async fn step(&self) -> Result<Option<Step>> {
+        // Printed however this returns, refusals included. A turn that ended
+        // early has still spent its clock, and leaving it running would hand its
+        // start time to the next turn and blame it for the wait.
+        struct Report<'a>(&'a Nudge);
+        impl Drop for Report<'_> {
+            fn drop(&mut self) {
+                if let Some(line) = self.0.laps.lock().unwrap().line() {
+                    eprintln!("timing: {line}");
+                }
+            }
+        }
+        let _report = Report(self);
+
         // Snapshot and release: the lock must not be held across the await, and a
         // tokio Mutex would be a heavier fix than simply not needing one.
         let Some((goal, done, seen, agent)) = self
@@ -241,6 +269,7 @@ impl Nudge {
         // `Settle` still set a floor -- some things take a moment to *begin* --
         // and this covers the rest, which is unbounded and unguessable.
         capture::wait_until_still(SETTLE_MAX).await;
+        self.mark("still");
 
         // Let our own voice finish before listening.
         //
@@ -259,10 +288,13 @@ impl Nudge {
         while crate::core::voice::speech::is_playing() && quiet.elapsed() < HUSH_MAX {
             tokio::time::sleep(std::time::Duration::from_millis(80)).await;
         }
+        self.mark("hush");
 
         // Before the capture, so the two describe the same moment.
         let facts = crate::core::screen::facts::gather();
+        self.mark("facts");
         let shot: Shot = capture::grab(self.cfg.max_edge)?;
+        self.mark("shot");
         let now = shot.fingerprint();
         // Only meaningful once something has been tried.
         let stalled = !done.is_empty() && capture::unchanged(&seen, &now);
@@ -275,6 +307,7 @@ impl Nudge {
             workspace: self.workspace().display().to_string(),
         };
         let step = self.provider.next_step(&shot, &ask).await?;
+        self.mark("brain");
 
         let mut guard = self.session.lock().unwrap();
         let Some(session) = guard.as_mut() else {

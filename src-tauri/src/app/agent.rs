@@ -238,9 +238,11 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         // to change it -- a blank page, a menu mid-animation, a video that had
         // not started. It then reasoned about that stale picture and acted on it.
         // This is the single largest source of the flailing in the test runs.
+        app.state::<Nudge>().clock_in();
         if let Some(wait) = app.state::<super::state::Settle>().remaining() {
             tokio::time::sleep(wait).await;
         }
+        app.state::<Nudge>().mark("settle");
 
         // A trace, not logging machinery. An agent that fails silently is an agent
         // you cannot debug, and every turn is one model call -- a line each is

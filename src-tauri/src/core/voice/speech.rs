@@ -110,7 +110,7 @@ async fn gemini(cfg: &Config, text: &str) -> Result<Vec<u8>, String> {
         },
     });
 
-    let resp: serde_json::Value = reqwest::Client::new()
+    let resp: serde_json::Value = crate::core::http()
         .post(format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
             cfg.speech_model

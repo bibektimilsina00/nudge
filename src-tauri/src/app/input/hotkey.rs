@@ -170,6 +170,10 @@ fn acknowledgement() -> &'static str {
 /// The transcript is shown before anything acts on it -- a voice UI that silently
 /// mishears is worse than no voice UI.
 async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
+    // The turn starts here: the key is up and the clock is the user's from this
+    // moment, whatever we spend it on.
+    app.state::<Nudge>().clock_in();
+
     // finish() blocks a few ms draining the audio callbacks. Not worth a
     // spawn_blocking hop.
     let Some(wav) = rec.finish()? else {
@@ -178,6 +182,7 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
         app.emit("status", "idle").ok();
         return Ok(());
     };
+    app.state::<Nudge>().mark("wav");
     let cfg: Config = app.state::<Nudge>().cfg.clone();
 
     app.emit("status", "thinking").ok();
@@ -186,6 +191,7 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
         app.emit("status", "idle").ok();
         return Ok(());
     };
+    app.state::<Nudge>().mark("heard");
     app.emit("heard", &heard).ok();
 
     // Answer before thinking.

@@ -66,12 +66,16 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
     }
     // Released however this returns, including on the `?` below.
     let _done = Done;
+    // Where a turn begins when it came from a click. A spoken one was already
+    // started by the hotkey, several stages ago, and this leaves that alone.
+    app.state::<Nudge>().clock_in();
     app.emit("status", "thinking").ok();
 
     // Let whatever we just did finish happening before photographing the result.
     if let Some(wait) = app.state::<Settle>().remaining() {
         tokio::time::sleep(wait).await;
     }
+    app.state::<Nudge>().mark("settle");
 
     let began = std::time::Instant::now();
     let step = app.state::<Nudge>().step().await?;

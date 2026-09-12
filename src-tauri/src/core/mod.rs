@@ -10,8 +10,22 @@
 //! - [`screen`] -- capture and input; everything that needs a permission
 //! - [`voice`] -- microphone, transcription, speech
 //! - [`tools`] -- commands, files and the web
+//! - [`laps`] -- where a turn's time went
+pub mod laps;
 pub mod provider;
 pub mod run;
 pub mod screen;
 pub mod tools;
 pub mod voice;
+
+/// One HTTP client, shared.
+///
+/// `reqwest::Client` owns the connection pool, so building a fresh one per call
+/// means a new TCP and TLS handshake to a host we are very likely already
+/// connected to. The providers have always held theirs on the struct; both of
+/// the `voice` paths built one per utterance, and paid for it every time anyone
+/// spoke.
+pub fn http() -> &'static reqwest::Client {
+    static HTTP: std::sync::OnceLock<reqwest::Client> = std::sync::OnceLock::new();
+    HTTP.get_or_init(reqwest::Client::new)
+}
