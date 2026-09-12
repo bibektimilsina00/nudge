@@ -158,12 +158,25 @@ fn load() -> std::io::Result<Vec<Case>> {
         let name = path.file_stem().unwrap().to_string_lossy().to_string();
         // Two corners means a box; one point means a spot.
         let target = match (x2, y2) {
-            (Some(x2), Some(y2)) => Target::Box {
-                x1: x.min(x2),
-                y1: y.min(y2),
-                x2: x.max(x2),
-                y2: y.max(y2),
-            },
+            (Some(bx), Some(by)) => {
+                // A drag along a bar is horizontal, so it records almost no
+                // height -- and a perfectly good answer a few pixels lower would
+                // be scored a miss against a box one pixel tall. A thin drag
+                // means "anywhere along this, at about this height", so any side
+                // narrower than the tolerance grows to it, centred.
+                let widen = |lo: f64, hi: f64| {
+                    let (lo, hi) = (lo.min(hi), lo.max(hi));
+                    if hi - lo >= TOLERANCE {
+                        (lo, hi)
+                    } else {
+                        let mid = (lo + hi) / 2.0;
+                        (mid - TOLERANCE / 2.0, mid + TOLERANCE / 2.0)
+                    }
+                };
+                let (x1, x2) = widen(x, bx);
+                let (y1, y2) = widen(y, by);
+                Target::Box { x1, y1, x2, y2 }
+            }
             _ => Target::Spot(Point { x, y }),
         };
         cases.push(Case {
@@ -283,7 +296,14 @@ fn record(cfg: &Config, goal: &str) -> nudge_lib::error::Result<()> {
                 a.y.max(b.y)
             )
         } else {
-            format!("point ({:.0},{:.0})", a.x, a.y)
+            // Says how far it moved, so a drag that did not take is diagnosable
+            // rather than silently a point.
+            format!(
+                "point ({:.0},{:.0}) -- moved {:.0}px, under the {DRAGGED:.0}px a box needs",
+                a.x,
+                a.y,
+                (b.x - a.x).abs().max((b.y - a.y).abs())
+            )
         }
     );
     Ok(())

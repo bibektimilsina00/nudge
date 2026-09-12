@@ -551,3 +551,46 @@ streaming TTS, cosmetic for latency and large for feel.
 
 ---
 
+---
+
+## The accuracy number, at last
+
+Ten saved screenshots, a recorded answer for each, scored automatically. The
+first real measurement this project has had.
+
+| | gemini-3.5-flash-lite | gemini-3.6-flash |
+|---|---|---|
+| Hits | 2/7 (29%) | **4/8 (50%)** |
+| Median | 1.75s | 4.5s |
+| p95 | 2.3s | 9.0s |
+
+**The shape of the misses mattered more than the score.** flash-lite was not
+aiming badly -- it was landing on the wrong element by exactly one. Same column,
+one row up; same strip, one icon over:
+
+    01 wifi icon    said (1119,12)  wanted (1060,15)   59px sideways
+    06 Bluetooth    said  (397,312) wanted  (398,342)  x correct, one row up
+    07 search icon  said   (24,151) wanted   (19,108)  x correct, one icon down
+
+**Resolution is not the bottleneck.** Re-running at 1920px instead of 1280 made
+it slightly *worse*. The detail was already in the image; the model was not
+resolving it. A negative result, and worth as much as a positive one -- it ruled
+out the obvious fix in one command.
+
+**The model was.** On identical inputs, 3.6-flash roughly doubled the hit rate,
+and its remaining misses are 4-6px boundary artifacts plus one recorded box that
+was drawn too narrow. Functionally about 6 of 8 against 2.
+
+**The uncomfortable part:** we had been running the weaker model all day. Several
+prompt rules written this week were compensating for a model that could not see
+well enough -- which is exactly the kind of thing that is invisible without a
+number, and exactly why every fix felt like it half-worked.
+
+**On the latency trade.** 2.6x slower per step, and still the right call: a miss
+costs a whole retry turn anyway, plus undoing whatever the wrong click did. A
+4.5s step that lands beats a 1.75s step that has to be repeated.
+
+**Three of the ten were never clicks.** `cmd+w`, `cmd+n` and `ctrl+f2` -- the
+prefer-a-shortcut rule working, consistently, across both models. Those cannot
+miss at all, and they are the best argument for pushing more work off the screen
+rather than grinding at grounding.

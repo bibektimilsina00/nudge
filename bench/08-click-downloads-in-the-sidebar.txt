@@ -1,3 +1,0 @@
-goal = click Downloads in the sidebar
-x = 497
-y = 354
