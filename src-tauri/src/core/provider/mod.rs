@@ -179,8 +179,10 @@ fn agents_here() -> String {
         .collect();
     format!(
         "## Coding agents on this machine\n\n\
-         Invoke with start, exactly as written, with the job in place of \
-         {{task}} in quotes. Then read its output.\n\n{}\n\n",
+         Invoke with start, EXACTLY as written, putting the job in quotes where \
+         {{task}} is -- the shape differs between them and a rearranged flag \
+         makes one of them ignore the job entirely while appearing to run \
+         fine. Then read its output with output.\n\n{}\n\n",
         lines.join("\n")
     )
 }

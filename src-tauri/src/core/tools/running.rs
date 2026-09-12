@@ -30,7 +30,7 @@ const STARTABLE: &[&str] = &[
     "npm", "pnpm", "yarn", "bun", "node", "cargo", "python3", "go", "make", "swift",
     // Watching
     "tail", "watch", // Other agents, which is the point of this whole file
-    "claude", "codex", "opencode", "gemini", "aider",
+    "claude", "codex", "agy", "opencode", "aider",
 ];
 
 /// Coding agents, and how to give one a job without it asking questions.
@@ -43,10 +43,23 @@ const STARTABLE: &[&str] = &[
 /// every one of them, and guessing it wrong looks identical to the tool being
 /// broken.
 const AGENTS: &[(&str, &str)] = &[
-    ("claude", "claude -p {task}"),
+    // Checked by running each one on a machine that has it. Not from memory --
+    // every form written from memory here has been wrong so far.
+    //
+    // `claude -p` alone is not enough: print mode still needs a permission mode,
+    // so it stops dead the first time it wants to edit a file. `acceptEdits`
+    // lets it change files in the workspace and nothing more, where
+    // `bypassPermissions` would also let it run anything, which is not a thing
+    // to hand a process nobody is watching.
+    ("claude", "claude -p --permission-mode acceptEdits {task}"),
     ("codex", "codex exec {task}"),
+    // agy takes the prompt attached to the flag. Given `-p {task}` it swallows
+    // whatever comes next as the prompt and ignores the real one -- which
+    // reads, from the outside, exactly like the agent doing nothing.
+    ("agy", "agy --mode accept-edits -p={task}"),
+    // Not verified: not installed here, so these come from documentation. If one
+    // behaves oddly, this is the first place to look.
     ("opencode", "opencode run {task}"),
-    ("gemini", "gemini -p {task}"),
     ("aider", "aider --yes --message {task}"),
 ];
 
@@ -414,6 +427,20 @@ mod tests {
         assert_eq!(r.list().len(), 3);
         r.stop_all();
         assert!(r.list().is_empty());
+    }
+
+    /// Each installed agent's own form has to survive the syntax check, or the
+    /// one thing this list exists for is refused at the door.
+    #[test]
+    fn every_agent_form_is_startable() {
+        for (name, form) in agents_installed() {
+            let command = form.replace("{task}", "'fix the failing test'");
+            assert_eq!(
+                Running::refuse(&command),
+                None,
+                "{name} cannot be started as {command}"
+            );
+        }
     }
 
     /// The syntax check scans the raw string, so a redirect character inside
