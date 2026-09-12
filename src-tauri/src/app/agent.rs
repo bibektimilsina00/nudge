@@ -189,11 +189,22 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         }
 
         // Blocked on the user. Nothing to do but wait for the card.
-        let blocked = app
+        let mine = app
             .state::<Agents>()
             .list()
-            .iter()
-            .any(|a| a.id == id && matches!(a.state, State::Waiting { .. }));
+            .into_iter()
+            .find(|a| a.id == id);
+        // If this agent is not in the registry, every write to it -- its step
+        // count, its state -- goes nowhere, and a question can never block. That
+        // is not a state to guess about from the outside: one run asked the same
+        // question four times in a row because of it.
+        let Some(mine) = mine else {
+            eprintln!("agent#{id} is not in the registry; stopping rather than looping");
+            return State::Failed {
+                why: "lost track of this task".into(),
+            };
+        };
+        let blocked = matches!(mine.state, State::Waiting { .. });
         if blocked {
             // An offer lapses; a genuine question does not. Being asked "shall I
             // also do X?" and walking away has to end the task, not hang it.

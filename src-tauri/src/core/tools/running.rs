@@ -42,7 +42,14 @@ const STARTABLE: &[&str] = &[
 /// Named individually because the flag that means "just do it" is different for
 /// every one of them, and guessing it wrong looks identical to the tool being
 /// broken.
-const AGENTS: &[(&str, &str)] = &[
+/// `(binary, what people call it, how to run it unattended)`.
+///
+/// The middle one matters as much as the others. Nobody asks for "agy" -- they
+/// ask for Antigravity, and a list carrying only the binary name gives the model
+/// nothing to match that against. It also survives mishearing: one run turned
+/// "agy" into "edu" and went off to contact somebody called Edu, where a list
+/// naming both would have had something to recognise.
+const AGENTS: &[(&str, &str, &str)] = &[
     // Checked by running each one on a machine that has it. Not from memory --
     // every form written from memory here has been wrong so far.
     //
@@ -51,16 +58,20 @@ const AGENTS: &[(&str, &str)] = &[
     // lets it change files in the workspace and nothing more, where
     // `bypassPermissions` would also let it run anything, which is not a thing
     // to hand a process nobody is watching.
-    ("claude", "claude -p --permission-mode acceptEdits {task}"),
-    ("codex", "codex exec {task}"),
+    (
+        "claude",
+        "Claude Code",
+        "claude -p --permission-mode acceptEdits {task}",
+    ),
+    ("codex", "Codex", "codex exec {task}"),
     // agy takes the prompt attached to the flag. Given `-p {task}` it swallows
     // whatever comes next as the prompt and ignores the real one -- which
     // reads, from the outside, exactly like the agent doing nothing.
-    ("agy", "agy --mode accept-edits -p={task}"),
+    ("agy", "Antigravity", "agy --mode accept-edits -p={task}"),
     // Not verified: not installed here, so these come from documentation. If one
     // behaves oddly, this is the first place to look.
-    ("opencode", "opencode run {task}"),
-    ("aider", "aider --yes --message {task}"),
+    ("opencode", "OpenCode", "opencode run {task}"),
+    ("aider", "Aider", "aider --yes --message {task}"),
 ];
 
 /// Which coding agents are actually on this machine.
@@ -68,14 +79,14 @@ const AGENTS: &[(&str, &str)] = &[
 /// The same problem as applications, one layer up: without asking, a model
 /// invents one. Told to use whatever is installed and finding nothing, it should
 /// say so rather than reach for a name it half-remembers.
-pub fn agents_installed() -> Vec<(&'static str, &'static str)> {
-    static FOUND: std::sync::OnceLock<Vec<(&'static str, &'static str)>> =
+pub fn agents_installed() -> Vec<(&'static str, &'static str, &'static str)> {
+    static FOUND: std::sync::OnceLock<Vec<(&'static str, &'static str, &'static str)>> =
         std::sync::OnceLock::new();
     FOUND
         .get_or_init(|| {
             AGENTS
                 .iter()
-                .filter(|(name, _)| {
+                .filter(|(name, _, _)| {
                     std::process::Command::new("/usr/bin/which")
                         .arg(name)
                         .output()
@@ -433,7 +444,7 @@ mod tests {
     /// one thing this list exists for is refused at the door.
     #[test]
     fn every_agent_form_is_startable() {
-        for (name, form) in agents_installed() {
+        for (name, _known_as, form) in agents_installed() {
             let command = form.replace("{task}", "'fix the failing test'");
             assert_eq!(
                 Running::refuse(&command),

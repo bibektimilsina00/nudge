@@ -175,10 +175,14 @@ fn agents_here() -> String {
     }
     let lines: Vec<String> = found
         .iter()
-        .map(|(name, form)| format!("- {name}: `{form}`"))
+        .map(|(name, known_as, form)| format!("- **{known_as}** (`{name}`): `{form}`"))
         .collect();
     format!(
         "## Coding agents on this machine\n\n\
+         They are asked for by name -- Antigravity, Claude Code, Codex -- so \
+         match what was said to the list and use that one. If the one they named \
+         is not here, say which and offer what is, rather than quietly using a \
+         different agent: they picked it for a reason.\n\n\
          Invoke with start, EXACTLY as written, putting the job in quotes where \
          {{task}} is -- the shape differs between them and a rearranged flag \
          makes one of them ignore the job entirely while appearing to run \
@@ -1044,8 +1048,14 @@ mod tests {
             return;
         }
         assert!(p.contains("Coding agents on this machine"));
-        for (name, form) in found {
+        for (name, known_as, form) in found {
             assert!(p.contains(name), "{name} is installed and unlisted");
+            // Nobody asks for "agy"; they ask for Antigravity. Without the name
+            // people use, the list gives the model nothing to match against.
+            assert!(
+                p.contains(known_as),
+                "{name} listed without the name people say"
+            );
             // The invocation matters as much as the name: the flag meaning "do
             // not ask me anything" differs per agent, and a wrong one hangs.
             assert!(p.contains(form), "{name} listed without how to run it");

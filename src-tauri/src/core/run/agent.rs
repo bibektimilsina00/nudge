@@ -368,7 +368,23 @@ impl Agents {
         });
     }
 
+    /// Take it off the list.
+    ///
+    /// Stops it first if it is still going. Removing a running agent's record
+    /// orphans the loop driving it: every write -- its step count, its state --
+    /// lands nowhere, so a question can never register as asked and the thing
+    /// asks again, and again. One run put the same question four times because
+    /// the card had been dismissed after the first.
     pub fn dismiss(&self, id: u64) {
+        let running = self
+            .items
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|a| a.id == id && !a.finished());
+        if running {
+            self.stop(id);
+        }
         self.items.lock().unwrap().retain(|a| a.id != id);
     }
 
@@ -578,6 +594,22 @@ mod tests {
             })
             .collect();
         assert!(a.set_plan(long).is_err(), "a plan that long is narration");
+    }
+
+    /// Dismissing a running agent used to leave its loop driving a record that
+    /// no longer existed -- every write dropped silently, so the question it had
+    /// asked never registered and it asked again, four times over.
+    #[test]
+    fn dismissing_a_running_agent_stops_it_first() {
+        let a = agents();
+        let id = a
+            .start("something long".into(), "Working".into(), "…".into(), false)
+            .unwrap();
+        assert!(a.running());
+
+        a.dismiss(id);
+        assert!(a.list().is_empty(), "gone from the list");
+        assert!(a.stopping(), "and told to stop, not just forgotten");
     }
 
     /// An offer is not a dependency. Most tasks end with nothing worth asking,
