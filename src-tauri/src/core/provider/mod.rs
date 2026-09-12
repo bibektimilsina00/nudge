@@ -164,6 +164,27 @@ pub enum Step {
     Reply { say: String },
 }
 
+/// The coding agents installed, and how to run each one unattended.
+///
+/// Empty when there are none, so the prompt does not carry a heading over a list
+/// of nothing -- and so a model told to use one has to notice there isn't one.
+fn agents_here() -> String {
+    let found = crate::core::tools::running::agents_installed();
+    if found.is_empty() {
+        return String::new();
+    }
+    let lines: Vec<String> = found
+        .iter()
+        .map(|(name, form)| format!("- {name}: `{form}`"))
+        .collect();
+    format!(
+        "## Coding agents on this machine\n\n\
+         Invoke with start, exactly as written, with the job in place of \
+         {{task}} in quotes. Then read its output.\n\n{}\n\n",
+        lines.join("\n")
+    )
+}
+
 /// First line, bounded -- an edit's `old` can be a paragraph, and history is
 /// meant to be readable.
 fn short(s: &str) -> String {
@@ -506,6 +527,18 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          **fetch** reads a web page as text and hands it to you next turn. No \
          window appears and nothing is screenshotted. Open a page instead only \
          when they want to SEE it, or the task needs something done on it.\n\
+         For real programming -- building something, refactoring across files, \
+         fixing a failing test suite -- hand it to a coding agent with start, \
+         then read its output. They are better at code than you are from a \
+         screenshot, they work in the same workspace, and their whole run is one \
+         step for you instead of thirty. The ones on this machine are listed at \
+         the end with how to invoke each; use that form exactly, because the \
+         flag that means \"do not ask me anything\" differs for every one and a \
+         wrong one hangs waiting for a person who is not there. If none is \
+         installed, say so rather than naming one you half-remember.\n\
+         Small edits are still yours: read and edit are one step each, and \
+         handing a one-line change to an agent costs a minute to save a \
+         second.\n\
          **start** launches something that keeps going -- a dev server, a build, \
          a watcher, another agent -- and hands back an id. **output** reads what \
          it has printed since it began, and **kill** stops it. Use these when a \
@@ -583,6 +616,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          item closes them instead. Opening a menu to READ it is fine; the \
          shortcut is printed beside each command, so read it and press that.\n\n\
          {routing}{carrying}\
+         {agents}\
          ## Applications this machine can launch\n\n\
          What `launch` accepts, and nothing more. Not a list of ways to do \
          something, and not a set of alternatives to what was asked for -- if \
@@ -592,6 +626,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
         workspace = ask.workspace,
         facts = ask.facts.brief(),
         apps = crate::core::screen::launch::installed_apps().join(", "),
+        agents = agents_here(),
     )
 }
 
@@ -990,6 +1025,29 @@ mod tests {
         let p = prompt(&ask("unwrap UVs", &["Opened the UV editor".into()], false));
         assert!(p.contains("1. Opened the UV editor"));
         assert!(prompt(&ask("x", &[], false)).contains("Nothing yet."));
+    }
+
+    /// The same failure as applications, one layer up: told to use an agent and
+    /// given no list, a model names one it half-remembers and the launch fails
+    /// with something useless.
+    #[test]
+    fn the_prompt_names_the_agents_that_are_actually_here() {
+        let p = prompt(&ask("refactor this", &[], false));
+        let found = crate::core::tools::running::agents_installed();
+        if found.is_empty() {
+            assert!(
+                !p.contains("Coding agents on this machine"),
+                "a heading over an empty list"
+            );
+            return;
+        }
+        assert!(p.contains("Coding agents on this machine"));
+        for (name, form) in found {
+            assert!(p.contains(name), "{name} is installed and unlisted");
+            // The invocation matters as much as the name: the flag meaning "do
+            // not ask me anything" differs per agent, and a wrong one hangs.
+            assert!(p.contains(form), "{name} listed without how to run it");
+        }
     }
 
     #[test]

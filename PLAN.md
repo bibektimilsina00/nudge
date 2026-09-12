@@ -202,8 +202,12 @@ one, because that is where the negative origins are.
 ### 5.3 Then, in order
 
 1. ~~**Background processes.**~~ **Done** -- see §3.3.
-2. **Orchestrating an external agent.** Hand a job to whatever is installed, with
-   its own boundary and its whole output visible.
+2. ~~**Orchestrating an external agent.**~~ **Done.** Nudge finds which coding
+   agents are on the machine and knows how to run each one unattended -- the
+   flag meaning "do not ask me anything" differs per agent, and a wrong one
+   hangs waiting for a person who is not there. The job goes through `start`, so
+   it runs in the same workspace, its whole output is readable, and it is killed
+   when the task ends. **Not yet tested against a real agent run.**
 3. **Memory.** Per-app notes, written from failure, injected only when that app is
    in front: *"CapCut: the timeline view means a project is open."* Earned once
    the loop is known to work -- memory that records a broken loop's habits is

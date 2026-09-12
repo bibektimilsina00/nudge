@@ -33,6 +33,48 @@ const STARTABLE: &[&str] = &[
     "claude", "codex", "opencode", "gemini", "aider",
 ];
 
+/// Coding agents, and how to give one a job without it asking questions.
+///
+/// Each is invoked in a way that runs to completion and prints -- no prompt, no
+/// editor, no waiting for a keypress. An agent that stops to ask something is
+/// an agent that hangs, because there is nobody at that terminal.
+///
+/// Named individually because the flag that means "just do it" is different for
+/// every one of them, and guessing it wrong looks identical to the tool being
+/// broken.
+const AGENTS: &[(&str, &str)] = &[
+    ("claude", "claude -p {task}"),
+    ("codex", "codex exec {task}"),
+    ("opencode", "opencode run {task}"),
+    ("gemini", "gemini -p {task}"),
+    ("aider", "aider --yes --message {task}"),
+];
+
+/// Which coding agents are actually on this machine.
+///
+/// The same problem as applications, one layer up: without asking, a model
+/// invents one. Told to use whatever is installed and finding nothing, it should
+/// say so rather than reach for a name it half-remembers.
+pub fn agents_installed() -> Vec<(&'static str, &'static str)> {
+    static FOUND: std::sync::OnceLock<Vec<(&'static str, &'static str)>> =
+        std::sync::OnceLock::new();
+    FOUND
+        .get_or_init(|| {
+            AGENTS
+                .iter()
+                .filter(|(name, _)| {
+                    std::process::Command::new("/usr/bin/which")
+                        .arg(name)
+                        .output()
+                        .map(|o| o.status.success())
+                        .unwrap_or(false)
+                })
+                .copied()
+                .collect()
+        })
+        .clone()
+}
+
 /// How much of a process's output is kept.
 ///
 /// A build prints megabytes and nobody reads the middle. Keeping the tail means
