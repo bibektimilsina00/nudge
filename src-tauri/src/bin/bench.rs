@@ -214,17 +214,26 @@ fn record(cfg: &Config, goal: &str) -> nudge_lib::error::Result<()> {
 
     let shot = capture::grab(cfg.max_edge)?;
     println!("captured {}x{}", shot.sent.0, shot.sent.1);
-    println!("Now CLICK the control that goal means -- the answer you want scored.");
+    println!("Now mark the answer:");
+    println!("  CLICK a small control, or DRAG across a wide one (a bar, a row).");
 
-    // Wait for a press, then for the release, so the recorded point is where the
-    // click finished rather than wherever the pointer was on the way there.
+    // Where the press started and where it ended. A click gives the same point
+    // twice; a drag gives two corners, which is how a wide control gets recorded
+    // as the shape it actually is.
     while !click::left_button_down() {
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
-    let at = click::cursor().unwrap_or(Point { x: 0.0, y: 0.0 });
+    let from = click::cursor().unwrap_or(Point { x: 0.0, y: 0.0 });
+    let mut to = from;
     while click::left_button_down() {
+        if let Some(p) = click::cursor() {
+            to = p;
+        }
         std::thread::sleep(std::time::Duration::from_millis(16));
     }
+
+    // Anything smaller than this was a click with a shaky hand, not a drag.
+    const DRAGGED: f64 = 12.0;
 
     // The click is in logical points; the case is stored in the image's space so
     // it stays valid whatever max_edge was used to capture it.
@@ -235,10 +244,12 @@ fn record(cfg: &Config, goal: &str) -> nudge_lib::error::Result<()> {
     // gone unnoticed until someone recorded a case on a second monitor.
     let (lw, lh) = shot.logical;
     let (ox, oy) = shot.origin;
-    let target = Point {
-        x: (at.x - ox) * shot.sent.0 as f64 / lw,
-        y: (at.y - oy) * shot.sent.1 as f64 / lh,
+    let into_image = |p: Point| Point {
+        x: (p.x - ox) * shot.sent.0 as f64 / lw,
+        y: (p.y - oy) * shot.sent.1 as f64 / lh,
     };
+    let (a, b) = (into_image(from), into_image(to));
+    let dragged = (b.x - a.x).abs() > DRAGGED || (b.y - a.y).abs() > DRAGGED;
 
     std::fs::create_dir_all(dir())?;
     let n = load()?.len() + 1;
@@ -252,11 +263,29 @@ fn record(cfg: &Config, goal: &str) -> nudge_lib::error::Result<()> {
         slug.trim_matches('-').split("--").next().unwrap_or("case")
     );
     std::fs::write(dir().join(format!("{name}.jpg")), &shot.bytes)?;
-    std::fs::write(
-        dir().join(format!("{name}.txt")),
-        format!("goal = {goal}\nx = {:.0}\ny = {:.0}\n", target.x, target.y),
-    )?;
-    println!("saved {name}  target ({:.0},{:.0})", target.x, target.y);
+    let body = if dragged {
+        format!(
+            "goal = {goal}\nx = {:.0}\ny = {:.0}\nx2 = {:.0}\ny2 = {:.0}\n",
+            a.x, a.y, b.x, b.y
+        )
+    } else {
+        format!("goal = {goal}\nx = {:.0}\ny = {:.0}\n", a.x, a.y)
+    };
+    std::fs::write(dir().join(format!("{name}.txt")), body)?;
+    println!(
+        "saved {name}  {}",
+        if dragged {
+            format!(
+                "box ({:.0},{:.0})-({:.0},{:.0})",
+                a.x.min(b.x),
+                a.y.min(b.y),
+                a.x.max(b.x),
+                a.y.max(b.y)
+            )
+        } else {
+            format!("point ({:.0},{:.0})", a.x, a.y)
+        }
+    );
     Ok(())
 }
 
