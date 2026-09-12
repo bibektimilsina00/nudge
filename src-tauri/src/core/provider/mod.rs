@@ -428,16 +428,7 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 /// Shared instruction. Kept in one place so a provider comparison measures the
 /// *model*, not three people's prompt-writing.
 pub(crate) fn prompt(ask: &Ask<'_>) -> String {
-    let history = if ask.done.is_empty() {
-        "Nothing yet.".to_string()
-    } else {
-        ask.done
-            .iter()
-            .enumerate()
-            .map(|(i, s)| format!("{}. {s}", i + 1))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
+    let history = recent(ask.done);
     // Said plainly, because from a screenshot alone nothing distinguishes "not
     // done yet" from "did not work", and the model assumes the former.
     let stalled = if ask.stalled {
@@ -634,6 +625,53 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
         apps = crate::core::screen::launch::installed_apps().join(", "),
         agents = agents_here(),
     )
+}
+
+/// The steps so far, newest kept whole and older ones cut to their first line.
+///
+/// Everything a step produced used to be carried forever: a `read` of a 38,000
+/// character file, a fetched page, a command's output -- re-sent on every turn
+/// after it. Measured: the prompt was 17,000 characters at the start of a task
+/// and 70,000 three turns in, which is most of why a live turn took twelve
+/// seconds when the same model answered the same screenshots in four.
+///
+/// What the model actually needs differs by age. The last thing it did, it needs
+/// in full -- that is the result it is reasoning about. What it did five turns
+/// ago it needs to *remember doing*, so it does not do it again; the contents
+/// are long since spent.
+fn recent(done: &[String]) -> String {
+    /// Roughly a page of text. Enough for the last file read or page fetched,
+    /// and bounded so a long task does not slow down as it goes.
+    const BUDGET: usize = 8_000;
+
+    if done.is_empty() {
+        return "Nothing yet.".to_string();
+    }
+    let mut lines: Vec<String> = Vec::with_capacity(done.len());
+    let mut spent = 0usize;
+    // Newest first, so the budget is spent on what matters most.
+    for (i, step) in done.iter().enumerate().rev() {
+        let n = i + 1;
+        let room = BUDGET.saturating_sub(spent);
+        if step.len() <= room {
+            spent += step.len();
+            lines.push(format!("{n}. {step}"));
+            continue;
+        }
+        // Past the budget: what was done, not what it said.
+        let first = step.lines().next().unwrap_or("");
+        let head: String = first.chars().take(120).collect();
+        lines.push(format!(
+            "{n}. {head}{}",
+            if step.len() > first.len() || first.len() > 120 {
+                " … (output no longer shown)"
+            } else {
+                ""
+            }
+        ));
+    }
+    lines.reverse();
+    lines.join("\n")
 }
 
 /// Guide mode: someone is watching, and some requests are not tasks at all.
@@ -1024,6 +1062,68 @@ mod tests {
                 "{once:?} appears more than once"
             );
         }
+    }
+
+    /// What the model needs differs by age: the last thing it did in full,
+    /// because that is the result it is reasoning about; older steps only as a
+    /// reminder that it did them, so it does not do them twice.
+    #[test]
+    fn the_newest_step_survives_whole_and_older_ones_shrink() {
+        let done = vec![
+            format!("Read a.rs:\n{}", "a".repeat(30_000)),
+            format!("Read b.rs:\n{}", "b".repeat(30_000)),
+            "Ran `ls`, which printed:\nCargo.toml\nsrc".to_string(),
+        ];
+        let out = recent(&done);
+
+        assert!(out.contains("Cargo.toml"), "the newest lost its contents");
+        assert!(!out.contains(&"a".repeat(200)), "an old file is still in full");
+        assert!(!out.contains(&"b".repeat(200)), "an old file is still in full");
+
+        // Still remembers doing them, in order, so it does not repeat them.
+        assert!(out.contains("1. Read a.rs"));
+        assert!(out.contains("2. Read b.rs"));
+        assert!(out.contains("3. Ran `ls`"));
+        let (a, b) = (out.find("1. Read a.rs"), out.find("3. Ran"));
+        assert!(a < b, "history came back out of order");
+
+        // And it says the output is gone rather than implying there was none.
+        assert!(out.contains("no longer shown"));
+    }
+
+    #[test]
+    fn an_empty_history_says_so() {
+        assert_eq!(recent(&[]), "Nothing yet.");
+    }
+
+    /// How big is what actually goes out, and what is it made of?
+    ///
+    ///     cargo test what_the_prompt_costs -- --nocapture
+    #[test]
+    fn what_the_prompt_costs() {
+        let empty = prompt(&ask("do a thing", &[], false));
+        let mut a = ask("do a thing", &[], false);
+        a.agent = true;
+        let agent_mode = prompt(&a);
+
+        // What a few turns of real work leaves behind: a file read, a page
+        // fetched, a command's output.
+        let history: Vec<String> = vec![
+            format!("Read src/main.rs:\n{}", "x".repeat(38_000)),
+            format!("Read https://example.com, which says:\n{}", "y".repeat(11_000)),
+            format!("Ran `cargo test`, which printed:\n{}", "z".repeat(3_800)),
+        ];
+        let mut b = ask("do a thing", &history, false);
+        b.agent = true;
+        let with_history = prompt(&b);
+
+        eprintln!("guide mode, no history : {:>7} chars", empty.len());
+        eprintln!("agent mode, no history : {:>7} chars", agent_mode.len());
+        eprintln!("agent mode, 3 turns in : {:>7} chars", with_history.len());
+        eprintln!(
+            "   of which history     : {:>7} chars",
+            with_history.len() - agent_mode.len()
+        );
     }
 
     #[test]

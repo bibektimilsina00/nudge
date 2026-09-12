@@ -224,9 +224,14 @@ one, because that is where the negative origins are.
      come from documentation. Marked as such in the code.
    - **Nothing reads the diff.** The agent reports what it did and Nudge believes
      it. `git diff` is one `run` away and would turn a claim into a check.
-   - **Turns were 12-14 seconds** in the last run, against 4.5s measured on the
-     same model in the bench. The live prompt is much longer than the bench's.
-     Worth finding before more is built on top.
+   - ~~**Turns were 12-14 seconds**~~ **Found and fixed.** Every step's output
+     was carried in the history forever -- a `read` of a 38,000 character file,
+     a fetched page, a command's output -- and re-sent on every turn after it.
+     Measured: 17,000 characters at the start of a task, 70,000 three turns in.
+     The bench only ever sent the base, which is why it showed 4.5s for the same
+     model on the same screenshots. The newest step is now kept whole and older
+     ones cut to what was done rather than what it said: 70,000 back down to
+     21,000.
 3. **Memory.** Per-app notes, written from failure, injected only when that app is
    in front: *"CapCut: the timeline view means a project is open."* Earned once
    the loop is known to work -- memory that records a broken loop's habits is

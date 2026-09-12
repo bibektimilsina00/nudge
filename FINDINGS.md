@@ -594,3 +594,37 @@ costs a whole retry turn anyway, plus undoing whatever the wrong click did. A
 prefer-a-shortcut rule working, consistently, across both models. Those cannot
 miss at all, and they are the best argument for pushing more work off the screen
 rather than grinding at grounding.
+
+---
+
+## Why a live turn took three times longer than the bench
+
+The bench measured 4.5s per call. Live runs were taking 12-14. Same model, same
+kind of screenshot -- so the difference had to be the prompt, and it was:
+
+    guide mode, no history :  12,954 chars
+    agent mode, no history :  16,885 chars
+    agent mode, 3 turns in :  69,773 chars
+       of which history    :  52,888 chars
+
+**Everything a step produced was carried forever.** A `read` returns up to 40,000
+characters and all of it went into the history; so did a fetched page, and a
+command's output. Each one re-sent on every subsequent turn, for the rest of the
+task.
+
+The bench never saw it because a bench case is one call with no history. It was
+measuring the best case and calling it the number.
+
+**The fix is about what the model needs when.** The last thing it did, it needs
+in full -- that is the result it is reasoning about. What it did five turns ago it
+needs to *remember doing*, so it does not do it again; the contents are long
+since spent. So the newest steps are kept whole up to a budget, and older ones
+are cut to their first line with "output no longer shown" -- said explicitly,
+rather than implying there had been none.
+
+70,000 characters back to 21,000, three turns in.
+
+**Worth keeping in mind about benchmarks.** This one has been genuinely useful --
+it found the model choice in one afternoon -- and it still measured a condition
+that never occurs in practice. A number from a harness answers the question the
+harness asks, which is never quite the question you have.
