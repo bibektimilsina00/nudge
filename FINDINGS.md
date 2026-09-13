@@ -738,3 +738,72 @@ small. `thinkingLevel` is the only dial with real travel, and it is paid for in
 accuracy. That makes the accessibility tree -- the one row that skips the call
 instead of shortening it -- no longer the speculative long game at the end of the
 list. It is the only lever left.
+
+---
+
+## Phase 5: does macOS already know where the buttons are?
+
+The plan's last phase rested on a doubt: a native app gets an accessibility tree
+for free, but an Electron app is a web page in a window and exposes whatever its
+authors bothered with. VS Code is in the bench cases, so this was answerable in an
+afternoon rather than arguable for a fortnight. `cargo run --bin ax` walks the
+frontmost app and reports what it finds.
+
+**It works, and it is fast.**
+
+| app | kind | elements | walk | clickable and named |
+|---|---|---|---|---|
+| Finder | native | 389 | 131ms | 297 |
+| Mail | native | 613 | 412ms | 464 |
+| Arc | Chromium | 1576 | 769ms | 689 |
+| VS Code | Electron | 1924 | 152ms | 440 |
+
+And the thing that matters, from VS Code -- an Electron app, the hard case:
+
+    AXRadioButton    Search (⇧⌘F)      at (8,116) 36x36
+    AXRadioButton    Explorer (⇧⌘E)    at (8,72)  36x36
+
+That first line is bench case 07, `click-the-search-icon-in-the-sidebar`. The
+vision model answers it in **4,568ms at best and 9,841ms at worst, and sometimes
+wrong**. The tree answers it in **152ms with an exact 36x36 frame**, every time,
+for no tokens.
+
+### Four things that took a wrong turn to learn
+
+**Chromium and Electron keep the tree switched off** until an assistive client
+announces itself, by setting `AXManualAccessibility` or `AXEnhancedUserInterface`
+on the application element. VS Code accepts the first and returns 0; Chromium
+rejects both with -25205 and -25208. Building that tree is not free for them
+either -- we would be asking a large application to maintain a parallel model of
+its whole interface for as long as we are watching. That is the real cost of this
+approach and it belongs in the decision, not in a footnote.
+
+**Windows are not always in `AXChildren`.** Some applications answer that with
+their menu bar alone and keep the windows behind the specific name `AXWindows`.
+The first run of the probe concluded that Chromium exposes nothing but a menu
+bar, which was the probe's fault.
+
+**An app with no window exposes no window.** VS Code and Chromium were both
+running, both listed as visible by System Events, and both reported
+`AXMenuBar(11)` and nothing else -- because neither had a window open. Two
+separate rounds of this were read as "Electron exposes nothing" before
+`count of windows` said 0 and settled it. *Visible is not the same as having
+something to show.*
+
+**A closed menu has no geometry.** Every menu item reads `(0,982) 0x0` until its
+menu is open. So menu navigation is not something the tree can shortcut: you
+still have to open the menu before you can be told where anything in it is,
+which is exactly the click-then-look loop we already have.
+
+### What is actually left to build
+
+Not the lookup. The lookup is a function call and it is done. What is left is the
+matching: turning *"the search icon in the sidebar"* into `Search (⇧⌘F)`. That is
+string matching where it is easy and a model call where it is not -- but a model
+call against forty labels is a different thing from a model call against a
+screenshot, and it is the cheap kind.
+
+Two things this probe did not settle, and should before anything is built on it:
+the file explorer's tree rows never appeared under any role (the one good run may
+simply have had a different sidebar showing), and Arc's web links all reported a
+height of one pixel, which is not a thing you can click.
