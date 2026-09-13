@@ -44,6 +44,21 @@ impl Shot {
         }
     }
 
+    /// The inverse of [`Shot::to_global`].
+    ///
+    /// The accessibility tree answers in global screen points, because that is
+    /// where controls actually are. Everything downstream of a step expects
+    /// image coordinates and converts them back on the way out, so a control is
+    /// converted *into* the picture rather than teaching the whole path about a
+    /// second coordinate space. One conversion each way, and they are tested to
+    /// agree.
+    pub fn to_image(&self, p: Point) -> Point {
+        Point {
+            x: (p.x - self.origin.0) * self.sent.0 as f64 / self.logical.0,
+            y: (p.y - self.origin.1) * self.sent.1 as f64 / self.logical.1,
+        }
+    }
+
     /// A tiny greyscale thumbnail, for "did anything actually happen?".
     ///
     /// Comparing full screenshots is hopeless -- a clock digit, an antialiased
@@ -386,6 +401,36 @@ pub fn unchanged(before: &[u8], after: &[u8]) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// The two conversions have to agree, or a control lands one display over.
+    ///
+    /// Written against the case that actually breaks: a second monitor, where
+    /// `origin` is not zero, and a Retina downscale, where the ratio is not one.
+    #[test]
+    fn a_point_survives_the_round_trip_between_the_screen_and_the_picture() {
+        let shot = Shot {
+            bytes: Vec::new(),
+            sent: (1280, 800),
+            logical: (1512.0, 945.0),
+            origin: (1512.0, -200.0),
+        };
+        for p in [
+            Point { x: 0.0, y: 0.0 },
+            Point { x: 640.0, y: 400.0 },
+            Point { x: 1280.0, y: 800.0 },
+        ] {
+            let there_and_back = shot.to_image(shot.to_global(p));
+            assert!(
+                (there_and_back.x - p.x).abs() < 0.001 && (there_and_back.y - p.y).abs() < 0.001,
+                "{p:?} came back as {there_and_back:?}"
+            );
+        }
+
+        // And the direction that matters: a control at the display's own origin
+        // is the top-left of the picture, not the top-left of the desktop.
+        let at_origin = shot.to_image(Point { x: 1512.0, y: -200.0 });
+        assert_eq!((at_origin.x, at_origin.y), (0.0, 0.0));
+    }
+
     use super::*;
 
     fn shot(sent: (u32, u32), logical: (f64, f64)) -> Shot {

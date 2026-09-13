@@ -76,6 +76,7 @@ impl Provider for Gemini {
         let instruction = format!(
             "{}\n\nEvery reply is an object with \"screen\" plus one of these \
              shapes:\n\
+             {{\"kind\":\"point\",\"control\":7,\"act\":\"click|doubleClick|hover\",\"say\":\"...\"}}\n\
              {{\"kind\":\"point\",\"point\":[y,x],\"act\":\"click|doubleClick|hover\",\"say\":\"...\"}}\n\
              {{\"kind\":\"done\",\"say\":\"...\"}}\n\
              {{\"kind\":\"unsure\",\"say\":\"...\"}}\n\
@@ -101,7 +102,10 @@ impl Provider for Gemini {
              {{\"kind\":\"edit\",\"path\":\"...\",\"old\":\"...\",\"new\":\"...\",\"say\":\"...\"}}\n\
              e.g. {{\"screen\":\"a list of search results; the goal is not met \
              yet\",\"kind\":\"point\",...}}\n\
-             where y and x are normalised to 0-1000.",
+             where y and x are normalised to 0-1000. Use \"control\" with a \
+             number from the list above whenever the thing you want is on it -- \
+             a number is exact and a guess at a pixel is not. \"point\" is for \
+             everything the list does not contain.",
             prompt(ask)
         );
         let body = json!({
@@ -142,6 +146,26 @@ impl Provider for Gemini {
 
         if let Some(step) = super::simple_step(v["kind"].as_str().unwrap_or(""), &v, say.clone()) {
             return Ok(step);
+        }
+
+        // A number from the list beats a guess at a pixel, so it is tried first.
+        // Resolved through the same function that numbered the list, and
+        // converted into the picture's coordinates -- everything downstream maps
+        // back out again, and a control that skipped that would be off by the
+        // display's origin on any screen but the first.
+        if let Some(n) = v["control"].as_u64() {
+            if let Some(c) = super::control_at(ask.controls, n) {
+                eprintln!("  control {n}: {} {:?}", c.role, c.label);
+                return Ok(Step::Point {
+                    at: shot.to_image(Point { x: c.at.0, y: c.at.1 }),
+                    say,
+                    act: super::act_from(v["act"].as_str()),
+                });
+            }
+            // Out of range. Falling through to `point` is right when the model
+            // gave both, and the error below is right when it did not -- either
+            // way, better than clicking a control we cannot identify.
+            eprintln!("  control {n} is not on the list of {}", ask.controls.len());
         }
 
         let pt: Vec<f64> = v["point"]

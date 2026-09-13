@@ -356,7 +356,12 @@ impl Nudge {
         // all and still describes this screen.
         let early = self.take_early(first_turn);
 
-        let Look { facts, shot, .. } = match early {
+        let Look {
+            facts,
+            shot,
+            controls,
+            ..
+        } = match early {
             Some(look) => look,
             // `look` checks before it photographs, so a refusal happens while the
             // only thing that exists is a window title.
@@ -380,6 +385,7 @@ impl Nudge {
             stalled,
             agent,
             facts,
+            controls: &controls,
             workspace: self.workspace().display().to_string(),
         };
         let step = self.provider.next_step(&shot, &ask).await?;
@@ -419,6 +425,7 @@ mod tests {
         let n = nudge();
         let look = || Look {
             facts: Default::default(),
+            controls: Vec::new(),
             shot: Shot {
                 bytes: vec![1],
                 sent: (1, 1),

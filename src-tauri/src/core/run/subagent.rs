@@ -54,6 +54,8 @@ where
             // No screen, so nothing to report about one. `facts` describes what
             // is in front of the user, and a subagent is not looking at it.
             facts: Default::default(),
+            // No screen, so nothing on it.
+            controls: &[],
             workspace: workspace.display().to_string(),
         };
         let step = provider.next_step_blind(&ask).await?;

@@ -361,6 +361,13 @@ pub struct Ask<'a> {
     /// What macOS reports about the machine right now -- frontmost app, window
     /// title, whether sound is coming out. Facts a screenshot cannot settle.
     pub facts: crate::core::screen::facts::Facts,
+    /// The controls macOS says are on screen, already located exactly.
+    ///
+    /// This is the difference between asking where a button is and being told.
+    /// Empty for anything drawn rather than built -- canvases, games, video --
+    /// and for a menu that has not been opened yet, which has no geometry until
+    /// it does. So it is a shortcut, never a replacement for looking.
+    pub controls: &'a [crate::core::screen::ax::Control],
     /// Where commands run and files are written.
     ///
     /// Told, not guessed. Without it a subagent asked to search "this project"
@@ -476,7 +483,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Paths are relative to it. If you need to know what is in there, look \
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
-         {facts}\
+         {facts}{controls}\
          Steps already completed:\n{history}{stalled}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
@@ -622,9 +629,87 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
         goal = ask.goal,
         workspace = ask.workspace,
         facts = ask.facts.brief(),
+        controls = controls_here(ask.controls),
         apps = crate::core::screen::launch::installed_apps().join(", "),
         agents = agents_here(),
     )
+}
+
+/// The controls macOS says are on screen, numbered so one can be named exactly.
+///
+/// The point of this block is that it removes a guess. Finding a button in a
+/// picture is the single least reliable thing the model does -- measured at
+/// roughly two thirds, with the misses landing 12 to 87 pixels out. Choosing a
+/// row from a list is a different kind of task, and an easier one.
+///
+/// Capped, and ordered down the screen so the list reads the way the window
+/// does. A window with four hundred controls in it is a list nobody can choose
+/// from, including a model.
+fn controls_here(controls: &[crate::core::screen::ax::Control]) -> String {
+    if controls.is_empty() {
+        return String::new();
+    }
+    let shown = ordered(controls);
+    let lines: Vec<String> = shown
+        .iter()
+        .enumerate()
+        .map(|(i, c)| format!("{}. {} \"{}\"", i + 1, role_word(&c.role), c.label))
+        .collect();
+    let more = match controls.len() > shown.len() {
+        true => format!("\n(and {} more, not listed)", controls.len() - shown.len()),
+        false => String::new(),
+    };
+    format!(
+        "The system reports these controls on screen, already located exactly. \
+         To act on one, use its number -- that is always better than pointing at \
+         a pixel, because the number cannot miss. If what you want is not here, \
+         point at it in the picture as usual; this list is what the application \
+         chose to expose, not everything that exists.\n\n{}{more}\n\n",
+        lines.join("\n")
+    )
+}
+
+/// The controls in the order they are numbered, and only the ones numbered.
+///
+/// The single source of that order. The prompt numbers this list and a reply
+/// names a number, and the two have to be the same list or a reply means
+/// something else entirely -- click the wrong row, confidently, with the model
+/// blameless. Two functions sorting "the same way" is exactly the kind of
+/// agreement that lasts until someone changes one of them.
+///
+/// Ordered down the screen so the list reads the way the window does, and capped
+/// because a list of four hundred is not a list anyone can choose from.
+fn ordered(controls: &[crate::core::screen::ax::Control]) -> Vec<&crate::core::screen::ax::Control> {
+    const MAX: usize = 60;
+    let mut out: Vec<&crate::core::screen::ax::Control> = controls.iter().collect();
+    out.sort_by_key(|c| (c.at.1 as i64, c.at.0 as i64));
+    out.truncate(MAX);
+    out
+}
+
+/// The control a reply means by `control: n`, counting from one as the prompt does.
+pub fn control_at(
+    controls: &[crate::core::screen::ax::Control],
+    n: u64,
+) -> Option<&crate::core::screen::ax::Control> {
+    ordered(controls).get(n.checked_sub(1)? as usize).copied()
+}
+
+/// The role, in a word someone would use out loud.
+fn role_word(role: &str) -> &str {
+    match role {
+        "AXButton" => "button",
+        "AXMenuItem" | "AXMenuBarItem" => "menu",
+        "AXCheckBox" => "checkbox",
+        "AXRadioButton" => "option",
+        "AXPopUpButton" => "dropdown",
+        "AXTextField" | "AXTextArea" => "text field",
+        "AXLink" => "link",
+        "AXTab" => "tab",
+        "AXRow" | "AXCell" => "row",
+        "AXDisclosureTriangle" => "twisty",
+        other => other.strip_prefix("AX").unwrap_or(other),
+    }
 }
 
 /// The steps so far, newest kept whole and older ones cut to their first line.
@@ -921,6 +1006,60 @@ mod tests {
         assert!(first_json("no object here").is_none());
     }
 
+    /// The prompt numbers a list and the reply names a number. If those two
+    /// disagree by even one, every reply clicks the wrong control and nothing
+    /// looks wrong -- the model named something real, we clicked something real,
+    /// and the only symptom is that it is the wrong thing.
+    ///
+    /// So this walks the rendered block line by line and checks that the label
+    /// on line n is the control `control_at(n)` hands back.
+    #[test]
+    fn the_number_the_model_is_shown_is_the_control_we_click() {
+        use crate::core::screen::ax::Control;
+        let c = |label: &str, x: f64, y: f64| Control {
+            role: "AXButton".into(),
+            label: label.into(),
+            at: (x, y),
+            size: (10.0, 10.0),
+        };
+        // Deliberately not in reading order: the whole job of `ordered` is to
+        // put them in one, and a list that arrived sorted would prove nothing.
+        let controls = vec![
+            c("Bottom left", 10.0, 900.0),
+            c("Top right", 900.0, 10.0),
+            c("Top left", 10.0, 10.0),
+            c("Middle", 400.0, 400.0),
+        ];
+
+        let block = controls_here(&controls);
+        let numbered: Vec<&str> = block
+            .lines()
+            .filter(|l| l.starts_with(|ch: char| ch.is_ascii_digit()))
+            .collect();
+        assert_eq!(numbered.len(), controls.len(), "not every control was listed");
+
+        for (i, line) in numbered.iter().enumerate() {
+            let n = i as u64 + 1;
+            assert!(line.starts_with(&format!("{n}. ")), "line {n} is {line:?}");
+            let resolved = control_at(&controls, n).expect("a control for every line shown");
+            assert!(
+                line.contains(&resolved.label),
+                "line {n} says {line:?} but control {n} is {:?}",
+                resolved.label
+            );
+        }
+
+        // Reading order, top to bottom then left to right.
+        assert!(numbered[0].contains("Top left"));
+        assert!(numbered[1].contains("Top right"));
+        assert!(numbered[3].contains("Bottom left"));
+
+        // And the ways a number can mean nothing.
+        assert!(control_at(&controls, 0).is_none(), "the list starts at one");
+        assert!(control_at(&controls, 5).is_none(), "past the end");
+        assert_eq!(controls_here(&[]), "", "no controls, no heading about controls");
+    }
+
     fn ask<'a>(goal: &'a str, done: &'a [String], stalled: bool) -> Ask<'a> {
         Ask {
             goal,
@@ -928,6 +1067,7 @@ mod tests {
             stalled,
             agent: false,
             facts: Default::default(),
+            controls: &[],
             workspace: "/tmp/workspace".into(),
         }
     }

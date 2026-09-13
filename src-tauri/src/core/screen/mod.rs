@@ -29,6 +29,10 @@ use crate::error::{Error, Result};
 pub struct Look {
     pub facts: facts::Facts,
     pub shot: capture::Shot,
+    /// What the system says is on screen, in global points. Empty when the app
+    /// exposes nothing, which is a normal answer and not a failure -- plenty of
+    /// interfaces are drawn rather than built.
+    pub controls: Vec<ax::Control>,
     /// When it was taken. A look can be taken ahead of the turn that uses it,
     /// and a photograph of a screen nobody is looking at any more is worse than
     /// no photograph.
@@ -42,14 +46,24 @@ pub struct Look {
 /// why it lives here rather than at the call sites: every caller routes through
 /// this function, so no future one can forget it.
 pub fn look(cfg: &Config) -> Result<Look> {
-    if let Some((app, title)) = privacy::frontmost() {
-        if let Some(reason) = privacy::blocked_by(cfg, &app, &title) {
+    let front = privacy::frontmost_window();
+    if let Some((_, app, title)) = &front {
+        if let Some(reason) = privacy::blocked_by(cfg, app, title) {
             return Err(Error::Blocked(reason));
         }
     }
+    let facts = facts::gather();
+    let shot = capture::grab(cfg.max_edge)?;
+    // After the picture, not before. Reading a tree can take the best part of a
+    // second, and the two will disagree by however long that took -- so the
+    // fresher of the pair should be the one whose coordinates we click.
+    let controls = front
+        .map(|(pid, _, _)| ax::controls(pid))
+        .unwrap_or_default();
     Ok(Look {
-        facts: facts::gather(),
-        shot: capture::grab(cfg.max_edge)?,
+        facts,
+        shot,
+        controls,
         taken: std::time::Instant::now(),
     })
 }

@@ -64,6 +64,11 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         shot.bytes.len() / 1024,
     );
 
+    // The same list the app would get: whatever the frontmost application is
+    // willing to say about its own controls.
+    let controls = nudge_lib::core::screen::privacy::frontmost_window()
+        .map(|(pid, _, _)| nudge_lib::core::screen::ax::controls(pid))
+        .unwrap_or_default();
     let ask = provider::Ask {
         goal,
         done: &[],
@@ -71,6 +76,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         agent: false,
         workspace: cfg.workspace_dir().display().to_string(),
         facts: facts::gather(),
+        controls: &controls,
     };
     let t1 = std::time::Instant::now();
     let step = tauri::async_runtime::block_on(provider.next_step(&shot, &ask))?;

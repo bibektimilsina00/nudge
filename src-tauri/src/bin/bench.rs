@@ -345,6 +345,11 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
             origin: (0.0, 0.0),
         };
         let ask = Ask {
+            // A saved case is a picture of a screen that is long gone, so there
+            // is no tree to ask. This harness scores grounding from pixels, which
+            // is exactly the thing the control list is meant to make unnecessary --
+            // so a good score here and a good score live are different claims.
+            controls: &[],
             goal: &c.goal,
             done: &[],
             stalled: false,

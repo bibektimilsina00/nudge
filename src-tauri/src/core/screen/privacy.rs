@@ -70,11 +70,21 @@ pub fn blocked_by(cfg: &Config, app: &str, title: &str) -> Option<String> {
 }
 
 /// The frontmost ordinary window, as (application, title).
+pub fn frontmost() -> Option<(String, String)> {
+    frontmost_window().map(|(_, app, title)| (app, title))
+}
+
+/// The same window, with the process that owns it.
+///
+/// The pid is what the accessibility tree is asked for, and it has to be the pid
+/// of *this* window -- the one the privacy check just approved and the capture is
+/// about to photograph. Asking anything else which controls are on screen would
+/// answer about a different screen.
 ///
 /// Layer 0 only: menus, the Dock and our own overlay live above it, and the
 /// window list is already in front-to-back order.
 #[cfg(target_os = "macos")]
-pub fn frontmost() -> Option<(String, String)> {
+pub fn frontmost_window() -> Option<(i32, String, String)> {
     use core_foundation::base::{CFType, TCFType};
     use core_foundation::dictionary::CFDictionary;
     use core_foundation::number::CFNumber;
@@ -114,13 +124,17 @@ pub fn frontmost() -> Option<(String, String)> {
             .and_then(|v| v.downcast::<CFString>())
             .map(|s| s.to_string())
             .unwrap_or_default();
-        return Some((owner, title));
+        let pid = get(&dict, "kCGWindowOwnerPID")
+            .and_then(|v| v.downcast::<CFNumber>())
+            .and_then(|n| n.to_i64())
+            .unwrap_or(-1) as i32;
+        return Some((pid, owner, title));
     }
     None
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn frontmost() -> Option<(String, String)> {
+pub fn frontmost_window() -> Option<(i32, String, String)> {
     None
 }
 
