@@ -912,3 +912,52 @@ plausibly.
 The old path stays underneath. This one needs macOS 14, a current screen
 recording grant, and a framework that is entitled to decline; a slow screenshot
 beats none.
+
+## Not asking the model at all
+
+The model is now about six seconds of an eight second turn, and its only levers
+are how much it may think and whether it is called. This is the second one.
+
+When someone says *"click the View menu"* and the system is already telling us
+there is exactly one thing called View, at (195,16), 50 by 33 -- asking a model
+to look at a picture and work that out is six seconds spent confirming what we
+were told. Measured against a live application:
+
+```
+"click the View menu"           obvious: AXMenuBarItem "View" at (195,16)
+"click Extensions"              obvious: AXMenuBarItem "Extensions" at (440,16)
+"press Help"                    obvious: AXMenuBarItem "Help" at (576,16)
+"click the Window menu please"  obvious: AXMenuBarItem "Window" at (518,16)
+"click view or edit"            not obvious -- this would go to the model
+```
+
+**A turn of about 300ms instead of about eight seconds**, for the cases where
+someone names a thing that exists.
+
+### The bar, and why it is set where it is
+
+There is nothing behind this. A model that grounds badly still said what it saw
+and can be contradicted by the next turn; a wrong match here clicks something
+with nobody disagreeing. So all of these must hold:
+
+- **The goal opens with an instruction to click.** "How do I send this" and "the
+  send button is greyed out" both contain the word send and neither is a request
+  to press it.
+- **A whole label appears in the goal, on word boundaries.** Not a substring:
+  "ok" must not match inside "bookmark", and "tab" must not match "table".
+- **Exactly one control qualifies** -- and it fires only on the **first turn** of
+  a session, which is what makes having no second opinion safe. It can act once
+  and then the model has the rest of the task. Something that could fire
+  repeatedly could also loop, and nothing here would notice.
+
+Two rules needed more care than expected. *"click send later"* matches both
+"Send" and "Send Later", and calling that ambiguous punishes someone for being
+precise -- the second contains the first, so it is one control named more fully.
+Whereas *"click send or cancel"* matches two unrelated labels and genuinely
+cannot be resolved. The rule is therefore: the longest match wins, but only when
+every other match sits inside it.
+
+And a test that passed for the wrong reason, caught by reading it rather than
+running it: a minimum label length of three characters was silently excluding
+"OK" and "No", which are the shortest things anyone actually says, while the
+comment above it claimed they survived.

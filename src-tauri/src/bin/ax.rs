@@ -85,6 +85,20 @@ fn main() {
         began.elapsed().as_secs_f32() * 1000.0
     );
 
+    // The question that matters: would this have skipped the model? Say it the
+    // way you would say it out loud.
+    //
+    //     cargo run --bin ax -- --pid 123 click the search icon
+    if needle.starts_with("click ") || needle.starts_with("press ") {
+        match ax::obvious(&needle, &found) {
+            Some(c) => println!(
+                "  obvious: {} {:?} at ({:.0},{:.0}) -- the model would be skipped\n",
+                c.role, c.label, c.at.0, c.at.1
+            ),
+            None => println!("  not obvious -- this would go to the model\n"),
+        }
+    }
+
     let shown: Vec<&ax::Control> = found
         .iter()
         .filter(|c| needle.is_empty() || c.label.to_lowercase().contains(&needle))

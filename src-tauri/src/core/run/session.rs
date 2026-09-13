@@ -388,7 +388,32 @@ impl Nudge {
             controls: &controls,
             workspace: self.workspace().display().to_string(),
         };
-        let step = self.provider.next_step(&shot, &ask).await?;
+        // When the system has already named exactly the control that was asked
+        // for, there is nothing for a model to work out. Six seconds of a turn
+        // goes to looking at a picture to discover what we have been told.
+        //
+        // First turn only, which is what makes it safe to have no second opinion:
+        // it can fire once and then the model has the rest of the task. A fast
+        // path that could fire repeatedly could also loop, and nothing here would
+        // notice.
+        let shortcut = first_turn
+            .then(|| crate::core::screen::ax::obvious(&goal, &controls))
+            .flatten();
+
+        let step = match shortcut {
+            Some(c) => {
+                eprintln!("  obvious: {} {:?} -- not asking the model", c.role, c.label);
+                Step::Point {
+                    at: shot.to_image(crate::core::screen::capture::Point {
+                        x: c.at.0,
+                        y: c.at.1,
+                    }),
+                    say: format!("Clicking {}.", c.label),
+                    act: crate::core::provider::Act::Click,
+                }
+            }
+            None => self.provider.next_step(&shot, &ask).await?,
+        };
         self.mark("brain");
 
         let mut guard = self.session.lock().unwrap();

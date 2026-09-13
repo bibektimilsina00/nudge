@@ -272,6 +272,159 @@ mod imp {
 
 pub use imp::*;
 
+/// The one control a goal obviously means, when there is one.
+///
+/// The model costs about six seconds of an eight second turn. When someone says
+/// "click the Send button" and the system is already telling us there is exactly
+/// one thing called Send, asking a model to look at a picture and work that out
+/// is six seconds spent confirming something we were told.
+///
+/// The bar is deliberately high, because there is nothing behind this. A model
+/// that grounds badly still described what it saw and can be second-guessed by
+/// the next turn; a wrong match here clicks something with no one disagreeing.
+/// So all of these have to hold:
+///
+/// - the goal opens with an explicit instruction to click something, so that
+///   "how do I send this" and "is the send button greyed out" are not clicks
+/// - a control's whole label appears in the goal, on word boundaries
+/// - exactly one control qualifies
+///
+/// Anything else returns `None` and the model decides, which is the normal path
+/// and always available. This only ever removes a wait, never a judgement.
+pub fn obvious<'a>(goal: &str, controls: &'a [Control]) -> Option<&'a Control> {
+    let goal = normalise(goal);
+    // Only an instruction to press something. Everything else -- a question, a
+    // description, a multi-step task -- is for the model.
+    let rest = ["click ", "press ", "tap ", "hit ", "choose ", "select "]
+        .iter()
+        .find_map(|verb| goal.strip_prefix(verb))?;
+
+    let hits: Vec<(&Control, String)> = controls
+        .iter()
+        .filter_map(|c| {
+            let label = normalise(&c.label);
+            // Two, because "OK" and "No" are real buttons and the shortest
+            // things anyone says. One character is a letter in a word.
+            (label.len() >= 2 && contains_phrase(rest, &label)).then_some((c, label))
+        })
+        .collect();
+
+    // The most specific wins, but only when it is genuinely more specific.
+    //
+    // "click send later" matches both "Send" and "Send Later", and treating that
+    // as ambiguous would punish someone for being precise -- the second contains
+    // the first, so it is the same control named more fully. Whereas "click send
+    // or cancel" matches two unrelated labels, and there we really do not know.
+    let most = hits.iter().map(|(_, label)| label.len()).max()?;
+    let mut best = hits.iter().filter(|(_, label)| label.len() == most);
+    let longest = best.next()?;
+    // Two controls equally well named -- most often the same label twice, which
+    // is what a list of rows looks like. Nothing here can tell them apart.
+    if best.next().is_some() {
+        return None;
+    }
+    let all_within = hits
+        .iter()
+        .all(|(_, label)| contains_phrase(&longest.1, label));
+    all_within.then_some(longest.0)
+}
+
+/// Lowercased, with the decoration people do not say out loud removed.
+///
+/// Labels carry their keyboard shortcut -- "Search (⇧⌘F)" -- and an ellipsis for
+/// anything that opens a dialog. Nobody says either, so neither should have to
+/// match.
+fn normalise(s: &str) -> String {
+    let mut out = String::with_capacity(s.len());
+    let mut depth = 0usize;
+    for ch in s.chars() {
+        match ch {
+            '(' | '[' => depth += 1,
+            ')' | ']' => depth = depth.saturating_sub(1),
+            _ if depth > 0 => {}
+            c if c.is_alphanumeric() => out.extend(c.to_lowercase()),
+            _ => out.push(' '),
+        }
+    }
+    out.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Does `phrase` appear in `text` as whole words?
+///
+/// Word boundaries, not a substring: "ok" must not match "bookmark", and "tab"
+/// must not match "table".
+fn contains_phrase(text: &str, phrase: &str) -> bool {
+    if phrase.is_empty() {
+        return false;
+    }
+    let words: Vec<&str> = text.split(' ').collect();
+    let target: Vec<&str> = phrase.split(' ').collect();
+    words.windows(target.len()).any(|w| w == target.as_slice())
+}
+
+#[cfg(test)]
+mod matching {
+    use super::{obvious, Control};
+
+    fn c(label: &str) -> Control {
+        Control {
+            role: "AXButton".into(),
+            label: label.into(),
+            at: (10.0, 10.0),
+            size: (20.0, 20.0),
+        }
+    }
+
+    #[test]
+    fn one_obvious_control_skips_the_model_entirely() {
+        let controls = [c("Send"), c("Cancel"), c("Attach file")];
+        assert_eq!(obvious("click Send", &controls).unwrap().label, "Send");
+        assert_eq!(obvious("Click the Send button", &controls).unwrap().label, "Send");
+        assert_eq!(obvious("press attach file", &controls).unwrap().label, "Attach file");
+
+        // The decoration nobody says out loud.
+        let shortcuts = [c("Search (⇧⌘F)"), c("Explorer (⇧⌘E)")];
+        assert_eq!(
+            obvious("click the search icon in the sidebar", &shortcuts).unwrap().label,
+            "Search (⇧⌘F)"
+        );
+    }
+
+    /// Every one of these has to fall through to the model. A fast path that is
+    /// sometimes wrong is worse than no fast path, because nothing behind it
+    /// disagrees.
+    #[test]
+    fn anything_less_than_obvious_goes_to_the_model() {
+        let controls = [c("Send"), c("Send Later"), c("OK")];
+
+        // "Send Later" does not appear in "click send", so this is not ambiguous
+        // -- only one label is actually present in what was said.
+        assert_eq!(obvious("click send", &controls).unwrap().label, "Send");
+        // Being more precise must not be punished: "Send" is inside "Send Later",
+        // so they are the same control named more fully, not two candidates.
+        assert_eq!(obvious("click send later", &controls).unwrap().label, "Send Later");
+        // Whereas two unrelated labels genuinely leave us not knowing.
+        assert!(obvious("click send or cancel", &[c("Send"), c("Cancel")]).is_none());
+        // Short labels are real buttons and must work.
+        assert_eq!(obvious("click OK", &[c("OK"), c("Cancel")]).unwrap().label, "OK");
+        // But two controls with the same name is the case nothing can resolve --
+        // which is what a list of rows looks like.
+        assert!(obvious("click ok", &[c("OK"), c("OK")]).is_none());
+        assert!(obvious("how do I send this", &controls).is_none(), "a question, not an instruction");
+        assert!(obvious("the send button is greyed out", &controls).is_none(), "a description");
+        assert!(obvious("open the file menu and send", &controls).is_none(), "does not open with a click");
+        assert!(obvious("click something else entirely", &controls).is_none(), "nothing matches");
+        assert!(obvious("click ok", &[]).is_none(), "nothing exposed at all");
+
+        // Word boundaries. "ok" inside "bookmark" is not a button called OK.
+        assert!(obvious("click bookmarks", &[c("OK"), c("Bookmarks")]).unwrap().label == "Bookmarks");
+        assert!(obvious("click tables", &[c("Tab")]).is_none(), "tab is not inside tables");
+
+        // Too short to mean anything on its own.
+        assert!(obvious("click a", &[c("A")]).is_none());
+    }
+}
+
 #[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::imp::usable;
