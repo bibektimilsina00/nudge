@@ -4,6 +4,10 @@
 //! macOS talking back. Each one needs a permission, fails in a way only this
 //! platform fails, and is untestable without a real display -- which is why so
 //! many of their tests are `#[ignore]`d and driven by hand.
+//!
+//! [`ax`] is the exception in kind rather than degree: it asks the system what
+//! is on screen instead of photographing it.
+pub mod ax;
 pub mod capture;
 pub mod click;
 pub mod facts;
