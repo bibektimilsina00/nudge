@@ -688,3 +688,53 @@ Latency, the bench measures well: six runs of the default sat between 4.9s and
 So the instrument is good at one of the two things we have been asking it. The
 fix is more cases, not more runs: repeating ten cases measures the model'''s
 sampling noise, not whether it can find a button it has not been shown before.
+
+## Phase 4 is worth two per cent, and here is why
+
+Streaming the model was the plan's largest remaining win. Before building it,
+one request with `alt=sse` and a stopwatch on the first chunk:
+
+| thinking | first chunk | total | streaming could save |
+|---|---|---|---|
+| medium | 6.26s | 6.36s | 0.10s (2%) |
+| low | 4.13s | 4.17s | 0.04s (1%) |
+
+The model thinks for the whole call and then emits the JSON in four chunks over a
+tenth of a second. **There is nothing to stream until the thinking stops.**
+
+Obvious in hindsight, and it would have been days of work. The five minutes that
+found it were the same five minutes the plan says to spend before every phase.
+
+### And nothing we send matters either
+
+If the wait is not the network and not the tokens coming back, it might have been
+the tokens going out -- a 15,000 character prompt and a 140KB screenshot. It is
+not. Time to first chunk, three runs each, thinking low:
+
+| what we send | median |
+|---|---|
+| full image + full 15,424-char prompt | 3.47s |
+| full image + 149-char prompt | 3.88s |
+| half-size image + full prompt | 5.48s |
+| no image at all + full prompt | 2.93s |
+
+Cutting the prompt by ninety-nine per cent does nothing. Halving the image does
+nothing. Removing the picture entirely -- which is not an option, it is the whole
+job -- saves about half a second.
+
+**So the brain has a floor of roughly three seconds that is not ours to move.**
+Not prefill, not upload, not generation. It is the model deciding, and the only
+three levers on it are how much it may think, which model it is, and whether we
+call it at all.
+
+One of those runs took 19.39 seconds against a median of 5.48 for the same
+request. That is worth remembering whenever a p95 looks alarming: some of it is
+not us.
+
+### What this leaves
+
+Everything in the plan that was going to shave the model call is now measured and
+small. `thinkingLevel` is the only dial with real travel, and it is paid for in
+accuracy. That makes the accessibility tree -- the one row that skips the call
+instead of shortening it -- no longer the speculative long game at the end of the
+list. It is the only lever left.

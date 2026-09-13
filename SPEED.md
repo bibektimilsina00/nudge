@@ -88,8 +88,8 @@ deletion.
 | **1** Delete self-inflicted waits | ~1.2s off every turn | hours | none -- it is removal | settle and hush drop out of the line |
 | **2** Overlap capture with transcribe | 0.3-0.5s, turn 1 only | hours | **`Settle`'s assumption** -- see the warning in Phase 2 | capture no longer appears in the serial sum |
 | **3** On-device STT | 1.0-1.5s, and no network | days | a new `objc2` binding; accuracy of the local recogniser is unmeasured | transcribe drops to ~0 and the accuracy number holds |
-| **4** Stream the brain | the largest remaining win against a 4.5s median | days | partial-object parsing has to be exactly right or we act on half a decision | time-to-first-motion, not total |
-| **5** AX grounding | turns the dominant row into ~0 for apps that expose it | weeks | a different project; AX coverage varies per app | a click lands with no model call at all |
+| ~~**4** Stream the brain~~ | **dead. 2%.** First chunk arrives at 6.26s of a 6.36s call -- the model thinks throughout, then emits in 0.10s | -- | -- | measured before building; see [FINDINGS](FINDINGS.md) |
+| **5** AX grounding | **now the only lever left.** Turns the dominant row into ~0 for apps that expose it | weeks | a different project; AX coverage varies per app, and Electron is the worry | a click lands with no model call at all |
 
 ## Two waits we inflict on ourselves
 

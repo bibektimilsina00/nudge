@@ -232,6 +232,17 @@ one, because that is where the negative origins are.
      model on the same screenshots. The newest step is now kept whole and older
      ones cut to what was done rather than what it said: 70,000 back down to
      21,000.
+   - **Two findings that change what is worth building**, from
+     [SPEED.md](SPEED.md) and [FINDINGS.md](FINDINGS.md): the model spends its
+     whole call thinking, so streaming it saves 2% and that phase is dead; and
+     nothing we send moves the number either -- cutting the prompt by 99% or
+     halving the image changes nothing. `thinkingLevel: low` takes the median
+     from 6.05s to 2.54s and costs grounding accuracy. The accessibility tree is
+     now the only lever left that is not a trade.
+   - **Ten bench cases cannot measure accuracy.** One hit is thirteen points, and
+     two identical runs scored 50% and 71%. The 29%-against-50% model comparison
+     above is a coin that landed the same way twice. Latency it measures well.
+     More cases, not more runs.
    - **The rest of the latency is structural, and has its own plan:
      [SPEED.md](SPEED.md).** The prompt fix addressed a turn getting *slower
      through a task*; it did nothing about the first turn, which is serial from
