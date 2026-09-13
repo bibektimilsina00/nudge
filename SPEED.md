@@ -62,7 +62,7 @@ obviously right.
 | **Connection** | a fresh TLS handshake per utterance | pooled | one shared client | 0.15-0.4s (E) → 0. The first byte leaves immediately instead of after a handshake to a host we were already talking to | **Level.** Table stakes. We are behind on a thing nobody should be behind on |
 | **Settle** | 2 screen composites + 120ms, every turn, unconditionally | no equivalent | skip it when nothing was performed | 0.2-0.4s (E) → 0 on turn 1, unchanged later. The first turn stops paying for a settle when nothing has been done to settle | **Not comparable.** A cost we invented, then removed |
 | **Hush** | wait for our own acknowledgement to finish before the screenshot | no equivalent | capture first, then speak | ~1.0s (E) → 0. The same sentence plays over the model call instead of in front of the screenshot. Nothing about it changes except that it stops being on the clock | **Not comparable.** Also invented, also removed |
-| **Capture** | `CGWindowListCreateImage`, resize, JPEG, base64, per shot | `SCStream` always running -- a frame is already in hand | overlap it with transcription on turn 1 | 0.3-0.5s (E) → hidden on turn 1, unchanged after. The picture is ready before the words are | **Still behind, deliberately.** We hide the cost once; they never pay it. Parity needs `SCStream`, deferred until Phase 0 says it matters |
+| **Capture** | `CGWindowListCreateImage`, resize, JPEG, base64, per shot -- **plus a stillness check that composites twice more** | `SCStream` always running -- a frame is already in hand | **`SCStream`. Phase 0 said it matters.** | **1.77s for the shot and 2.10s for the stillness check, measured (M)** -- 4.1s of screen per turn, of which 1.53s is one composite and 0.23s is all the resizing and encoding | **Behind, and it is now the largest lever left that costs no accuracy.** The estimate here was 0.3-0.5s. It was the least examined row in the table and it is the second biggest cost in the product |
 | **Brain** | `gemini-3.6-flash`, thinking at its default, wait for the entire JSON | `claude-sonnet-4-6`, streamed, acting on early tokens | first decide how much it may think; then stream | **6.05s median, 9.3s p95 (M)** → `thinkingLevel: low` takes the median to **2.54s** and the p95 to 4.0s, measured over six runs each. It is not free: see [FINDINGS](FINDINGS.md) | **Ahead on the clock, undecided on the trade.** Thinking is most of the wait, and turning it down costs grounding accuracy by an amount ten cases cannot measure |
 | **Grounding** | a vision model finds the pixel | a vision model finds the pixel | AX tree where exposed, vision as fallback | seconds → microseconds, for every app that exposes AX. No screenshot, no model call, no token cost, no chance of a wrong pixel | **Ahead, structurally.** The only row where we would be doing something different in kind rather than degree. Also the only one that can reach zero |
 | **Prompt size** | newest step whole, older ones trimmed | not observable from outside | **done** | 70k chars by turn 3 → 21k. Turn 10 now costs what turn 1 costs | **Unknown.** They have the same problem or they solved it; either way it is invisible to us |
@@ -320,9 +320,11 @@ Stated up front, so the measurement can settle it rather than an argument:
   expensive answer to a problem that is structural.
 - **Trading accuracy back for speed.** Measured, once, properly: 29% against 50%.
   A fast wrong click costs more than a slow right one.
-- **Rewriting capture onto ScreenCaptureKit before Phase 0 reports.** It is the
-  right end state and it is a real piece of work. If capture turns out to be
-  400ms of a seven-second turn, it is not where the next week goes.
+- ~~**Rewriting capture onto ScreenCaptureKit before Phase 0 reports.**~~
+  *Reinstated.* The reason for deferring it was: if capture turns out to be 400ms
+  of a seven-second turn, it is not where the next week goes. Measured, it is
+  **4.1 seconds of a ten-second turn**. It is exactly where the next week goes,
+  and it is the only large saving left that is not paid for in accuracy.
 
 ---
 

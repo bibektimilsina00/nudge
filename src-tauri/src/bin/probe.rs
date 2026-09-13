@@ -66,9 +66,19 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
 
     // The same list the app would get: whatever the frontmost application is
     // willing to say about its own controls.
+    let t_ax = std::time::Instant::now();
     let controls = nudge_lib::core::screen::privacy::frontmost_window()
         .map(|(pid, _, _)| nudge_lib::core::screen::ax::controls(pid))
         .unwrap_or_default();
+    eprintln!(
+        "  tree: {} controls in {:.0}ms{}",
+        controls.len(),
+        t_ax.elapsed().as_secs_f32() * 1000.0,
+        controls
+            .first()
+            .map(|c| format!(" -- e.g. {} {:?}", c.role, c.label))
+            .unwrap_or_default()
+    );
     let ask = provider::Ask {
         goal,
         done: &[],

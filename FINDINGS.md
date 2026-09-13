@@ -807,3 +807,70 @@ Two things this probe did not settle, and should before anything is built on it:
 the file explorer's tree rows never appeared under any role (the one good run may
 simply have had a different sidebar showing), and Arc's web links all reported a
 height of one pixel, which is not a thing you can click.
+
+---
+
+## Looking at the screen costs four seconds
+
+The estimate in SPEED.md was 0.3-0.5s for a capture, marked E for estimated. It
+was the least examined row in the table and it is the second largest cost in the
+product. `cargo run --example captime`:
+
+```
+  grab(240)                1021ms
+  grab(640)                1226ms
+  grab(1280)               1769ms      <- the live setting
+  grab(1920)               2457ms
+
+  resize + encode           232ms
+  compositing              1529ms      <- everything else
+
+  facts::gather              50ms
+  ax::controls              206ms      (248 controls in VS Code)
+```
+
+**Compositing the screen costs a second and a half.** The resize and the JPEG,
+which were tuned carefully and have a comment explaining the choice of filter,
+are 232ms of it. `max_edge` -- described in the config as "the main speed dial"
+-- moves the number by about a second across its whole useful range, because it
+only touches the small half.
+
+And the part nobody had ever timed: **`wait_until_still` costs 2.1 seconds.** It
+composites at 240px twice, because there is nothing to compare a first sample
+against, and a 240px composite costs 1021ms -- almost all of it compositing,
+since the size barely matters.
+
+So a turn that does anything spends:
+
+| | |
+|---|---|
+| stillness check | 2.10s |
+| the screenshot itself | 1.77s |
+| facts and the control tree | 0.26s |
+| **screen, total** | **~4.1s** |
+| the model | ~6.0s |
+
+**Nearly forty per cent of a turn is compositing the screen**, and it is one
+deprecated call doing it: `CGWindowListCreateImageFromArray`, which the code
+comment has flagged since it was written as the thing ScreenCaptureKit replaces.
+
+### What this does to the plan
+
+SPEED.md deferred ScreenCaptureKit under "deliberately not doing", with the
+reason: *if capture turns out to be 400ms of a seven-second turn, it is not where
+the next week goes.* It is 4.1 seconds of a ten-second turn. It is exactly where
+the next week goes.
+
+It is also the largest lever left that costs no accuracy. Turning thinking down
+saves 3.5s and is paid for in grounding. This saves more and is paid for in a
+framework migration.
+
+A cheaper intermediate exists, worth about 1.2s: `fingerprint` resizes to 16x16
+before comparing, so samples of different sizes are comparable, and the stillness
+check's second composite could be the real screenshot rather than a third one.
+Worth doing only if the migration turns out to be slow.
+
+### A smaller note, in our favour
+
+`ax::controls` returned **248 controls from VS Code in 206ms**. Against a 1.8s
+screenshot and a 6s model call, asking the system what is on screen is free.
