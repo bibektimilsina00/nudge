@@ -14,7 +14,24 @@ use serde_json::json;
 pub struct Gemini {
     model: String,
     key: String,
+    think: Option<String>,
     http: reqwest::Client,
+}
+
+impl Gemini {
+    /// What goes in `generationConfig`, with the thinking budget folded in when
+    /// one is configured.
+    ///
+    /// Left out entirely when unset, rather than sent as a default we invented:
+    /// a budget we guess at is a change to the model's behaviour that nothing
+    /// measured.
+    fn generation(&self) -> serde_json::Value {
+        let mut cfg = json!({"responseMimeType": "application/json"});
+        if let Some(level) = &self.think {
+            cfg["thinkingConfig"] = json!({"thinkingLevel": level});
+        }
+        cfg
+    }
 }
 
 impl Gemini {
@@ -32,6 +49,7 @@ impl Gemini {
                 .clone()
                 .unwrap_or_else(|| "gemini-3.5-flash-lite".into()),
             key,
+            think: cfg.think.clone(),
             http: reqwest::Client::new(),
         })
     }
@@ -91,7 +109,7 @@ impl Provider for Gemini {
                 {"inline_data": {"mime_type": crate::core::screen::capture::MIME, "data": shot.b64()}},
                 {"text": instruction},
             ]}],
-            "generationConfig": {"responseMimeType": "application/json"},
+            "generationConfig": self.generation(),
         });
 
         let resp: serde_json::Value = self
@@ -162,7 +180,7 @@ impl Provider for Gemini {
         );
         let body = json!({
             "contents": [{"parts": [{"text": instruction}]}],
-            "generationConfig": {"responseMimeType": "application/json"},
+            "generationConfig": self.generation(),
         });
         let resp: serde_json::Value = self
             .http

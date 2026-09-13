@@ -10,6 +10,7 @@
 //!     cargo run --bin bench -- record "click the settings gear"
 //!     cargo run --bin bench
 //!     NUDGE_MODEL=gemini-3-pro cargo run --bin bench
+//!     NUDGE_THINK=low cargo run --bin bench
 //!
 //! `record` captures the screen, waits for you to click the right answer, and
 //! writes the case. Recording the target by *clicking it* rather than typing
@@ -34,16 +35,18 @@ fn main() {
         ("NUDGE_PROVIDER", 0),
         ("NUDGE_MODEL", 1),
         ("NUDGE_MAX_EDGE", 2),
+        ("NUDGE_THINK", 3),
     ] {
         if let Ok(v) = std::env::var(var) {
             match apply {
                 0 => cfg.provider = v,
                 1 => cfg.model = Some(v),
-                _ => {
+                2 => {
                     if let Ok(e) = v.parse() {
                         cfg.max_edge = e;
                     }
                 }
+                _ => cfg.think = Some(v),
             }
         }
     }
@@ -315,8 +318,12 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
     let provider = provider::build(cfg)?;
     let model = cfg.model.clone().unwrap_or_else(|| "<default>".into());
     println!(
-        "{} ({model}) -- {} cases, tolerance {TOLERANCE:.0}px\n",
+        "{} ({model}{}) -- {} cases, tolerance {TOLERANCE:.0}px\n",
         provider.name(),
+        match &cfg.think {
+            Some(n) => format!(", thinking {n}"),
+            None => ", thinking default".into(),
+        },
         cases.len()
     );
 

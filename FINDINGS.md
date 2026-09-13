@@ -628,3 +628,63 @@ rather than implying there had been none.
 it found the model choice in one afternoon -- and it still measured a condition
 that never occurs in practice. A number from a harness answers the question the
 harness asks, which is never quite the question you have.
+
+---
+
+## The brain spends most of its time thinking
+
+The table in [SPEED.md](SPEED.md) had one measured row and it dominated
+everything else: the model call, 4.5s median. Reading the provider to find out
+how to stream it turned up something cheaper first -- nothing anywhere sets
+`thinkingConfig`, and flash models in this family reason before they answer.
+Those tokens come out before the first character of the JSON, so they are paid in
+full on the critical path of every screen action.
+
+It cannot be switched off. `thinkingBudget: 0` is rejected outright: thinking is
+part of what this model is, and the only question is how much. Four levels exist
+-- `minimal`, `low`, `medium`, `high` -- and `none` is not one of them.
+
+Scored on the ten recorded cases, repeated to pool the noise:
+
+| level | runs | hits | median | p95 | expected time to a hit |
+|---|---|---|---|---|---|
+| default | 6 | 29/46 = **63%** | 6.05s | 9.3s | 9.6s |
+| medium | 3 | 14/24 = 58% | 6.18s | 9.6s | 10.7s |
+| low | 6 | 24/47 = **51%** | **2.54s** | 4.0s | **5.0s** |
+| minimal | 3 | 10/24 = 42% | 2.22s | 2.7s | 5.3s |
+
+**Latency comes in two tiers, not a slope.** `medium` costs what the default
+costs; `low` is two and a half times quicker. The cliff is between them, which
+means there is no gentle dial here -- there is a choice.
+
+**Accuracy declines with every step down.** No single pair of those rows is
+significant on its own; the gap between default and low is about 1.2 standard
+errors, which on its own is nothing. But it is monotone across four levels in the
+order you would predict, and four levels landing in the right order by chance is
+about a one-in-twenty event. Taken together it is more likely real than not.
+
+**The reframing that matters.** A turn that misses is not a turn that is wrong
+forever -- the loop looks again. So the number to compare is not the hit rate and
+not the latency but the product: expected time until something is actually
+clicked. On that measure `low` wins outright, 5.0s against 9.6s, *because* it is
+fast enough to be wrong twice in the time the default is right once.
+
+That is not the whole argument, because a miss is not always free. A near miss --
+12px, 22px -- lands on nothing and costs a turn. The 84px miss in the Mail case
+lands on the wrong conversation. Time-to-success prices the first kind correctly
+and the second kind not at all.
+
+### The finding underneath the finding
+
+**Ten cases cannot measure accuracy.** One hit is thirteen points. Two identical
+runs of the default scored 50% and 71%; two runs of `low` scored 57% and 38%. We
+have been choosing models on this -- 29% against 50% is in the plan as though it
+were settled -- and the honest reading is that it was a coin landing the same way
+twice.
+
+Latency, the bench measures well: six runs of the default sat between 4.9s and
+7.0s, and six of `low` between 2.3s and 3.1s, with no overlap at all.
+
+So the instrument is good at one of the two things we have been asking it. The
+fix is more cases, not more runs: repeating ten cases measures the model'''s
+sampling noise, not whether it can find a button it has not been shown before.

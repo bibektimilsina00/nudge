@@ -21,6 +21,17 @@ pub struct Config {
     /// additionally hard-caps at 2576px and silently downscales past it, which
     /// desyncs every coordinate, so never go above that.
     pub max_edge: u32,
+    /// `"low"` or `"high"`. `None` leaves the model's own default alone.
+    ///
+    /// Flash models in this family reason before they answer, and those tokens
+    /// come out before the first character of the JSON -- so they are paid in
+    /// full on the critical path of every screen action.
+    ///
+    /// It cannot be switched off: this model rejects a budget of zero outright.
+    /// Thinking is part of what it is, and the only question is how much. That is
+    /// a question for the bench rather than an opinion --
+    /// `NUDGE_THINK=low cargo run --bin bench` scores hits and latency together.
+    pub think: Option<String>,
     /// Model that turns speech into text. Independent of `model` -- the ear and
     /// the eye are separate choices. Gemini-only for now; needs GEMINI_API_KEY.
     pub voice_model: String,
@@ -60,6 +71,7 @@ impl Default for Config {
         Self {
             provider: "ollama".into(),
             model: None,
+            think: None,
             api_key: None,
             // A bare modifier: hold Control to talk, tap it for the next step.
             hotkey: "ctrl".into(),
