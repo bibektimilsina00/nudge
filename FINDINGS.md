@@ -874,3 +874,41 @@ Worth doing only if the migration turns out to be slow.
 
 `ax::controls` returned **248 controls from VS Code in 206ms**. Against a 1.8s
 screenshot and a 6s model call, asking the system what is on screen is free.
+
+## ScreenCaptureKit: 1.53s of compositing becomes 86ms
+
+Measured before migrating, because "it is the modern API" is not a reason and a
+number is.
+
+| | `CGWindowList` | `SCScreenshotManager` |
+|---|---|---|
+| compositing | 1529ms | **86ms** |
+| `grab(240)`, the stillness peek | 1021ms | **90ms** |
+| `grab(1280)`, the shot | 1769ms | **296ms** |
+| a turn's screen time | **~4.1s** | **~0.7s** |
+
+**Three and a half seconds a turn, and it costs nothing in accuracy.** That is
+more than turning thinking down saves, and thinking is paid for in grounding.
+
+It also scales while it composites, so the 232ms of resizing goes as well -- ask
+for 1280 wide and 1280 wide is what arrives, done on the GPU on the way past.
+
+Two things worth knowing before relying on the numbers. The **first call in a
+process costs 892ms** while the framework wakes up, against 119ms for every one
+after; the app is long-lived and pays that once, but a benchmark that measures
+one capture measures the wrong thing. And what is left is no longer compositing:
+of the 296ms, roughly 86 is the capture, 30 the byte-order conversion and **180
+the JPEG encode**, which is now the largest part of taking a screenshot.
+
+### How it was checked
+
+A picture with the right dimensions can still be a black rectangle, and a picture
+with the right brightness can still have its colours inverted. So: brightness
+spread against a flat image, and **per-channel means against the old path on the
+same screen at the same moment** -- they agree to within half a level across all
+three, which is what says the BGRA byte order was read correctly rather than
+plausibly.
+
+The old path stays underneath. This one needs macOS 14, a current screen
+recording grant, and a framework that is entitled to decline; a slow screenshot
+beats none.

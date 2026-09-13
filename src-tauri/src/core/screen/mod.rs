@@ -9,6 +9,8 @@
 //! is on screen instead of photographing it.
 pub mod ax;
 pub mod capture;
+#[cfg(target_os = "macos")]
+pub mod fast;
 pub mod click;
 pub mod facts;
 pub mod haptics;

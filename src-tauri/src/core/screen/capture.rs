@@ -141,13 +141,13 @@ fn other_windows(ours: i64) -> Option<core_foundation::array::CFArray> {
 /// is the best available proxy for that. Falls back to the main display, which
 /// is what the whole app assumed before.
 #[cfg(target_os = "macos")]
-pub fn active_display() -> ((f64, f64), (f64, f64)) {
+pub fn active_display() -> ((f64, f64), (f64, f64), u32) {
     use core_graphics::display::CGDisplay;
 
     let main = CGDisplay::main();
     let fallback = {
         let b = main.bounds();
-        ((b.origin.x, b.origin.y), (b.size.width, b.size.height))
+        ((b.origin.x, b.origin.y), (b.size.width, b.size.height), main.id)
     };
     let Some(at) = super::click::cursor() else {
         return fallback;
@@ -162,15 +162,15 @@ pub fn active_display() -> ((f64, f64), (f64, f64)) {
             && at.y >= b.origin.y
             && at.y < b.origin.y + b.size.height;
         if inside {
-            return ((b.origin.x, b.origin.y), (b.size.width, b.size.height));
+            return ((b.origin.x, b.origin.y), (b.size.width, b.size.height), id);
         }
     }
     fallback
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn active_display() -> ((f64, f64), (f64, f64)) {
-    ((0.0, 0.0), (1512.0, 982.0))
+pub fn active_display() -> ((f64, f64), (f64, f64), u32) {
+    ((0.0, 0.0), (1512.0, 982.0), 0)
 }
 
 /// Capture the screen without Nudge in it.
@@ -237,8 +237,18 @@ fn capture_png(
 /// or changing resolution, or unplugging a monitor -- left every coordinate
 /// silently wrong until Nudge was restarted.
 pub fn grab(max_edge: u32) -> Result<Shot> {
-    let (origin, logical) = active_display();
-    let img = match capture_png(std::process::id() as i64, origin, logical) {
+    let (origin, logical, id) = active_display();
+
+    // ScreenCaptureKit first, because it is thirty times quicker and scales the
+    // frame while it composites it -- see `fast`. Everything below is the old
+    // path, kept because this one needs macOS 14 and a current screen recording
+    // grant, and a slow screenshot beats none.
+    #[cfg(target_os = "macos")]
+    let quick = super::fast::grab(id, max_edge, std::process::id() as i32);
+    #[cfg(not(target_os = "macos"))]
+    let quick: Option<image::DynamicImage> = None;
+
+    let img = match quick.or_else(|| capture_png(std::process::id() as i64, origin, logical)) {
         Some(img) => img,
         None => {
             // Fall back to the shell tool, which cannot exclude our windows but
@@ -327,7 +337,7 @@ mod capture_tests {
             .ok()
             .and_then(|v| v.parse().ok())
             .unwrap_or(std::process::id() as i64);
-        let (origin, size) = super::active_display();
+        let (origin, size, _) = super::active_display();
         let img =
             super::capture_png(pid, origin, size).expect("the deprecated path returned nothing");
         let (w, h) = (img.width(), img.height());
