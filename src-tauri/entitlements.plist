@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+  <!-- Hardened runtime is on, and under it an application with no entitlement
+       for a device is refused that device outright: no prompt, no entry in
+       System Settings, just Denied. A usage description in Info.plist explains
+       *why* we want the microphone; this is what says we want it at all.
+
+       Diagnosed the long way round. The symptom was a microphone that read as
+       granted in Settings and denied in the app, which also has three other
+       possible causes on macOS, and we found all of them first. -->
+  <key>com.apple.security.device.audio-input</key>
+  <true/>
+</dict>
+</plist>

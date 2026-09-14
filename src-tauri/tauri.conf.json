@@ -66,7 +66,8 @@
     "active": true,
     "targets": "app",
     "macOS": {
-      "minimumSystemVersion": "12.0"
+      "minimumSystemVersion": "12.0",
+      "entitlements": "entitlements.plist"
     }
   }
 }

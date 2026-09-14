@@ -1004,3 +1004,55 @@ The bytes have to survive: `fingerprint` decodes them every turn to decide
 whether the screen has stopped changing, so a JPEG that was the right size and
 unreadable would break the loop quietly. It decodes, the dimensions match what we
 claim to have sent, and the brightness has a real spread rather than being flat.
+
+---
+
+## The first live turn, and what the estimates were worth
+
+Every number in the plan's table was an estimate except three. Here is a real
+turn, measured by the instrument built in Phase 0 and read out of a real
+conversation:
+
+```
+wav 0.03s · heard 0.19s · settle 0.00s · still 0.00s · hush 0.00s · shot 0.00s · brain 4.28s · total 4.50s
+```
+
+| stage | the estimate | measured |
+|---|---|---|
+| record to WAV | ~0.1s | 0.03s |
+| transcription | 1.0-1.5s | **0.19s** |
+| settle | 0.2-0.4s | 0.00s |
+| stillness check | 2.10s (measured) | 0.00s |
+| our own voice | ~1.0s | 0.00s |
+| screenshot | 1.77s (measured) | 0.00s |
+| the model | 6.05s (measured) | 4.28s |
+| **everything but the model** | **~6.5s** | **0.22s** |
+
+**Thirty times less overhead**, and a turn that was about eleven seconds is four
+and a half. The model is now ninety-five per cent of it.
+
+The zeroes are not the work disappearing -- they are the work moving. The
+screenshot still costs 61ms; it happens while the transcription is running, and
+the transcription is now 190ms, so it finishes first. On an agent turn, where
+there is no transcription to hide behind and something was performed, the same
+line reads `still 0.24s · shot 0.33s · brain 7.90s`: real numbers, and still a
+third of a second against nearly eight.
+
+**On-device transcription cost nothing in accuracy.** It returned *"When will be
+the official release version of macOS 27 will release"* verbatim, including the
+phrasing, in 190ms and without a packet leaving the machine.
+
+### What is left
+
+Only the model. Every other row is measured, small, and mostly hidden. The two
+levers on it are how much it thinks -- 3.5s, paid for in grounding accuracy -- and
+whether it is called at all, which is the direct-match path and currently fires
+only for an explicit "click *something*" on the first turn of a session.
+
+### One thing latency does not fix
+
+The same log has the agent answering that macOS 27 *"would likely launch around
+September or October 2036"*, on a machine running macOS 27. It searched, got 2744
+characters back, and still produced the wrong year. Nothing in this document
+would have caught that, and the bench cannot see it either -- it scores where a
+click lands, not whether the answer is true.

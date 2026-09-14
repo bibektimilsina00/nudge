@@ -16,8 +16,21 @@ pub fn run() {
     tauri::Builder::default()
         .setup(|app| {
             // Menu-bar app: no Dock icon, no app switcher, no window chrome.
+            //
+            // Except while a permission is still unanswered. macOS will not put a
+            // privacy dialog on screen for an application that has no presence --
+            // the request returns, nothing appears, and the status stays
+            // "not asked" forever, which is indistinguishable from the user
+            // ignoring a prompt they were never shown. So we stay an ordinary
+            // application, with a Dock icon, until both questions have answers,
+            // and disappear after.
             #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            let asking = crate::core::voice::access() == crate::core::voice::Access::Unasked
+                || crate::core::voice::ear::status() == "not asked yet";
+            #[cfg(target_os = "macos")]
+            if !asking {
+                app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+            }
 
             let cfg = Config::load()?;
             let hotkey = cfg.hotkey.clone();
@@ -36,6 +49,40 @@ pub fn run() {
             // on this machine when this is granted and over the network when it
             // is not, so a refusal costs a second a turn and nothing else -- which
             // is not worth interrupting a hotkey press for.
+            #[cfg(target_os = "macos")]
+            if asking {
+                // Front and centre, so the dialog has something to belong to.
+                let handle = app.handle().clone();
+                tauri::async_runtime::spawn(async move {
+                    for _ in 0..120 {
+                        tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+                        let answered = crate::core::voice::access()
+                            != crate::core::voice::Access::Unasked
+                            && crate::core::voice::ear::status() != "not asked yet";
+                        if answered {
+                            break;
+                        }
+                    }
+                    println!(
+                        "nudge: permissions settled -- microphone = {:?}, speech = {}",
+                        crate::core::voice::access(),
+                        crate::core::voice::ear::status()
+                    );
+                    let _ = handle.set_activation_policy(tauri::ActivationPolicy::Accessory);
+                });
+            }
+
+            // Both grants, asked for at launch rather than mid-hotkey.
+            //
+            // The hotkey path asks too, and that was the only place asking until
+            // now -- which put a system dialog on screen at the exact moment
+            // someone was holding a key and talking, where it opens behind
+            // whatever they were looking at and gets dismissed unread. A dismissed
+            // microphone prompt is recorded as a refusal, and macOS never asks
+            // twice.
+            if crate::core::voice::access() == crate::core::voice::Access::Unasked {
+                crate::core::voice::request_access();
+            }
             crate::core::voice::ear::request_access();
             println!(
                 "nudge: on-device speech = {}",
