@@ -38,10 +38,10 @@ const SHORTCUTS: [string, string[]][] = [
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[286px]",
-  agents: "h-[330px]",
-  settings: "h-[560px]",
-  integrations: "h-[560px]",
+  home: "h-[318px]",
+  agents: "h-[362px]",
+  settings: "h-[592px]",
+  integrations: "h-[592px]",
 } as const;
 
 export default function Panel() {
@@ -160,6 +160,14 @@ export default function Panel() {
           </nav>
 
           <div className="flex min-w-0 flex-1 flex-col">
+            {/* Clear of the notch.
+                The panel is centred on it, so a band across the middle of the top
+                edge is behind real hardware -- anything drawn there is invisible,
+                and worse, silently invisible. The rail is far enough left to be
+                safe; the content is not, so it starts below the notch entirely.
+                One line, and no view has to think about it. */}
+            <div className="h-(--notch-h) shrink-0" aria-hidden />
+
             <div className="min-h-0 flex-1 overflow-y-auto">
               {view === "agents" ? (
                 <Agents />

@@ -3,6 +3,15 @@
 @theme {
   --color-accent: #7c6cff;
 
+  /* Foreground, as a variable.
+   *
+   * Tailwind resolves `text-white/45` to a colour mix against `--color-white`, so
+   * pointing that at a token makes every one of them follow the colour scheme --
+   * hundreds of class names in a dozen components, and not one of them edited.
+   * The name stays "white" and stops being true in light mode, which is the one
+   * cost and is cheaper than the alternative. */
+  --color-white: var(--fg);
+
   /* Glass, done in CSS rather than by the window.
    *
    * A window-level NSVisualEffectView was tried and is wrong here. The panel
@@ -17,10 +26,10 @@
    * Dark enough to read against a bright wallpaper: glass you can read your own
    * files through is a screenshot, not an interface.
    */
-  --color-ink: rgba(10, 10, 12, 0.86);
-  --color-raised: rgba(255, 255, 255, 0.07);
-  --color-hover: rgba(255, 255, 255, 0.12);
-  --color-hair: rgba(255, 255, 255, 0.09);
+  --color-ink: var(--ink);
+  --color-raised: var(--raised);
+  --color-hover: var(--hover);
+  --color-hair: var(--hair);
 
   /* The pill's bottom corners.
    *
@@ -113,6 +122,42 @@ body {
   #ring { animation: none; opacity: 1; }
 }
 
+/* Dark, and the default: this hangs off a menu bar that is usually dark. */
+:root {
+  --fg: #ffffff;
+  --ink: rgba(10, 10, 12, 0.86);
+  --raised: rgba(255, 255, 255, 0.07);
+  --hover: rgba(255, 255, 255, 0.12);
+  --hair: rgba(255, 255, 255, 0.09);
+  --sheen: 255, 255, 255;
+}
+
+/* Light.
+ *
+ * Not the dark values inverted. A light pane is lit from in front rather than
+ * behind, so its surfaces are *darker* than the glass they sit on rather than
+ * lighter, and the sheen has to come down hard -- white on white is invisible,
+ * and the same gradient that reads as gloss on black reads as a smudge on white. */
+@media (prefers-color-scheme: light) {
+  :root {
+    --fg: #101014;
+    --ink: rgba(250, 250, 252, 0.78);
+    --raised: rgba(0, 0, 0, 0.04);
+    --hover: rgba(0, 0, 0, 0.07);
+    --hair: rgba(0, 0, 0, 0.08);
+    --sheen: 255, 255, 255;
+  }
+
+  .glass::after {
+    opacity: 0.45;
+  }
+
+  .on-glass {
+    background-image: none;
+    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
+  }
+}
+
 /* The material.
  *
  * Four things together make glass read as glass, and leaving any one out makes it
@@ -137,9 +182,9 @@ body {
      of one. No drop shadow either, for the reason the original code already had
      a comment about. */
   box-shadow:
-    inset 1px 0 0 0 rgba(255, 255, 255, 0.07),
-    inset -1px 0 0 0 rgba(255, 255, 255, 0.07),
-    inset 0 -1px 0 0 rgba(255, 255, 255, 0.07);
+    inset 1px 0 0 0 var(--color-hair),
+    inset -1px 0 0 0 var(--color-hair),
+    inset 0 -1px 0 0 var(--color-hair);
 }
 
 /* The gloss.
