@@ -45,7 +45,7 @@ export function Row({
     <Tag
       onClick={onClick}
       className={[
-        "flex w-full items-center gap-2.5 rounded-xl bg-raised px-2.5 text-left",
+        "flex w-full items-center gap-2.5 rounded-[6px] bg-raised px-2.5 text-left",
         "on-glass",
         compact ? "h-[38px]" : sub ? "py-2" : "h-[40px]",
         onClick ? "transition-colors duration-150 hover:bg-hover" : "",

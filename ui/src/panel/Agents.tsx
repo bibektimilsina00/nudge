@@ -50,7 +50,7 @@ function Card({ agent }: { agent: Agent }) {
   return (
     <div
       className={[
-        "rounded-xl p-2.5 inset-ring-1",
+        "rounded-[6px] p-2.5 inset-ring-1",
         running
           ? "bg-[#141824] inset-ring-white/[0.12]"
           : "bg-[#1e1e1e] inset-ring-white/[0.09]",

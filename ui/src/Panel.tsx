@@ -111,7 +111,7 @@ export default function Panel() {
           // Matching the notch exactly is what makes the pill read as part of the
           // hardware. The open panel is far bigger than the notch and carries a
           // slightly larger radius, or 12px on a 500px sheet looks like a mistake.
-          open ? "glass bg-ink rounded-b-[20px]" : "notch-corner bg-black",
+          open ? "glass bg-ink rounded-b-[14px]" : "notch-corner bg-black",
           // No shadow while open. The panel is black on a dark menu bar, so the
           // drop shadow never read as depth -- it read as a grey smear along the
           // bottom edge. The resting pill keeps a faint one so it separates from
@@ -158,7 +158,7 @@ export default function Panel() {
               // rather than a row with something floating in it -- and a 30px
               // target instead of a 15px glyph with padding round it.
               className={[
-                "grid size-[26px] shrink-0 place-items-center rounded-full",
+                "grid size-[26px] shrink-0 place-items-center rounded-[6px]",
                 "transition-colors duration-150",
                 view === "settings"
                   ? "bg-hover text-white"
@@ -187,7 +187,7 @@ export default function Panel() {
               <p className="mt-0.5 text-[10.5px] text-white/40">
                 Skills give Nudge superpowers
               </p>
-              <button className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-hover text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-hover">
+              <button className="mt-2.5 grid size-[44px] place-items-center rounded-[6px] bg-hover text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-hover">
                 +
               </button>
             </section>
@@ -218,9 +218,9 @@ export default function Panel() {
               <button
                 onClick={() => openIntegrations("home")}
                 aria-label="Browse integrations"
-                className="flex h-[30px] flex-1 items-center rounded-[10px] bg-raised px-1.5 text-left transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
+                className="flex h-[30px] flex-1 items-center rounded-[6px] bg-raised px-1.5 text-left transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
               >
-                <span className="grid size-[22px] place-items-center rounded-md bg-white/[0.11] text-[13px] font-light text-white/60">
+                <span className="grid size-[22px] place-items-center rounded-[5px] bg-white/[0.11] text-[13px] font-light text-white/60">
                   +
                 </span>
                 <span className="ml-2 text-[11px] text-white/35">Add an integration</span>
@@ -228,7 +228,7 @@ export default function Panel() {
 
               <Perch docked={docked} onToggle={() => dock(!docked)} />
 
-              <button className="grid size-[30px] place-items-center rounded-[10px] bg-raised text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 inset-ring-1 inset-ring-hair">
+              <button className="grid size-[30px] place-items-center rounded-[6px] bg-raised text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 inset-ring-1 inset-ring-hair">
                 i
               </button>
             </div>
@@ -256,7 +256,7 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
     <button
       onClick={onToggle}
       aria-pressed={docked}
-      className="flex h-[30px] items-center gap-2 rounded-full bg-raised pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
+      className="flex h-[30px] items-center gap-2 rounded-[6px] bg-raised pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
     >
       {/* A socket, carved rather than drawn.
           The inner shadow is what makes it read as a dimple in the surface
@@ -330,7 +330,7 @@ function Tab({
     <button
       onClick={onClick}
       className={[
-        "flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px] transition-colors duration-150",
+        "flex items-center gap-1.5 rounded-[6px] px-2 py-[3px] text-[11px] transition-colors duration-150",
         active ? "bg-hover text-white" : "text-white/40 hover:text-white/65",
       ].join(" ")}
     >
