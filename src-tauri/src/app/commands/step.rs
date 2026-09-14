@@ -350,8 +350,16 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             // where moving it is the entire point.
             let asked = matches!(act, Act::Click)
                 && control.as_deref().is_some_and(|label| {
-                    crate::core::screen::privacy::frontmost_window()
-                        .is_some_and(|(pid, _, _)| crate::core::screen::ax::press(pid, label))
+                    let done = crate::core::screen::privacy::frontmost_window()
+                        .is_some_and(|(pid, _, _)| crate::core::screen::ax::press(pid, label));
+                    // Said out loud, because the two failures look identical from
+                    // outside: a press that is refused falls back to a click, and
+                    // a press that succeeds while doing nothing does not.
+                    eprintln!(
+                        "  {} {label:?}",
+                        if done { "pressed" } else { "press refused, clicking" }
+                    );
+                    done
                 });
 
             // Plenty of controls decline to be pressed, and a refusal is silent,

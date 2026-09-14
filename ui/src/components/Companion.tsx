@@ -1,12 +1,7 @@
 import { useEffect, useRef } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Alignment, Fit, Layout, RuntimeLoader, useRive } from "@rive-app/react-canvas";
-// Bundled, not fetched. Rive pulls its WASM from a CDN by default, which the app's
-// CSP blocks and which would make the companion vanish offline.
-import riveWasm from "@rive-app/canvas/rive.wasm?url";
+import { Alignment, Fit, Layout, useRive } from "@rive-app/react-canvas";
 import cat from "../assets/cat.riv?url";
-
-RuntimeLoader.setWasmUrl(riveWasm);
 
 export type CompanionMode = "idle" | "listening" | "thinking";
 

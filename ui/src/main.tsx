@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import "./lib/rive";
 import AgentCard from "./Agent";
 import App from "./App";
 import Panel from "./Panel";

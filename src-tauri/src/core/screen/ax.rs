@@ -190,6 +190,27 @@ mod imp {
         }
     }
 
+    /// What is actually worth pressing, as opposed to what claims to be.
+    ///
+    /// `AXPress` returning zero does not mean anything happened. Measured: a
+    /// link in a Chromium window accepted the press, reported success in 56ms,
+    /// and left the page exactly where it was -- so the click that would have
+    /// worked was skipped and the agent tried the same thing three turns running.
+    ///
+    /// A press that lies is worse than no press, because the click underneath is
+    /// the thing that actually works. So this is a list of what has been watched
+    /// doing the job, not a list of what says it can:
+    ///
+    /// - **menus** -- verified: pressing a menu bar item opened the menu, its
+    ///   items going from a zero-sized rectangle to real positions. This is also
+    ///   where it is worth the most, because clicking menus on macOS is
+    ///   unreliable for reasons this codebase already has a workaround for.
+    ///
+    /// Anything else falls back to a real click, which is slower, takes the
+    /// pointer, and works. Widening this list means watching a role do the job
+    /// first -- a success code is not evidence.
+    const PRESSABLE: [&str; 2] = ["AXMenuItem", "AXMenuBarItem"];
+
     /// Press a control without touching the pointer.
     ///
     /// The interesting one. Everything else here answers *where* something is so
@@ -249,7 +270,7 @@ mod imp {
         *seen += 1;
 
         let role = text(el, "AXRole").unwrap_or_default();
-        if ACTIONABLE.contains(&role.as_str()) {
+        if PRESSABLE.contains(&role.as_str()) {
             let mine = own_label(el).unwrap_or_else(|| inner_text(el, 0));
             if let Some(c) = usable(role, mine, frame(el)) {
                 if c.label.eq_ignore_ascii_case(label) {
