@@ -171,27 +171,42 @@ to stop trusting them with consequences.
 
 Two things are outstanding. Everything else is a choice rather than a blocker.
 
-### 5.1 The accuracy number — **blocking**
+### 5.1 The accuracy number — **the question changed**
 
-The harness exists: `make record GOAL="..."` captures the screen and takes the
-right answer from where you click; `make bench` scores every case and reports hit
-rate and latency.
+The screenshot bench measured whether a click lands on the control the model
+named. That was the right question when finding a button meant guessing at
+pixels, and it mostly is not any more: the system reports where the controls are,
+and the job is choosing the right one from a list.
 
-Ten cases is enough for a signal. Spread them: a menu-bar icon, a small toolbar
-button, a row in a dense settings pane, browser chrome, a dialog button, one dark
-app and one light one.
+Two things were learned the hard way and both are now written down properly in
+[FINDINGS.md](FINDINGS.md):
 
-**What it decides:**
+**Ten cases cannot measure accuracy.** One hit is thirteen points. Two identical
+runs of the same model scored 50% and 71%. The 29%-against-50% comparison that
+picked the current model is a coin that landed the same way twice. Latency it
+measures well -- six runs at each setting, cleanly separated, no overlap.
 
-| Hit rate | Then |
+**So there is a second harness now**, and it is cheap in the way the first never
+was. `make picks` scores a control list, a goal, and the label that should win --
+no screenshot, no network, milliseconds to run, a sentence to record. Fifteen
+cases, and the awkward ones ("click the thing next to View") are easier to write
+by hand than to stage in front of a real application.
+
+It reports two failures and never averages them, because they are not the same
+kind of mistake:
+
+| | |
 |---|---|
-| above 85% | the screen surface is sound; build §2.1 on top of it |
-| 70--85% | the failures will cluster; fix the top cluster and re-run. Three rounds, then treat it as the row below |
-| below 70% | the screen is a fallback, not a surface. Lean on tools and CLIs, and keep clicking for the cases with no other handle |
+| **fell through** | the model handles it. Four seconds slower, right answer |
+| **WRONG** | clicked something nobody asked for, with nothing watching |
 
-It also re-runs forever, which is the real point: change the model or the prompt,
-run it again, and the two numbers are comparable because the screenshots did not
-move.
+Only WRONG exits non-zero. That distinction found a live bug within an hour of
+existing: "click the thing next to View" was clicking View.
+
+**What neither harness can see:** whether the answer is *true*. The same log that
+proved the latency work also has the agent reporting that macOS 27 ships in 2036,
+on a machine running macOS 27, after a successful web search. Nothing here would
+catch that, and it is the failure that costs trust rather than seconds.
 
 ### 5.2 Two-display verification
 
@@ -201,8 +216,23 @@ one, because that is where the negative origins are.
 
 ### 5.3 Then, in order
 
+Latency came off this list today. A turn is 4.5 seconds and everything that is
+not the model accounts for 0.22 of it -- see [SPEED.md](SPEED.md) for what was
+tried, what worked, and the three ideas that were measured and abandoned.
+
 1. ~~**Background processes.**~~ **Done** -- see §3.3.
-2. **Orchestrating an external agent — built, not yet proven.**
+2. ~~**Latency.**~~ **Done.** Overhead 6.5s to 0.22s. The screenshot went from
+   1769ms to 61, transcription from 1300ms to 190 and off the network entirely,
+   and "click the View menu" now takes 0.3 seconds because it never reaches the
+   model at all.
+3. **Whether the answers are true.** The one genuinely unmeasured thing, and the
+   only kind of wrong that costs trust rather than time. It needs a harness that
+   scores *answers* rather than clicks, which neither existing one does.
+4. **Widen the no-model path.** Every phrasing it learns is another turn that
+   costs 0.3s instead of 4.5. Cheap, compounding, and now safe to do because
+   `picks` catches a wrong match the moment it appears. Typing into a named
+   field and launching apps by name are the next two.
+5. **Orchestrating an external agent — built, not yet proven.**
 
    Nudge finds which coding agents are on the machine, knows the name people
    call each one by, and knows how to run it unattended. The job goes through
@@ -224,40 +254,23 @@ one, because that is where the negative origins are.
      come from documentation. Marked as such in the code.
    - **Nothing reads the diff.** The agent reports what it did and Nudge believes
      it. `git diff` is one `run` away and would turn a claim into a check.
-   - ~~**Turns were 12-14 seconds**~~ **Found and fixed.** Every step's output
-     was carried in the history forever -- a `read` of a 38,000 character file,
-     a fetched page, a command's output -- and re-sent on every turn after it.
-     Measured: 17,000 characters at the start of a task, 70,000 three turns in.
-     The bench only ever sent the base, which is why it showed 4.5s for the same
-     model on the same screenshots. The newest step is now kept whole and older
-     ones cut to what was done rather than what it said: 70,000 back down to
-     21,000.
-   - **Two findings that change what is worth building**, from
-     [SPEED.md](SPEED.md) and [FINDINGS.md](FINDINGS.md): the model spends its
-     whole call thinking, so streaming it saves 2% and that phase is dead; and
-     nothing we send moves the number either -- cutting the prompt by 99% or
-     halving the image changes nothing. `thinkingLevel: low` takes the median
-     from 6.05s to 2.54s and costs grounding accuracy. The accessibility tree is
-     now the only lever left that is not a trade.
-   - **Ten bench cases cannot measure accuracy.** One hit is thirteen points, and
-     two identical runs scored 50% and 71%. The 29%-against-50% model comparison
-     above is a coin that landed the same way twice. Latency it measures well.
-     More cases, not more runs.
-   - **The rest of the latency is structural, and has its own plan:
-     [SPEED.md](SPEED.md).** The prompt fix addressed a turn getting *slower
-     through a task*; it did nothing about the first turn, which is serial from
-     the key coming up to the cursor moving. Two self-inflicted waits are
-     confirmed and free to remove; after that it is streaming, and then the
-     accessibility tree instead of vision. Measurement comes first -- the
-     ordering in FINDINGS went stale the day the brain model changed.
-3. **Memory.** Per-app notes, written from failure, injected only when that app is
+6. **Memory.** Per-app notes, written from failure, injected only when that app is
    in front: *"CapCut: the timeline view means a project is open."* Earned once
    the loop is known to work -- memory that records a broken loop's habits is
    worse than none.
-4. **MCP.** The extensibility story, and the right answer for *other people's*
+7. **MCP.** The extensibility story, and the right answer for *other people's*
    tools rather than ours. Last, because a plugin surface over a tool set that
    moved this much would lock in shapes still in motion.
-5. **Signing and notarisation**, before anyone else can run it.
+8. **Signing and notarisation**, before anyone else can run it.
+9. **Windows, when there are Windows users.** The platform seam is drawn and the
+   other side of it is written -- `xcap`, `enigo`, `device_query`,
+   `active-win-pos-rs`, and a UI Automation tree -- but none of it has ever been
+   compiled for the target, because it cannot be from a Mac. See
+   [PORTING.md](PORTING.md) for what is done, what is missing, and which calls to
+   suspect first. Expect a very different latency profile: a capture is 61ms here
+   through ScreenCaptureKit and a hardware encoder, and about 2100ms through the
+   portable path.
+
 
 ### Deliberately not doing
 
