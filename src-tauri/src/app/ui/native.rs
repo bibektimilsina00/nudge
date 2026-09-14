@@ -120,7 +120,12 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
     ns.setCollectionBehavior(
         NSWindowCollectionBehavior::CanJoinAllSpaces
             | NSWindowCollectionBehavior::Stationary
-            | NSWindowCollectionBehavior::FullScreenAuxiliary,
+            | NSWindowCollectionBehavior::FullScreenAuxiliary
+            // Matching the overlay. Without it this is a cmd-tab target, which
+            // means the system believes it is a window someone might switch to --
+            // and a window someone might switch to is one it will animate during a
+            // Space change rather than leave where it is.
+            | NSWindowCollectionBehavior::IgnoresCycle,
     );
     ns.setHidesOnDeactivate(false);
     ns.setHasShadow(false);
@@ -128,6 +133,14 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
     if let Some(anchor) = overlay() {
         // Same trick as the companion: a child window follows its parent between
         // Spaces, which is the only thing that survives going full screen.
-        unsafe { anchor.addChildWindow_ordered(ns, NSWindowOrderingMode::Above) };
+        //
+        // Only once. This runs again on every dock and undock, and re-adding a
+        // window that is already a child re-orders it -- which the compositor
+        // shows as a flash, and a Space transition is exactly when it is most
+        // likely to be noticed.
+        let already = unsafe { ns.parentWindow() }.is_some();
+        if !already {
+            unsafe { anchor.addChildWindow_ordered(ns, NSWindowOrderingMode::Above) };
+        }
     }
 }
