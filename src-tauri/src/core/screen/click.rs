@@ -132,7 +132,33 @@ pub fn move_to(at: Point) -> Result<()> {
 }
 
 pub fn click(at: Point, times: u8) -> Result<()> {
-    click_inner(at, times.max(1))
+    // Where the user left it, before we borrow it.
+    let theirs = cursor();
+    let result = click_inner(at, times.max(1));
+
+    // And hand it straight back.
+    //
+    // The pointer belongs to the person sitting there. It has to move, because a
+    // click is delivered to whatever is under it and no amount of asking politely
+    // changes that -- `AXPress` works only for menus, and posting the event to a
+    // single process leaves the cursor alone but does not land the click. Both
+    // measured before settling for this.
+    //
+    // So it moves, and it comes back. What is left is a flicker instead of a
+    // pointer abandoned on the far side of the screen, halfway through whatever
+    // its owner was doing.
+    if let Some(home) = theirs {
+        // Warped, not posted. A warp moves the cursor without generating an
+        // event, so nothing downstream sees a second click or a stray drag.
+        unsafe {
+            core_graphics::display::CGWarpMouseCursorPosition(CGPoint::new(home.x, home.y))
+        };
+        // Otherwise the next real movement snaps back to where the click was:
+        // the hardware and the cursor stay associated, and warping alone does not
+        // tell the system the mouse is somewhere new.
+        unsafe { core_graphics::display::CGAssociateMouseAndMouseCursorPosition(1) };
+    }
+    result
 }
 
 fn click_inner(at: Point, times: u8) -> Result<()> {
