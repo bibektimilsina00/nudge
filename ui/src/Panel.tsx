@@ -258,20 +258,18 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
       aria-pressed={docked}
       className="flex h-[30px] items-center gap-2 rounded-full bg-raised pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
     >
-      <span
-        className={[
-          "grid size-[24px] shrink-0 place-items-center rounded-full overflow-hidden",
-          "transition-colors duration-300",
-          // Empty, the socket still reads as a spot something belongs in.
-          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
-        ].join(" ")}
-      >
+      {/* The empty spot is the cat, faded -- not a circle it might fit into.
+          A round socket described the hole rather than what was missing, and
+          the one thing the button has to say is *which* thing is out. Greyed
+          and dimmed, it reads as an outline of where it sits; at full colour it
+          reads as still being there. */}
+      <span className="grid size-[24px] shrink-0 place-items-center">
         <span
           className={[
-            "block transition-[transform,opacity] duration-300",
+            "block transition-[transform,opacity,filter] duration-300",
             docked
-              ? "scale-[0.42] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
-              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
+              ? "scale-[0.42] opacity-100 [filter:grayscale(0)] ease-[cubic-bezier(0.34,1.4,0.44,1)]"
+              : "scale-[0.38] opacity-[0.28] [filter:grayscale(1)] ease-[cubic-bezier(0.4,0,1,1)]",
           ].join(" ")}
         >
           <Companion mode="idle" anchored />
