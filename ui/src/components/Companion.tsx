@@ -17,6 +17,21 @@ const FOLLOW = 0.2;
  * down and left of it -- sitting below meant sitting behind the arrow.
  */
 const BESIDE = { x: 22, y: 5 };
+
+/**
+ * How far the eyes are asked to look, as a fraction of the cat's own size.
+ *
+ * The rig inside the file has `HeadTurn_IK` and a target for each pupil, driven
+ * by a pointer listener -- the cat is built to watch your mouse when your mouse
+ * is over it. Ours never is: the overlay is click-through, and the canvas is
+ * fourteen pixels of a cat that follows the cursor rather than being visited by
+ * it. So it is told where to look, with a pointer event it never received.
+ *
+ * Past the edge of the canvas rather than inside it, because the IK clamps at
+ * its own limits: a target out here reads as a glance, one near the middle reads
+ * as a stare.
+ */
+const GAZE = 1.6;
 /** Lag converted to stretch. The further behind it is, the more it deforms. */
 const STRETCH = 0.02;
 const MAX_STRETCH = 0.22;
@@ -96,6 +111,24 @@ export function Companion({
             : `rotate(${angle}deg) scale(${1 + s}, ${1 - s * 0.6}) rotate(${-angle}deg)`;
       }
 
+      // Look where it is going.
+      //
+      // The cat trails the cursor, so the line from where it is to where the
+      // cursor is *is* the direction of travel. No separate notion of facing is
+      // needed, and it stays right when the pointer stops: the two converge, the
+      // reach falls below the threshold, and the gaze settles wherever it was.
+      const canvas = shell.current?.querySelector("canvas");
+      if (canvas && speed > 0.4) {
+        const box = canvas.getBoundingClientRect();
+        const reach = speed || 1;
+        canvas.dispatchEvent(
+          new MouseEvent("mousemove", {
+            bubbles: true,
+            clientX: box.left + box.width / 2 + (dx / reach) * box.width * GAZE,
+            clientY: box.top + box.height / 2 + (dy / reach) * box.height * GAZE,
+          }),
+        );
+      }
     };
     frame = requestAnimationFrame(tick);
 
