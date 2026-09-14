@@ -148,10 +148,6 @@ body {
     --sheen: 255, 255, 255;
   }
 
-  .glass::after {
-    opacity: 0.45;
-  }
-
   .on-glass {
     background-image: none;
     box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.06);
@@ -187,36 +183,18 @@ body {
     inset 0 -1px 0 0 var(--color-hair);
 }
 
-/* The gloss.
+/* No gloss.
  *
- * Real glass is not a flat tint. Light falls off down the pane, so the top is
- * slightly brighter than the bottom, and there is a faint sheen where it catches
- * the room. Two gradients, both very weak -- at these opacities you should not be
- * able to point at it, only notice that it stopped looking like a rectangle of
- * paint.
+ * A vertical falloff and an off-centre sheen were tried, on the theory that real
+ * glass is not a flat tint. On a panel this shape they are wrong: the highlight
+ * landed in the middle of the content column and not on the rail beside it, so
+ * the panel read as two different colours with a seam down it rather than as one
+ * pane catching light.
  *
- * Pointer-events none, or it would swallow every click in the panel. */
-.glass::after {
-  content: "";
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-  border-radius: inherit;
-  background:
-    linear-gradient(
-      to bottom,
-      rgba(255, 255, 255, 0.055) 0%,
-      rgba(255, 255, 255, 0.018) 38%,
-      rgba(255, 255, 255, 0) 72%
-    ),
-    /* and a wide, off-centre highlight, the way a pane catches one light source
-       rather than being lit evenly */
-    radial-gradient(
-      120% 70% at 28% -12%,
-      rgba(255, 255, 255, 0.07) 0%,
-      rgba(255, 255, 255, 0) 60%
-    );
-}
+ * The material is the blur and the saturation. Those are uniform, which is what a
+ * surface this small needs -- any gradient across 520px is wide enough to look
+ * like a mistake and too narrow to look like lighting.
+ */
 
 /* Content sitting on glass needs its own faint lift, or every row reads as a
  * hole cut in the pane rather than a surface resting on it. */
