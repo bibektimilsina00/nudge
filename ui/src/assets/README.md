@@ -8,6 +8,27 @@ without `strings`.
 
 The companion. Used by `components/Companion.tsx`.
 
+| | |
+|---|---|
+| artboard | `Cat` |
+| state machine | `State Machine 1` |
+| animations | `Idle`, `Blink` |
+| inputs | none |
+
+**No inputs at all**, which is why the companion is driven from the outside --
+CSS scales it for listening and thinking, and the transform is rewritten every
+frame for the trail and the stretch.
+
+It does contain a rig for looking around: `HeadTurn_IK`, and `Pupil1_TARGET_X/Y`
+and `Pupil2_TARGET_X/Y` with limits. Nothing drives them. Synthetic `mousemove`
+events at the canvas do nothing -- there is no pointer listener, confirmed in the
+editor.
+
+To make the eyes follow, the file needs two Number inputs on `State Machine 1`
+(say `lookX` and `lookY`, about -1 to 1) bound to those pupil targets. The
+component already computes the direction of travel every frame for the stretch,
+so wiring them up afterwards is a few lines.
+
 ## `agent.riv`
 
 The agent, as something visibly working. Used by `components/Face.tsx` on the
