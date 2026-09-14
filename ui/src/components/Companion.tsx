@@ -16,7 +16,7 @@ const FOLLOW = 0.2;
  * because the pointer's own hotspot is its top-left corner and the arrow hangs
  * down and left of it -- sitting below meant sitting behind the arrow.
  */
-const BESIDE = { x: 22, y: -4 };
+const BESIDE = { x: 22, y: 5 };
 /** Lag converted to stretch. The further behind it is, the more it deforms. */
 const STRETCH = 0.02;
 const MAX_STRETCH = 0.22;
