@@ -22,12 +22,6 @@ import { Settings } from "./panel/Settings";
  * display. Only the bottom corners are rounded, because the illusion is that the
  * notch got wider.
  */
-const SHORTCUTS: [string, string[]][] = [
-  ["Talk", ["⌃ control", "⇧ shift", "space"]],
-  ["Next step", ["tap", "⌃⇧ space"]],
-  ["Type", ["tap", "then type"]],
-  ["Stop", ["esc"]],
-];
 
 /**
  * Each view gets the height it needs; the pill is a separate case.
@@ -38,17 +32,18 @@ const SHORTCUTS: [string, string[]][] = [
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[300px]",
+  home: "h-[262px]",
   agents: "h-[362px]",
   settings: "h-[592px]",
   integrations: "h-[592px]",
+  shortcuts: "h-[300px]",
 } as const;
 
 export default function Panel() {
   const [open, setOpen] = useState(false);
   // Three places to be, so a name rather than a pile of booleans that can all be
   // true at once.
-  const [view, setView] = useState<"home" | "agents" | "settings" | "integrations">("home");
+  const [view, setView] = useState<"home" | "agents" | "settings" | "integrations" | "shortcuts">("home");
   // Integrations opens from two places, so "back" has to mean the one you left
   // rather than a fixed destination -- entering from Home and landing in Settings
   // is the kind of small wrongness that makes a panel feel untrustworthy.
@@ -171,6 +166,8 @@ export default function Panel() {
             <div className="min-h-0 flex-1 overflow-y-auto">
               {view === "agents" ? (
                 <Agents />
+              ) : view === "shortcuts" ? (
+                <Shortcuts onBack={() => setView("settings")} />
               ) : view === "integrations" ? (
                 <Integrations onBack={() => setView(cameFrom)} />
               ) : view === "settings" ? (
@@ -178,9 +175,14 @@ export default function Panel() {
                   docked={docked}
                   onDock={dock}
                   onIntegrations={() => openIntegrations("settings")}
+                  onShortcuts={() => setView("shortcuts")}
                 />
               ) : (
-                <HomeView status={status} onIntegrations={() => openIntegrations("home")} />
+                <HomeView
+                  status={status}
+                  onIntegrations={() => openIntegrations("home")}
+                  onAgents={() => setView("agents")}
+                />
               )}
             </div>
 
@@ -234,45 +236,73 @@ function Pill({ open }: { open: boolean }) {
 function HomeView({
   status,
   onIntegrations,
+  onAgents,
 }: {
   status: Status;
   onIntegrations: () => void;
+  onAgents: () => void;
 }) {
   const said = STATE[status];
   return (
     <div className="px-3 py-2.5">
-      <div className="flex items-center gap-1.5 px-1">
-        <span
-          aria-hidden
-          className={`size-[5px] shrink-0 rounded-full ${said.dot}`}
-        />
-        <span className="text-[10px] font-medium tracking-wide text-white/50 uppercase">
-          {said.label}
+      {/* Two lines about how things are and what to say, then out of the way. It
+          is worth saying once and is not worth half the panel. */}
+      <div className="flex items-baseline gap-2 px-1">
+        <span className="flex items-center gap-1.5">
+          <span aria-hidden className={`size-[5px] shrink-0 rounded-full ${said.dot}`} />
+          <span className="text-[9.5px] font-medium tracking-[0.08em] text-white/45 uppercase">
+            {said.label}
+          </span>
         </span>
       </div>
-
-      {/* The instruction, as the largest thing on the page -- because it is the
-          only thing on the page anyone has to do. */}
-      <p className="mt-1.5 px-1 text-[15px] leading-snug font-semibold tracking-tight">
-        Hold <Key big>⌃ control</Key> and say
-        <br />
-        what you want.
-      </p>
-      {/* A real sentence rather than a description of one. "Ask for a task" tells
-          you the shape; this tells you the words. */}
-      <p className="mt-1.5 px-1 text-[11px] leading-relaxed text-white/35">
-        “play Bohemian Rhapsody on YouTube”
-        <br />
-        “open my downloads folder”
+      <p className="mt-1 px-1 text-[12.5px] leading-snug font-semibold tracking-tight">
+        Hold <Key big>⌃ control</Key> and say what you want.
       </p>
 
-      <h2 className="mt-3.5 mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
-        Shortcuts
-      </h2>
+      <ul className="mt-3 on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
+        <Item
+          icon={<Sparkle />}
+          label="Agents"
+          note="Tasks Nudge is carrying out"
+          onClick={onAgents}
+        />
+        <Item icon={<Bolt />} label="Skills" note="Power-ups that attach to Nudge" />
+        <Item
+          icon={<Grid />}
+          label="Integrations"
+          note="Connect the apps you already use"
+          onClick={onIntegrations}
+        />
+        <Item icon={<Clock />} label="What's new" note="Recent changes" />
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Shortcuts, behind the menu item that always promised them.
+ *
+ * They were a table on Home, where they are reference material sitting in the
+ * one place that should be about getting started. You look these up once, or
+ * when you have forgotten one -- which is what a menu item is for.
+ */
+function Shortcuts({ onBack }: { onBack: () => void }) {
+  return (
+    <div className="px-3 py-2.5">
+      <div className="mb-2 flex items-center gap-1.5">
+        <button
+          onClick={onBack}
+          aria-label="Back"
+          className="grid size-[22px] place-items-center rounded-md text-white/45 transition-colors duration-150 hover:bg-hover hover:text-white"
+        >
+          <span className="text-[13px] leading-none">‹</span>
+        </button>
+        <h2 className="text-[12.5px] font-semibold tracking-tight">Shortcuts</h2>
+      </div>
       <dl className="on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
         {SHORTCUTS.map(([name, keys]) => (
-          <div key={name} className="flex h-[28px] items-center gap-2 px-2.5">
-            <dt className="min-w-0 flex-1 truncate text-[10.5px] text-white/60">{name}</dt>
+          <div key={name} className="flex h-[34px] items-center gap-2 px-2.5">
+            <dt className="min-w-0 flex-1 truncate text-[11px] text-white/65">{name}</dt>
             <dd className="flex shrink-0 gap-1">
               {keys.map((k) => (
                 <Key key={k}>{k}</Key>
@@ -281,17 +311,44 @@ function HomeView({
           </div>
         ))}
       </dl>
-
-      {/* Second things, as one quiet row rather than three cards competing with
-          the instruction above them. */}
-      <div className="mt-2.5 flex items-center gap-1 px-0.5">
-        <Quiet label="Add a skill" />
-        <Dot />
-        <Quiet label="Integrations" onClick={onIntegrations} />
-        <Dot />
-        <Quiet label="What's new" />
-      </div>
     </div>
+  );
+}
+
+const SHORTCUTS: [string, string[]][] = [
+  ["Talk", ["⌃ control", "⇧ shift", "space"]],
+  ["Next step", ["tap", "⌃⇧ space"]],
+  ["Type", ["tap", "then type"]],
+  ["Stop", ["esc"]],
+];
+
+
+/** One option on the home list. */
+function Item({
+  icon,
+  label,
+  note,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  note: string;
+  onClick?: () => void;
+}) {
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className="flex w-full items-center gap-2.5 px-2.5 py-[7px] text-left transition-colors duration-150 hover:bg-hover"
+      >
+        <span className="shrink-0 text-white/45">{icon}</span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[11.5px] font-medium">{label}</span>
+          <span className="block truncate text-[10px] text-white/35">{note}</span>
+        </span>
+        <span className="shrink-0 text-[11px] text-white/20">›</span>
+      </button>
+    </li>
   );
 }
 
@@ -305,28 +362,6 @@ const STATE: Record<Status, { label: string; dot: string }> = {
   asking: { label: "Needs you", dot: "bg-[#e8b027]" },
 };
 
-function Quiet({ label, onClick }: { label: string; onClick?: () => void }) {
-  return (
-    <button
-      onClick={onClick}
-      className="rounded px-1 py-0.5 text-[10.5px] text-white/40 transition-colors duration-150 hover:text-white/80"
-    >
-      {label}
-    </button>
-  );
-}
-
-function Dot() {
-  return <span aria-hidden className="text-[9px] text-white/15">·</span>;
-}
-
-/**
- * One stop on the rail.
- *
- * Where you are is carried by the raised background alone. A coloured bar in the
- * margin was tried and is one signal too many at this size -- the rail is three
- * icons tall, so which one is lit is never in doubt without help.
- */
 function Rail({
   active,
   label,
@@ -449,6 +484,34 @@ function Gear() {
     <svg viewBox="0 0 24 24" className="size-[15px]" {...stroke} strokeWidth={1.8}>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
+    </svg>
+  );
+}
+
+function Bolt() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
+      <path d="M8.8 2 4 9h3.4l-.6 5L12 7H8.4Z" />
+    </svg>
+  );
+}
+
+function Grid() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
+      <rect x="2.6" y="2.6" width="4.6" height="4.6" rx="1.3" />
+      <rect x="8.8" y="2.6" width="4.6" height="4.6" rx="1.3" />
+      <rect x="2.6" y="8.8" width="4.6" height="4.6" rx="1.3" />
+      <rect x="8.8" y="8.8" width="4.6" height="4.6" rx="1.3" />
+    </svg>
+  );
+}
+
+function Clock() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
+      <circle cx="8" cy="8" r="5.6" />
+      <path d="M8 4.8V8l2.2 1.6" />
     </svg>
   );
 }

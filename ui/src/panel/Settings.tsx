@@ -24,10 +24,12 @@ export function Settings({
   docked,
   onDock,
   onIntegrations,
+  onShortcuts,
 }: {
   docked: boolean;
   onDock: (v: boolean) => void;
   onIntegrations: () => void;
+  onShortcuts: () => void;
 }) {
   const [voice, setVoice] = useState<VoiceMode>("system");
   const [mic, setMic] = useState("…");
@@ -69,7 +71,7 @@ export function Settings({
 
       <Section title="Customization">
         <Row icon={<I.TextIcon />} label="Dictation" badge="NEW" value="Automatic" chevron />
-        <Row icon={<I.Keyboard />} label="Shortcuts" chevron />
+        <Row icon={<I.Keyboard />} label="Shortcuts" sub="Every key Nudge listens for" chevron onClick={onShortcuts} />
         {/* Wired. */}
         <Row
           icon={<I.Arrow />}
