@@ -1,0 +1,115 @@
+app = Code
+goal = click the Window menu please
+expect = Window
+--
+AXButton | Go Back (⌃-) | 454 52 | 22 22
+AXButton | Go Forward (⌃⇧-) | 480 52 | 22 22
+AXButton | Open Quick Access | 757 52 | 522 22
+AXButton | Toggle Chat | 1034 52 | 34 22
+AXButton | Toggle Chat | 1034 52 | 23 22
+AXPopUpButton | More Actions | 1058 52 | 17 22
+AXButton | Open in Agents Window (⇧⌥⌘A) | 1092 52 | 25 22
+AXButton | Customize Layout... | 1411 52 | 22 22
+AXCheckBox | Toggle Primary Side Bar (⌘B) | 1437 52 | 22 22
+AXCheckBox | Toggle Panel (⌘J) | 1463 52 | 22 22
+AXCheckBox | Toggle Secondary Side Bar (⌥⌘B) | 1489 52 | 22 22
+AXRadioButton | Explorer (⇧⌘E) | 26 90 | 36 36
+AXRadioButton | Search (⇧⌘F) | 26 134 | 36 36
+AXRadioButton | Source Control (⌃⇧G) - 5 pending changes | 26 178 | 36 36
+AXRadioButton | Run and Debug (⇧⌘D) | 26 222 | 36 36
+AXRadioButton | GitHub | 26 266 | 36 36
+AXRadioButton | Extensions (⇧⌘X) | 26 310 | 36 36
+AXRadioButton | Makefile | 26 354 | 36 36
+AXRadioButton | Claude Code | 26 398 | 36 36
+AXRadioButton | Containers | 26 442 | 36 36
+AXRadioButton | GitHub Actions | 26 486 | 36 36
+AXRadioButton | Gemini Code Assist (⌥⌘G) | 26 530 | 36 36
+AXRadioButton | Python | 26 574 | 36 36
+AXPopUpButton | Accounts | 26 884 | 36 36
+AXPopUpButton | Manage | 26 928 | 36 36
+AXPopUpButton | Views and More Actions... | 332 85 | 22 22
+AXButton | Explorer Section: nudge | 198 115 | 289 28
+AXRow | .claude | 198 140 | 289 22
+AXRow | .nudge-backups | 198 162 | 289 22
+AXRow | bench | 198 184 | 289 22
+AXRow | clicky | 198 206 | 289 22
+AXRow | opencode | 198 228 | 289 22
+AXRow | picks | 198 250 | 289 22
+AXRow | src-tauri | 198 272 | 289 22
+AXRow | ui | 198 294 | 289 22
+AXRow | .env | 198 316 | 289 22
+AXRow | .gitignore | 198 338 | 289 22
+AXRow | .signing-identity | 198 360 | 289 22
+AXRow | 3225-6846-custom-mouse-cursor-face.riv | 198 382 | 289 22
+AXRow | 15993-30090-chatbot.riv | 198 404 | 289 22
+AXRow | config.example.toml | 198 426 | 289 22
+AXRow | FINDINGS.md | 198 448 | 289 22
+AXRow | Makefile | 198 470 | 289 22
+AXRow | PLAN.md | 198 492 | 289 22
+AXRow | PORTING.md | 198 514 | 289 22
+AXRow | project_idea.md | 198 536 | 289 22
+AXRow | README.md | 198 558 | 289 22
+AXRow | results.md | 198 580 | 289 22
+AXRow | SPEED.md | 198 602 | 289 22
+AXRow | temp.md | 198 624 | 289 22
+AXButton | Open Editors Section | 198 830 | 289 28
+AXButton | Close Editor (⌘W) | 71 877 | 20 20
+AXButton | Outline Section | 198 902 | 289 28
+AXButton | Timeline Section | 198 930 | 289 28
+AXRadioButton | PLAN.md | 412 85 | 113 32
+AXButton | Close (⌘W) | 454 85 | 20 20
+AXRadioButton | FINDINGS.md, preview | 538 85 | 140 32
+AXButton | Close (⌘W) | 594 85 | 20 20
+AXButton | Claude Code: Open in Terminal | 1284 85 | 22 22
+AXButton | Open Preview to the Side (⌘K V) [⌥] Open Preview | 1310 85 | 22 22
+AXButton | Open as Preview | 1336 85 | 22 22
+AXButton | Open Changes with Previous Revision [⌥] Open Changes with Revision... | 1362 85 | 22 22
+AXButton | Show Revision Commit | 1388 85 | 22 22
+AXButton | Open Changes with Next Revision | 1414 85 | 22 22
+AXPopUpButton | File Annotations | 1440 85 | 22 22
+AXButton | Split Editor Right (⌘\) [⌥] Split Editor Down | 1466 85 | 22 22
+AXPopUpButton | More Actions... | 1492 85 | 22 22
+AXButton | Text Editor  | 1466 112 | 83 22
+AXRadioButton | Problems (⇧⌘M) | 394 448 | 77 32
+AXRadioButton | Debug Console (⇧⌘Y) | 488 448 | 113 32
+AXRadioButton | Ports | 571 448 | 52 32
+AXRadioButton | Terminal (⌃`) | 633 448 | 72 32
+AXButton | New Terminal (⌃⇧`) [⌥] Split Terminal (⌘\) | 1392 448 | 22 22
+AXButton | New Terminal (⌃⇧`) [⌥] Split Terminal (⌘\) | 1392 448 | 22 22
+AXPopUpButton | Launch Profile... | 1408 448 | 16 22
+AXPopUpButton | Views and More Actions... | 1431 448 | 22 22
+AXCheckBox | Maximize Panel | 1466 448 | 22 22
+AXButton | Hide Panel (⌘J) | 1492 448 | 22 22
+AXTextField | Terminal 1, ◐ autonomous-agent-tasks Use ⌥F1 for terminal accessibility help | 390 893 | 7 14
+AXButton | remote | 23 968 | 26 24
+AXButton | nudge (Git) | 72 968 | 61 24
+AXButton | nudge (Git) - main*, Checkout Branch/Tag... | 131 968 | 58 24
+AXButton | nudge (Git) - Push 31 commits to origin/main | 196 968 | 71 24
+AXButton | Show the GitLens Commit Graph | 252 968 | 27 24
+AXButton | rocket bibektimilsina00/khareedlow_flutter#1 needs reviewers, GitLens Launchpad  | 441 968 | 342 24
+AXButton | No Problems | 652 968 | 67 24
+AXButton | Notifications | 1490 968 | 28 24
+AXButton | material-spark-off, Gemini Code Assist: Please log in to continue | 1460 968 | 32 24
+AXButton | gitlens-gitlens, **GitLens Pro — reactivate your Pro trial** Experience full acc | 1428 968 | 26 24
+AXButton | broadcast Go Live, Click to run live server | 1373 968 | 72 24
+AXButton | Inline suggestions disabled | 1318 968 | 27 24
+AXButton | Markdown | 1266 968 | 65 24
+AXButton | Editor Language Status: Markdown link validation disabled, next: $(copilot) No i | 1222 968 | 22 24
+AXButton | LF | 1191 968 | 24 24
+AXButton | UTF-8 | 1150 968 | 47 24
+AXButton | Spaces: 2 | 1088 968 | 66 24
+AXButton | Ln 931, Col 12 (10 selected) | 962 968 | 174 24
+AXButton | Screen Reader Optimized | 792 968 | 161 24
+AXButton | git-commit Bibek Timilsina (13 hours ago) | 1402 981 | 201 2
+AXButton | $(git-commit) You, 13 hours ago Click to Show Commit | 1230 981 | 132 2
+AXMenuBarItem | Apple | 27 16 | 34 33
+AXMenuBarItem | Code | 70 16 | 55 33
+AXMenuBarItem | File | 118 16 | 42 33
+AXMenuBarItem | Edit | 160 16 | 44 33
+AXMenuBarItem | Selection | 220 16 | 77 33
+AXMenuBarItem | View | 282 16 | 51 33
+AXMenuBarItem | Go | 326 16 | 38 33
+AXMenuBarItem | Run | 366 16 | 44 33
+AXMenuBarItem | Terminal | 424 16 | 73 33
+AXMenuBarItem | Window | 494 16 | 69 33
+AXMenuBarItem | Help | 552 16 | 49 33

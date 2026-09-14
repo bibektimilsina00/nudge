@@ -47,6 +47,9 @@ run: build ## Build, then restart the app
 test: ## Run the Rust test suite
 	cd src-tauri && cargo test
 
+picks: ## Score the control-picking cases (offline, instant, no API key)
+	cd src-tauri && cargo run --quiet --bin picks
+
 lint: ## Clippy with warnings as errors, plus a format check
 	cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo fmt --check
 

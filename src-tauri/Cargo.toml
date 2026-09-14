@@ -39,6 +39,10 @@ name = "ax"
 path = "src/bin/ax.rs"
 
 [[bin]]
+name = "picks"
+path = "src/bin/picks.rs"
+
+[[bin]]
 name = "bench"
 path = "src/bin/bench.rs"
 
