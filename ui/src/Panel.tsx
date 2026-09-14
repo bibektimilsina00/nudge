@@ -383,10 +383,15 @@ function Home() {
   );
 }
 
+/** An agent: a head with an antenna and two eyes. A sparkle meant "something
+ *  clever happens here", which is what every icon in every product means. */
 function Sparkle() {
   return (
-    <svg viewBox="0 0 16 16" className="size-3" {...stroke}>
-      <path d="M8 2.2 9.3 6 13 7.3 9.3 8.6 8 12.4 6.7 8.6 3 7.3 6.7 6Z" />
+    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
+      <rect x="2.6" y="5.2" width="10.8" height="8" rx="2.4" />
+      <path d="M8 5.2V2.8" />
+      <circle cx="6" cy="9.2" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="9.2" r="0.9" fill="currentColor" stroke="none" />
     </svg>
   );
 }

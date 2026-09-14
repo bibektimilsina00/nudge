@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Artifacts, Commands, Plan, type Agent } from "../Agent";
 import { Section } from "./parts";
+import { Face } from "../components/Face";
 
 /**
  * The Agents tab: what Nudge is working on, or an explanation of what would be
@@ -102,19 +103,12 @@ function progress(a: Agent) {
 
 function Empty() {
   return (
-    <div className="flex flex-1 flex-col items-center px-6 pt-8 text-center">
-      <svg
-        viewBox="0 0 24 24"
-        className="size-5 text-white/35"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth={1.5}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      >
-        <path d="M12 2.8 13.9 8.1 19.2 10 13.9 11.9 12 17.2 10.1 11.9 4.8 10 10.1 8.1Z" />
-        <path d="M18.5 3v3M20 4.5h-3M5.5 16v2M6.5 17h-2" />
-      </svg>
+    <div className="flex flex-1 flex-col items-center px-6 pt-6 text-center">
+      {/* The thing itself, idling. A drawing of a sparkle said "agents" the way
+          a road sign says "deer" -- this says it by being one, sitting there
+          waiting for something to do, which is exactly the state being
+          described. */}
+      <Face state="done" step={0} size={64} />
       <h2 className="mt-2.5 text-[12.5px] font-medium">No agents yet</h2>
       <p className="mt-1 max-w-[300px] text-[10.5px] leading-snug text-white/35">
         Ask for a whole task — “play a song on YouTube” — and Nudge will go and do

@@ -19,7 +19,16 @@ const MACHINE = "State Machine 1";
  * nothing about it, so every one of these is optional here on purpose: a renamed
  * input costs the expression, not the component.
  */
-export function Face({ state, step }: { state: AgentState["state"]; step: number }) {
+export function Face({
+  state,
+  step,
+  size = 22,
+}: {
+  state: AgentState["state"];
+  step: number;
+  /** Pixels. A chip on the tile at 22; the whole point of an empty state at 64. */
+  size?: number;
+}) {
   const { rive, RiveComponent } = useRive({
     src: agent,
     stateMachines: MACHINE,
@@ -54,7 +63,7 @@ export function Face({ state, step }: { state: AgentState["state"]; step: number
   }, [step, press]);
 
   return (
-    <div className="size-[22px] shrink-0" aria-hidden>
+    <div style={{ width: size, height: size }} className="shrink-0" aria-hidden>
       <RiveComponent />
     </div>
   );
