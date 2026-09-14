@@ -147,7 +147,45 @@ What that needs:
   machine, and the whole of its output visible afterwards.
 - **Knowing what is installed.** The same problem as applications, one layer up.
 
-### 2.2 Where this sits
+### 2.2 The whole machine, from the notch
+
+Where this ends up, stated so the intermediate decisions can be checked against
+it: **you run your computer through Nudge.** Not most of it, not the parts with
+integrations -- all of it, from a key held down in the notch.
+
+Underneath, it uses whatever is installed. A coding agent, a CLI, a shell, an
+application driven through its own interface. **The person is not meant to know
+which.** They install a coding agent once, authenticate it, and never open it
+again; they say "clean this up" and it happens. Jarvis, with a cat.
+
+**What that requires, beyond doing the work:**
+
+- **Delegation is infrastructure, not a feature.** Choosing between agents is
+  Nudge's job, not a choice to present. The card reports *what was done* -- the
+  plan, the commands, the files -- and not *who did it*.
+- **Nudge owns every failure.** When the agent underneath breaks, nobody sees that
+  agent break. They see Nudge fail. So errors have to be rewritten into something
+  about the task rather than passed up as a stack trace from a program the person
+  does not know is running.
+- **Setup has to be invisible too.** "Install and forget" means detecting what is
+  on the machine, working with whatever is there, and asking for the rest once, in
+  plain language, at the moment it would help. Provisioning is a capability this
+  does not have.
+- **Credentials.** The unglamorous blocker. A coding agent needs authenticating,
+  and if it is never opened, that has to happen somewhere else.
+
+**The tension, named rather than discovered:** *"they do not need to know"* reads
+badly next to *"something is silently running programs on my machine."* Those are
+reconcilable, but only on purpose:
+
+> **Never needs to know. Can always find out.**
+
+Invisible by default, inspectable on demand. The agent card is already the right
+shape for this -- a receipt after the fact, not a dialog before it -- and the
+privacy guard, the workspace and the allow-list are what make "I did not watch"
+a safe thing to say.
+
+### 2.3 Where this sits
 
 Worth writing down, because the field moved twice while this was being built and
 both moves were *away* from where Nudge stands.
@@ -171,7 +209,7 @@ product, and it competes with Claude Desktop rather than with this.
 So the position is narrow and currently empty: **the agent that works the
 graphical interface, by voice, without taking over the screen.**
 
-### 2.3 What makes it defensible
+### 2.4 What makes it defensible
 
 Not features. Four things, and the fourth is new:
 
@@ -193,7 +231,7 @@ The last two are the ones a funded competitor cannot copy without cannibalising
 something -- a window app cannot become ambient, and a hosted product cannot
 become local.
 
-### 2.4 Parity, then the screen on top
+### 2.5 Parity, then the screen on top
 
 **The goal: everything a general local agent can do, as a subset of what Nudge
 can do.** Not because the list is the product -- the screen is -- but because
@@ -242,7 +280,7 @@ That is a different and better answer than either extreme, and it is the only
 version of parity worth having: the general agents are unbounded because nobody
 has done this work, not because it is wrong.
 
-### 2.5 What would make it fail
+### 2.6 What would make it fail
 
 Written down so it can be checked rather than discovered.
 
@@ -428,19 +466,29 @@ tried, what worked, and the three ideas that were measured and abandoned.
    but turned from a constant in the source into something a person can widen on
    purpose, visibly, with today's behaviour as the default.
 
-8. **Discovery.** The cost of §1's shape: an interface that shows nothing teaches
+8. **Invisible setup.** What §2.2 needs and does not have: noticing what is
+   installed, working with whatever is there, and asking for the rest once, in
+   plain language, when it would help. Includes the unglamorous half --
+   authenticating a coding agent that its owner never opens.
+
+9. **Failures that are about the task.** Also from §2.2. When the thing underneath
+   breaks, nobody sees it break; they see Nudge fail. A CLI's stack trace passed
+   up unedited is a bug report about a program the person does not know is
+   running.
+
+10. **Discovery.** The cost of §1's shape: an interface that shows nothing teaches
    nothing, and nobody guesses that the thing in the notch can refactor a
    repository. The answer has to live in the voice loop rather than in a menu --
    *"what can you do?"* answered well, and capability surfacing when it is
    relevant. Not urgent while there is one user who wrote it; the first real
    blocker on the second one.
 
-9. **Memory.** Per-app notes, written from failure, injected only when that app is
+11. **Memory.** Per-app notes, written from failure, injected only when that app is
    in front: *"CapCut: the timeline view means a project is open."* Earned once
    the loop is known to work -- memory that records a broken loop's habits is
    worse than none.
-10. **Signing and notarisation**, before anyone else can run it.
-11. **Windows, when there are Windows users.** The platform seam is drawn and the
+12. **Signing and notarisation**, before anyone else can run it.
+13. **Windows, when there are Windows users.** The platform seam is drawn and the
    other side of it is written -- `xcap`, `enigo`, `device_query`,
    `active-win-pos-rs`, and a UI Automation tree -- but none of it has ever been
    compiled for the target, because it cannot be from a Mac. See
