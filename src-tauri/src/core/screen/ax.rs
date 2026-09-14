@@ -481,6 +481,18 @@ pub fn obvious<'a>(goal: &str, controls: &'a [Control]) -> Option<&'a Control> {
     //
     // Anything that positions the target relative to something else is a
     // description rather than a name, and descriptions are what the model is for.
+    // More than one thing was asked for. "Open the file menu and send" matches
+    // "send" and would fire on half the instruction -- doing the second step
+    // first, which is worse than doing nothing.
+    //
+    // Caught by a test that was written for a different reason and kept failing
+    // after the verbs were widened: "open" used to be rejected for not being a
+    // click, and once it was allowed, the rest of that sentence was not.
+    const AND_THEN: [&str; 4] = [" and ", " then ", " after ", " followed by "];
+    if AND_THEN.iter().any(|c| rest.contains(c)) {
+        return None;
+    }
+
     const RELATIVE: [&str; 14] = [
         "next to", "beside", "left of", "right of", "above", "below", "under",
         "over", "after", "before", "near", "other", "second", "third",
