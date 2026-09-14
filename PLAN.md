@@ -151,7 +151,51 @@ The last two are the ones a funded competitor cannot copy without cannibalising
 something -- a window app cannot become ambient, and a hosted product cannot
 become local.
 
-### 2.4 What would make it fail
+### 2.4 Parity, then the screen on top
+
+**The goal: everything a general local agent can do, as a subset of what Nudge
+can do.** Not because the list is the product -- the screen is -- but because
+"bounded subset, plus the screen" is a harder thing to choose than "everything
+they do, plus the screen", and the second one is reachable.
+
+Measured against the code rather than guessed, this is the actual gap:
+
+| | Them | Here | What it needs |
+|---|---|---|---|
+| Shell | anything | 38 programs, read-only subcommands | a way to widen it on purpose |
+| Files | anywhere | workspace only | granted paths, not a deleted boundary |
+| HTTP | full client | `fetch`, GET only, no auth | a real request tool |
+| Email · calendar · chat | native | nothing | MCP, almost certainly |
+| Extensibility | plugins | nothing | MCP |
+| Learned behaviour | skills | nothing | §5.3, memory |
+
+**MCP does most of this, and that is the whole argument for doing it early.**
+Email, calendar, Slack, Notion, GitHub, databases -- those servers exist and are
+maintained by other people. Writing six integrations by hand buys six
+integrations; speaking MCP buys the ones that exist now and the ones written next
+year. It moves from item 7 in §5.3 to somewhere near the front.
+
+**The part that needs design rather than deletion.** Every boundary here is a
+scar. The shell is read-only because a model reached for `rm` to get around a
+refusal. Files are workspace-bound because the first thing that wrote a file put
+it in this repository's root. One agent owns the cursor because two of them sent
+a voice note to a real person.
+
+So parity cannot mean removing them. It means replacing a fixed answer with a
+decision someone makes:
+
+- **Widening is explicit and visible.** A setting, a per-task grant, a prompt --
+  not a longer constant in the source.
+- **The default stays where it is.** Someone who never opens settings keeps
+  today's boundaries, which is the right default for a thing that listens all day.
+- **What was granted is inspectable.** "It has full shell access" must be
+  something you can see, not something you have to remember agreeing to.
+
+That is a different and better answer than either extreme, and it is the only
+version of parity worth having: the general agents are unbounded because nobody
+has done this work, not because it is wrong.
+
+### 2.5 What would make it fail
 
 Written down so it can be checked rather than discovered.
 
@@ -320,15 +364,29 @@ tried, what worked, and the three ideas that were measured and abandoned.
      come from documentation. Marked as such in the code.
    - **Nothing reads the diff.** The agent reports what it did and Nudge believes
      it. `git diff` is one `run` away and would turn a claim into a check.
-6. **Memory.** Per-app notes, written from failure, injected only when that app is
+6. **MCP, for parity.** Promoted from last place. It was going to be the
+   extensibility story once the tool set settled; it is now the cheapest route to
+   §2.4, because email, calendar, Slack, GitHub and the rest already exist as
+   servers someone else maintains. Six integrations written by hand buy six
+   integrations. Speaking MCP buys every one that exists and every one written
+   next year.
+
+   The original reason for deferring it still stands and is worth holding to: a
+   plugin surface over a tool set that is still moving locks in shapes that should
+   not be locked. So the internal tools want to settle first -- but "settle" is
+   now weeks away rather than a phase.
+
+7. **The boundaries, made adjustable.** The shell allow-list, the workspace, the
+   GET-only fetch. Not removed -- see §2.4 for why every one of them is a scar --
+   but turned from a constant in the source into something a person can widen on
+   purpose, visibly, with today's behaviour as the default.
+
+8. **Memory.** Per-app notes, written from failure, injected only when that app is
    in front: *"CapCut: the timeline view means a project is open."* Earned once
    the loop is known to work -- memory that records a broken loop's habits is
    worse than none.
-7. **MCP.** The extensibility story, and the right answer for *other people's*
-   tools rather than ours. Last, because a plugin surface over a tool set that
-   moved this much would lock in shapes still in motion.
-8. **Signing and notarisation**, before anyone else can run it.
-9. **Windows, when there are Windows users.** The platform seam is drawn and the
+9. **Signing and notarisation**, before anyone else can run it.
+10. **Windows, when there are Windows users.** The platform seam is drawn and the
    other side of it is written -- `xcap`, `enigo`, `device_query`,
    `active-win-pos-rs`, and a UI Automation tree -- but none of it has ever been
    compiled for the target, because it cannot be from a Mac. See
