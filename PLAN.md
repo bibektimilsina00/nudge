@@ -12,21 +12,25 @@ them at writing code. It is trying to be the thing you talk to, which then talks
 to them. One voice, one cursor, one place that knows what is on your screen and
 what you asked for ten seconds ago.
 
-> This document was rewritten once the shape of the project changed. It began as
-> a companion that pointed at buttons. Most of what it used to say was about
-> keeping up with a similar product, and that framing is gone -- see §7.
+> Rewritten twice. It began as a companion that pointed at buttons, and most of
+> what it used to say was about keeping up with a similar product -- that framing
+> is gone, see §7. Rewritten again once the speed work finished and the
+> accessibility tree replaced guessing at pixels, because a plan that describes a
+> solved problem as the next one is worse than no plan.
 
 ---
 
 ## 1. What it is
 
-Three surfaces, and a rule about which to reach for.
+Four surfaces, and a rule about which to reach for. Every cost below is measured,
+not estimated -- see [FINDINGS.md](FINDINGS.md).
 
 | Surface | What it is for | Cost |
 |---|---|---|
-| **Facts** | What macOS already knows: frontmost app, window title, whether audio is playing | free |
+| **Facts** | What macOS already knows: frontmost app, window title, whether audio is playing | 50ms |
+| **Tree** | What macOS says is *on screen*: every control, its name, its exact rectangle | 200ms |
 | **Tools** | Commands, files, the web. No screen involved | one call |
-| **Screen** | Clicking, typing, keys. For things with no other handle | ~2.4s and a model guessing at pixels |
+| **Screen** | A picture, for anything the tree does not expose | 61ms to take, ~6s for the model to read, right about two thirds of the time |
 
 **The rule, and the one idea this project keeps rediscovering:** use the cheapest
 surface that can actually answer. Prefer the shortcut to the menu, the command to
@@ -34,23 +38,45 @@ the click, the data to the picture of the data. Every tool added here should mak
 Nudge reach for the screen *less*, and the measure of a good one is how much it
 shrinks that set.
 
-The screen is not going away -- some things genuinely have no other handle, and
-nothing else can drive an app that offers no API. But it is the fallback, not the
-default.
+**The tree is new and it moved the floor.** Before it, finding a button meant a
+model guessing at pixels: several seconds, and wrong about a third of the time,
+with the misses landing 12 to 87 pixels out. The tree answers *where the Send
+button is* in 200ms, exactly, for no tokens -- so the model now chooses from a
+numbered list rather than aiming, and when a request names one control
+unambiguously it never reaches a model at all. *"Click the View menu"* is 0.3
+seconds end to end.
+
+The picture is not going away. Canvases, games, video and custom-drawn interfaces
+expose nothing, and a closed menu has no geometry until it opens. But it is now
+the fallback under a fallback rather than the way things get done.
 
 ### What exists
 
-Eighteen outcomes the model can choose between:
+Twenty-one outcomes the model can choose between:
 
-- **Screen** -- `point` (click, double, hover), `press`, `type`, `launch`, `open`
+- **Screen** -- `point` (by control name or by pixel; click, double, hover),
+  `press`, `type`, `launch`, `open`
 - **Files** -- `read`, `write`, `edit`, `show`
-- **World** -- `run`, `fetch`, `search`
+- **World** -- `run`, `start`, `output`, `kill`, `fetch`, `search`
 - **Coordination** -- `plan`, `task`, `agent`, `question`, `workspace`,
   `done`/`unsure`/`reply`
 
-Plus: voice in and out, a notch dock, an agent card with its plan, its commands
-and the files it made, a privacy guard that refuses to photograph password
-managers, and a workspace boundary that nothing reaches past.
+Plus: voice in and out with transcription on the machine, a notch dock, an agent
+card with its plan and its commands and the files it made, a privacy guard that
+refuses to photograph password managers, and a workspace boundary that nothing
+reaches past.
+
+**And two instruments, because the numbers above had to come from somewhere:**
+
+- `make picks` -- does it choose the control you meant? Offline, instant, fifteen
+  cases. Reports wrong picks separately from fall-throughs and never averages
+  them, because one costs four seconds and the other clicks the wrong thing.
+- `make bench` -- can a model find a control in a picture? Ten saved screenshots
+  with recorded answers. Good for latency, too small for accuracy, and it measures
+  the surface the tree replaced -- kept for the cases that still need it.
+
+Plus `cargo run --example captime` for what looking at the screen costs, and a
+timing line on every turn naming each stage.
 
 ---
 
@@ -79,27 +105,67 @@ What that needs:
   machine, and the whole of its output visible afterwards.
 - **Knowing what is installed.** The same problem as applications, one layer up.
 
-### 2.2 What makes it defensible
+### 2.2 Where this sits
 
-Not features. Three things a terminal-bound agent structurally cannot do:
+Worth writing down, because the field moved twice while this was being built and
+both moves were *away* from where Nudge stands.
 
-- **It can see your screen.** Half of what people want is in an app with no API.
-- **You talk to it.** No window to find, no prompt to type, no context to paste.
-- **It is local and open.** Your screenshots never have to leave the machine, and
-  anyone can check that claim. For anyone under an NDA, in healthcare or in
-  finance, "where do the screenshots go?" is a hard blocker a closed binary
-  cannot answer.
+**OpenClaw** is the local agent now -- a quarter of a million stars inside two
+months, its author gone to OpenAI to run personal agents, the project handed to a
+foundation. It reads and writes files, runs shell commands, browses, sends email,
+manages a calendar, and reaches you through WhatsApp or Telegram or Slack. It is
+very good and it is free.
 
-The last one is worth more than it sounds. It is also the only one a funded
-competitor cannot copy without cannibalising themselves.
+**It cannot see your screen, and it cannot drive one.** That is not a feature it
+has not got round to; it is a different architecture. Everything it does goes
+through an API, a file, or a shell. Half of what people actually want to automate
+lives in an application with none of those.
 
-### 2.3 What would make it fail
+**HeyClicky** was in this space and left it. It was a small thing in the menu bar
+that listened and clicked; it is now a full window with a sidebar, a roster of
+named assistants and a greeting. That is the same shape as every other agent
+product, and it competes with Claude Desktop rather than with this.
+
+So the position is narrow and currently empty: **the agent that works the
+graphical interface, by voice, without taking over the screen.**
+
+### 2.3 What makes it defensible
+
+Not features. Four things, and the fourth is new:
+
+- **It can see your screen and drive it.** The thing a terminal-bound agent
+  structurally cannot do, and the thing the biggest player in the category has
+  chosen not to build.
+- **It asks the system rather than guessing.** The accessibility tree gives exact
+  rectangles for named controls in 200ms. A competitor bolting screen control onto
+  a shell agent would start with screenshots and a vision model, which is where
+  this project started and spent a day climbing out of.
+- **You talk to it, and it never takes the screen.** No window to find, no prompt
+  to type, nothing to paste. It borrows the pointer for 150ms and gives it back.
+- **It is local and open.** Transcription happens on the machine and never leaves
+  it; screenshots do not either, and anyone can check that claim. For anyone under
+  an NDA, in healthcare or in finance, "where do the screenshots go?" is a hard
+  blocker a closed binary cannot answer.
+
+The last two are the ones a funded competitor cannot copy without cannibalising
+something -- a window app cannot become ambient, and a hosted product cannot
+become local.
+
+### 2.4 What would make it fail
 
 Written down so it can be checked rather than discovered.
 
-- **Grounding is not good enough.** If the screen surface misses often, the
-  orchestration story leans entirely on CLIs, and then Nudge is a voice frontend
-  to a terminal -- a thinner product. §5 is how we find out.
+- ~~**Grounding is not good enough.**~~ **Largely answered, and not by improving
+  the guessing.** The tree gives exact rectangles for anything an application
+  exposes, so the question shrank to *which* control rather than *where* it is.
+  What is left is the gap: applications that expose nothing, where it is still a
+  model looking at a picture and still right about two thirds of the time.
+- **It confidently says things that are not true.** The new one, and the worst
+  one, because it survives every test written so far. Asked when macOS 27 ships,
+  on a machine running macOS 27, after a successful web search, it answered 2036.
+  Neither harness can see that. A fast agent that is wrong is worse than a slow
+  one that is right, and it is the only failure that costs trust rather than
+  seconds.
 - **Too many tools.** A longer menu makes worse choices, and that is measured,
   not theoretical: this project has watched a model open Messages instead of
   WhatsApp Web, launch Weather to read a number, and open Terminal to run a
