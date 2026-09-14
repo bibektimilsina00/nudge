@@ -23,7 +23,7 @@ SIGN_ID ?= $(shell cat $(IDENTITY_FILE) 2>/dev/null \
 export APPLE_SIGNING_IDENTITY = $(SIGN_ID)
 
 .DEFAULT_GOAL := help
-.PHONY: help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks
+.PHONY: truth help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks
 
 help: ## Show this list
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -49,6 +49,9 @@ test: ## Run the Rust test suite
 
 picks: ## Score the control-picking cases (offline, instant, no API key)
 	cd src-tauri && cargo run --quiet --bin picks
+
+truth: ## Score the answers — does it tell the truth? (needs a key, makes real calls)
+	cd src-tauri && cargo run --quiet --bin truth
 
 lint: ## Clippy with warnings as errors, plus a format check
 	cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo fmt --check

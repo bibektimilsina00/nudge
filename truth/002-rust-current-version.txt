@@ -1,0 +1,6 @@
+# Something true but after any model's training cutoff, so it can only be right
+# by actually looking. Deliberately loose on the answer: the point is whether it
+# finds a current version at all, not which patch.
+ask = What is the current stable version of the Rust compiler?
+must = 1.9 | 1.10 | 1.8
+never = 1.5 | 1.6 | 0.

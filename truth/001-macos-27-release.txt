@@ -1,0 +1,6 @@
+# The case this harness exists for. Asked on a machine running macOS 27, after a
+# successful search, it answered 2036 -- a decade out, stated plainly, with no
+# hedging and nothing anywhere able to notice.
+ask = When was macOS 27 released?
+must = 2026 | 2025
+never = 2036 | 2035 | 2030

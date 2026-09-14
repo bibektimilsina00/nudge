@@ -173,14 +173,27 @@ Everything else is worth less until this is done. An operator that is confidentl
 wrong will not be given real work, and the more invisible the machinery gets the
 more the one visible thing -- what it tells you -- has to be true.
 
-**1.1 A harness that scores answers, not clicks.**
+**1.1 A harness that scores answers, not clicks.** — **built, three cases**
 
-The gap that let 2036 through. Record questions with known answers, run them
-through the real search-and-answer path, and score what comes back. Unlike the
-screenshot bench this is cheap to grow, so grow it: fifty questions, not ten.
+`make truth`. A question, strings that must appear, strings that must not; the
+real blind loop with search and fetch behind it. Substrings rather than a model
+judging free text, because judging with a second model makes the score depend on
+a second thing that can also be wrong.
 
-*Done when:* there is a number for how often it is right, and it moves when the
-model or the prompt changes.
+Three outcomes, and unsure is a pass: *"I could not find out"* is the correct
+answer to a question it cannot answer, and worth more than a guess that reads the
+same as knowledge. Only WRONG exits non-zero. Verified by asserting Berlin is the
+capital of France and watching it report `WRONG said "paris"`.
+
+*What is left:* cases. Three is enough to catch a regression and nowhere near
+enough to find an unknown failure -- and the 2036 answer has not reproduced,
+which means it is intermittent, which means a handful of cases will miss it.
+Fifty, spread across: facts after the training cutoff, facts that changed
+recently, things with no answer, things where the search returns something
+plausible and wrong, and arithmetic on dates.
+
+*Also not covered:* this drives the blind path. The original failure came from an
+agent that also had a screenshot.
 
 **1.2 Verify before asserting.**
 

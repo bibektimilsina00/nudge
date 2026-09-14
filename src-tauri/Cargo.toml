@@ -47,6 +47,10 @@ name = "ax"
 path = "src/bin/ax.rs"
 
 [[bin]]
+name = "truth"
+path = "src/bin/truth.rs"
+
+[[bin]]
 name = "picks"
 path = "src/bin/picks.rs"
 
