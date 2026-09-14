@@ -38,7 +38,7 @@ const SHORTCUTS: [string, string[]][] = [
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[318px]",
+  home: "h-[300px]",
   agents: "h-[362px]",
   settings: "h-[592px]",
   integrations: "h-[592px]",
@@ -180,7 +180,7 @@ export default function Panel() {
                   onIntegrations={() => openIntegrations("settings")}
                 />
               ) : (
-                <HomeView onIntegrations={() => openIntegrations("home")} />
+                <HomeView status={status} onIntegrations={() => openIntegrations("home")} />
               )}
             </div>
 
@@ -220,25 +220,59 @@ function Pill({ open }: { open: boolean }) {
   );
 }
 
-function HomeView({ onIntegrations }: { onIntegrations: () => void }) {
+/**
+ * Home.
+ *
+ * It was a list of links -- add a skill, what's new -- which is a menu, and a menu
+ * is what you open when you already know what you want. The first thing in the
+ * panel should answer the two questions someone actually has on opening it: is
+ * this working, and what do I say?
+ *
+ * So it leads with the state, then with the sentence you are supposed to speak.
+ * The links are still here, underneath, where second things go.
+ */
+function HomeView({
+  status,
+  onIntegrations,
+}: {
+  status: Status;
+  onIntegrations: () => void;
+}) {
+  const said = STATE[status];
   return (
-    <div className="px-2.5 py-2.5">
-      <ul className="space-y-px">
-        <Item icon="+" label="Add a skill" note="Power-ups that attach to Nudge" />
-        <Item icon="◇" label="Browse integrations" note="Connect the apps you use" onClick={onIntegrations} />
-        <Item icon="✦" label="What's new" note="Recent changes" />
-      </ul>
+    <div className="px-3 py-2.5">
+      <div className="flex items-center gap-1.5 px-1">
+        <span
+          aria-hidden
+          className={`size-[5px] shrink-0 rounded-full ${said.dot}`}
+        />
+        <span className="text-[10px] font-medium tracking-wide text-white/50 uppercase">
+          {said.label}
+        </span>
+      </div>
+
+      {/* The instruction, as the largest thing on the page -- because it is the
+          only thing on the page anyone has to do. */}
+      <p className="mt-1.5 px-1 text-[15px] leading-snug font-semibold tracking-tight">
+        Hold <Key big>⌃ control</Key> and say
+        <br />
+        what you want.
+      </p>
+      {/* A real sentence rather than a description of one. "Ask for a task" tells
+          you the shape; this tells you the words. */}
+      <p className="mt-1.5 px-1 text-[11px] leading-relaxed text-white/35">
+        “play Bohemian Rhapsody on YouTube”
+        <br />
+        “open my downloads folder”
+      </p>
 
       <h2 className="mt-3.5 mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
         Shortcuts
       </h2>
-      {/* The same grouped list as the rows above it. It was a label, a rule and a
-          run of keycaps -- three alignments fighting in each line, and the rule
-          drew the eye to the gap rather than to either end of it. */}
       <dl className="on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
         {SHORTCUTS.map(([name, keys]) => (
-          <div key={name} className="flex h-[30px] items-center gap-2 px-2.5">
-            <dt className="min-w-0 flex-1 truncate text-[11px] text-white/65">{name}</dt>
+          <div key={name} className="flex h-[28px] items-center gap-2 px-2.5">
+            <dt className="min-w-0 flex-1 truncate text-[10.5px] text-white/60">{name}</dt>
             <dd className="flex shrink-0 gap-1">
               {keys.map((k) => (
                 <Key key={k}>{k}</Key>
@@ -247,39 +281,43 @@ function HomeView({ onIntegrations }: { onIntegrations: () => void }) {
           </div>
         ))}
       </dl>
+
+      {/* Second things, as one quiet row rather than three cards competing with
+          the instruction above them. */}
+      <div className="mt-2.5 flex items-center gap-1 px-0.5">
+        <Quiet label="Add a skill" />
+        <Dot />
+        <Quiet label="Integrations" onClick={onIntegrations} />
+        <Dot />
+        <Quiet label="What's new" />
+      </div>
     </div>
   );
 }
 
-/** One row of the home list. */
-function Item({
-  icon,
-  label,
-  note,
-  onClick,
-}: {
-  icon: string;
-  label: string;
-  note: string;
-  onClick?: () => void;
-}) {
+/** How things are, in a word. */
+const STATE: Record<Status, { label: string; dot: string }> = {
+  idle: { label: "Ready", dot: "bg-[#30d158]" },
+  listening: { label: "Listening", dot: "bg-[#0a84ff] motion-safe:animate-pulse" },
+  thinking: { label: "Thinking", dot: "bg-[#ff9f0a] motion-safe:animate-pulse" },
+  speaking: { label: "Speaking", dot: "bg-[#0a84ff]" },
+  agent: { label: "Working", dot: "bg-[#0a84ff] motion-safe:animate-pulse" },
+  asking: { label: "Needs you", dot: "bg-[#e8b027]" },
+};
+
+function Quiet({ label, onClick }: { label: string; onClick?: () => void }) {
   return (
-    <li>
-      <button
-        onClick={onClick}
-        className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-[7px] text-left transition-colors duration-150 hover:bg-hover"
-      >
-        <span className="on-glass grid size-[26px] shrink-0 place-items-center rounded-md bg-raised text-[12px] text-white/55">
-          {icon}
-        </span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[11.5px] font-medium">{label}</span>
-          <span className="block truncate text-[10px] text-white/35">{note}</span>
-        </span>
-        <span className="shrink-0 text-[10px] text-white/20">›</span>
-      </button>
-    </li>
+    <button
+      onClick={onClick}
+      className="rounded px-1 py-0.5 text-[10.5px] text-white/40 transition-colors duration-150 hover:text-white/80"
+    >
+      {label}
+    </button>
   );
+}
+
+function Dot() {
+  return <span aria-hidden className="text-[9px] text-white/15">·</span>;
 }
 
 /**
@@ -359,9 +397,14 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
   );
 }
 
-function Key({ children }: { children: ReactNode }) {
+function Key({ children, big }: { children: ReactNode; big?: boolean }) {
   return (
-    <kbd className="on-glass rounded-[4px] bg-raised px-[5px] py-[2px] font-mono text-[9px] leading-none whitespace-nowrap text-white/60">
+    <kbd
+      className={[
+        "on-glass rounded-[4px] bg-raised font-mono leading-none whitespace-nowrap",
+        big ? "px-[6px] py-[3px] text-[12px] text-white/85" : "px-[5px] py-[2px] text-[9px] text-white/60",
+      ].join(" ")}
+    >
       {children}
     </kbd>
   );
