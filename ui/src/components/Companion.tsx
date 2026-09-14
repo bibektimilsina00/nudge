@@ -7,6 +7,16 @@ export type CompanionMode = "idle" | "listening" | "thinking";
 
 /** How far behind the cursor the companion trails, per frame. Lower = looser. */
 const FOLLOW = 0.2;
+
+/**
+ * Where it sits relative to the pointer.
+ *
+ * Offset from it, never on it: close enough to belong to the cursor, clear
+ * enough never to cover the thing you are about to click. Up and to the right,
+ * because the pointer's own hotspot is its top-left corner and the arrow hangs
+ * down and left of it -- sitting below meant sitting behind the arrow.
+ */
+const BESIDE = { x: 22, y: -4 };
 /** Lag converted to stretch. The further behind it is, the more it deforms. */
 const STRETCH = 0.02;
 const MAX_STRETCH = 0.22;
@@ -70,9 +80,7 @@ export function Companion({
       shown.x += dx * FOLLOW;
       shown.y += dy * FOLLOW;
       if (shell.current) {
-        // Offset from the pointer, not on it: close enough to belong to the
-        // cursor, clear enough never to cover what you are about to click.
-        shell.current.style.transform = `translate3d(${shown.x + 12}px, ${shown.y + 11}px, 0)`;
+        shell.current.style.transform = `translate3d(${shown.x + BESIDE.x}px, ${shown.y + BESIDE.y}px, 0)`;
       }
 
       // Stretch along travel, pinch across it -- that pairing keeps the volume
