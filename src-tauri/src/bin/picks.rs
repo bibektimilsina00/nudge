@@ -22,7 +22,15 @@
 use nudge_lib::core::screen::{ax, privacy};
 use std::io::Write;
 
-const DIR: &str = "picks";
+/// Beside the repository, not beside whatever directory you happened to run
+/// from. `make picks` runs inside `src-tauri`, and a relative path there finds
+/// an empty folder and reports, cheerfully, that there is nothing to score.
+fn dir() -> std::path::PathBuf {
+    std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+        .parent()
+        .unwrap_or_else(|| std::path::Path::new("."))
+        .join("picks")
+}
 
 struct Case {
     name: String,
@@ -87,14 +95,14 @@ fn record(spec: &str) -> std::io::Result<()> {
         std::process::exit(1);
     }
 
-    std::fs::create_dir_all(DIR)?;
+    std::fs::create_dir_all(dir())?;
     let slug: String = goal
         .to_lowercase()
         .chars()
         .map(|c| if c.is_alphanumeric() { c } else { '-' })
         .collect();
     let slug = slug.trim_matches('-').replace("--", "-");
-    let path = format!("{DIR}/{:03}-{slug}.txt", count() + 1);
+    let path = dir().join(format!("{:03}-{slug}.txt", count() + 1));
 
     let mut f = std::fs::File::create(&path)?;
     writeln!(f, "app = {app}")?;
@@ -108,21 +116,21 @@ fn record(spec: &str) -> std::io::Result<()> {
             c.role, c.label, c.at.0, c.at.1, c.size.0, c.size.1
         )?;
     }
-    println!("wrote {path} ({} controls from {app})", controls.len());
+    println!("wrote {} ({} controls from {app})", path.display(), controls.len());
     Ok(())
 }
 
 fn count() -> usize {
-    std::fs::read_dir(DIR)
+    std::fs::read_dir(dir())
         .map(|d| d.flatten().filter(|e| e.path().extension().is_some_and(|x| x == "txt")).count())
         .unwrap_or(0)
 }
 
 fn load() -> std::io::Result<Vec<Case>> {
-    let Ok(dir) = std::fs::read_dir(DIR) else {
+    let Ok(found) = std::fs::read_dir(dir()) else {
         return Ok(Vec::new());
     };
-    let mut paths: Vec<_> = dir
+    let mut paths: Vec<_> = found
         .flatten()
         .map(|e| e.path())
         .filter(|p| p.extension().is_some_and(|x| x == "txt"))

@@ -23,7 +23,7 @@ SIGN_ID ?= $(shell cat $(IDENTITY_FILE) 2>/dev/null \
 export APPLE_SIGNING_IDENTITY = $(SIGN_ID)
 
 .DEFAULT_GOAL := help
-.PHONY: help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools
+.PHONY: help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks
 
 help: ## Show this list
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
