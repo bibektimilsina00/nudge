@@ -336,12 +336,33 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         // No advance() call here on purpose. Moving the pointer and pressing it
         // are both things the watchers already notice, so Nudge's own clicks
         // travel the same path a person's do and the two cannot drift.
-        Step::Point { at, act, .. } => {
-            match act {
-                Act::Hover => click::move_to(*at),
-                Act::DoubleClick => click::click(*at, 2),
-                Act::Click => click::click(*at, 1),
-            }?;
+        Step::Point { at, act, control, .. } => {
+            // Ask the application to press it, rather than sending the pointer
+            // to where it is and clicking.
+            //
+            // The pointer is the user's. Taking it away to press a button they
+            // can see perfectly well is the rudest thing this program does, and
+            // for anything the system has named it is also unnecessary --
+            // measured at 157ms, with the cursor not moving by a pixel.
+            //
+            // Only a plain click. A double click is not two presses, and a hover
+            // is a request to put the pointer somewhere, which is the one case
+            // where moving it is the entire point.
+            let asked = matches!(act, Act::Click)
+                && control.as_deref().is_some_and(|label| {
+                    crate::core::screen::privacy::frontmost_window()
+                        .is_some_and(|(pid, _, _)| crate::core::screen::ax::press(pid, label))
+                });
+
+            // Plenty of controls decline to be pressed, and a refusal is silent,
+            // so the click is still there underneath.
+            if !asked {
+                match act {
+                    Act::Hover => click::move_to(*at),
+                    Act::DoubleClick => click::click(*at, 2),
+                    Act::Click => click::click(*at, 1),
+                }?;
+            }
             app.state::<Settle>().after(AFTER_CLICK);
         }
         Step::Write { path, content, .. } => {

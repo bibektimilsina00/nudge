@@ -404,6 +404,7 @@ impl Nudge {
             Some(c) => {
                 eprintln!("  obvious: {} {:?} -- not asking the model", c.role, c.label);
                 Step::Point {
+                    control: Some(c.label.clone()),
                     at: shot.to_image(crate::core::screen::capture::Point {
                         x: c.at.0,
                         y: c.at.1,

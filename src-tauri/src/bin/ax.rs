@@ -77,6 +77,23 @@ fn main() {
         std::process::exit(1);
     };
 
+    // `--press "Label"` asks the application to do it, instead of sending the
+    // mouse. Watch the pointer while this runs: it should not move at all.
+    if let Some(i) = args.iter().position(|a| a == "--press") {
+        let label = args.get(i + 1).cloned().unwrap_or_default();
+        let before = nudge_lib::core::screen::click::cursor();
+        let began = std::time::Instant::now();
+        let ok = ax::press(pid, &label);
+        let after = nudge_lib::core::screen::click::cursor();
+        println!(
+            "  press {label:?}: {} in {:.0}ms",
+            if ok { "done" } else { "REFUSED" },
+            began.elapsed().as_secs_f32() * 1000.0
+        );
+        println!("  pointer {before:?} -> {after:?}");
+        return;
+    }
+
     let began = std::time::Instant::now();
     let found = ax::controls(pid);
     println!(

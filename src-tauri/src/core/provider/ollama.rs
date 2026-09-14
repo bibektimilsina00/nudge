@@ -102,6 +102,7 @@ impl Provider for Ollama {
         // answered on a 0-1000 grid instead -- scale by (w/1000, h/1000) and move on.
         match (v["x"].as_f64(), v["y"].as_f64()) {
             (Some(x), Some(y)) => Ok(Step::Point {
+                control: None,
                 at: Point { x, y },
                 say,
                 act: super::act_from(v["act"].as_str()),

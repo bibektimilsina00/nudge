@@ -240,7 +240,7 @@ fn read_step(resp: &serde_json::Value) -> Option<Step> {
 
     let say = if say.is_empty() { "Here.".into() } else { say };
     Some(match point {
-        Some(at) => Step::Point { at, say, act },
+        Some(at) => Step::Point { at, say, act, control: None },
         None if reads_as_unsure(&say) => Step::Unsure { say },
         None => Step::Done { say, next: None },
     })

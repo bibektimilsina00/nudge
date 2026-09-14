@@ -36,6 +36,7 @@ mod imp {
         fn AXUIElementSetAttributeValue(el: Ref, attr: CFStringRef, value: Ref) -> i32;
         fn AXUIElementSetMessagingTimeout(el: Ref, seconds: f32) -> i32;
         fn AXValueGetValue(value: Ref, kind: u32, out: *mut c_void) -> bool;
+        fn AXUIElementPerformAction(el: Ref, action: CFStringRef) -> i32;
     }
 
     const CG_POINT: u32 = 1;
@@ -187,6 +188,81 @@ mod imp {
         for child in under(el, "AXChildren") {
             walk(child.as_CFTypeRef(), depth + 1, seen, out, began);
         }
+    }
+
+    /// Press a control without touching the pointer.
+    ///
+    /// The interesting one. Everything else here answers *where* something is so
+    /// that the mouse can be sent there; this asks the application to do the
+    /// thing instead, which is what a screen reader does and what the control
+    /// was built to respond to.
+    ///
+    /// The difference is not only politeness about the user's cursor. A posted
+    /// click can land on whatever moved into that rectangle in the meantime, and
+    /// it needs the window to be visible and unobscured. This needs neither: the
+    /// button is pressed because it was asked, not because something arrived at
+    /// its coordinates.
+    ///
+    /// `false` when the control cannot be found or does not answer to being
+    /// pressed -- plenty do not -- and the caller falls back to a real click.
+    pub fn press(pid: i32, label: &str) -> bool {
+        if !unsafe { AXIsProcessTrusted() } {
+            return false;
+        }
+        let app = unsafe { AXUIElementCreateApplication(pid) };
+        if app.is_null() {
+            return false;
+        }
+        let app = unsafe { CFType::wrap_under_create_rule(app) };
+        let app = app.as_CFTypeRef();
+        unsafe { AXUIElementSetMessagingTimeout(app, 1.0) };
+
+        let began = std::time::Instant::now();
+        let mut seen = 0usize;
+        for root in roots(app) {
+            if let Some(found) = find(root.as_CFTypeRef(), label, 1, &mut seen, began) {
+                let action = CFString::new("AXPress");
+                let err = unsafe {
+                    AXUIElementPerformAction(found.as_CFTypeRef(), action.as_concrete_TypeRef())
+                };
+                return err == 0;
+            }
+        }
+        false
+    }
+
+    /// The element whose label matches, by the same rules the list was built by.
+    ///
+    /// Found again rather than held. An `AXUIElement` is a live reference into
+    /// another process, and keeping one between turns means holding a handle to
+    /// a button that may have been destroyed and rebuilt since.
+    fn find(
+        el: Ref,
+        label: &str,
+        depth: usize,
+        seen: &mut usize,
+        began: std::time::Instant,
+    ) -> Option<CFType> {
+        if *seen >= MAX_ELEMENTS || depth > MAX_DEPTH || began.elapsed() > BUDGET {
+            return None;
+        }
+        *seen += 1;
+
+        let role = text(el, "AXRole").unwrap_or_default();
+        if ACTIONABLE.contains(&role.as_str()) {
+            let mine = own_label(el).unwrap_or_else(|| inner_text(el, 0));
+            if let Some(c) = usable(role, mine, frame(el)) {
+                if c.label.eq_ignore_ascii_case(label) {
+                    return Some(unsafe { CFType::wrap_under_get_rule(el) });
+                }
+            }
+        }
+        for child in under(el, "AXChildren") {
+            if let Some(found) = find(child.as_CFTypeRef(), label, depth + 1, seen, began) {
+                return Some(found);
+            }
+        }
+        None
     }
 
     /// The controls the given process is willing to describe.
@@ -395,6 +471,9 @@ mod imp {
     /// model, which is slower and less accurate and works.
     pub fn controls(_pid: i32) -> Vec<super::Control> {
         Vec::new()
+    }
+    pub fn press(_pid: i32, _label: &str) -> bool {
+        false
     }
 }
 

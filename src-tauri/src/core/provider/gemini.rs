@@ -157,6 +157,8 @@ impl Provider for Gemini {
             if let Some(c) = super::control_at(ask.controls, n) {
                 eprintln!("  control {n}: {} {:?}", c.role, c.label);
                 return Ok(Step::Point {
+                    // Named, so this can be pressed rather than clicked at.
+                    control: Some(c.label.clone()),
                     at: shot.to_image(Point { x: c.at.0, y: c.at.1 }),
                     say,
                     act: super::act_from(v["act"].as_str()),
@@ -177,6 +179,9 @@ impl Provider for Gemini {
         }
         let (w, h) = shot.sent;
         Ok(Step::Point {
+            // A pixel the model picked out of a picture. Nothing named it, so
+            // there is nothing to press -- this one is a real click.
+            control: None,
             at: denorm(&pt, w, h),
             say,
             act: super::act_from(v["act"].as_str()),

@@ -37,7 +37,18 @@ pub enum Act {
 #[serde(tag = "kind", rename_all = "camelCase")]
 pub enum Step {
     /// Do something at this point next.
-    Point { at: Point, say: String, act: Act },
+    Point {
+        at: Point,
+        say: String,
+        act: Act,
+        /// The control's own name, when the system gave us one.
+        ///
+        /// With a name the application can be asked to press it, and the pointer
+        /// is never touched -- see [`crate::core::screen::ax::press`]. The point
+        /// is carried anyway: plenty of controls decline to be pressed, and the
+        /// overlay has to draw somewhere either way.
+        control: Option<String>,
+    },
     /// The goal is achieved.
     ///
     /// `next` is an optional follow-up offer -- one short question about the
@@ -302,9 +313,12 @@ impl Step {
     /// and none of them worked.
     pub fn recap(&self) -> String {
         match self {
-            Step::Point { at, act, say } => {
-                format!("{act:?} at ({:.0}, {:.0}) -- {say}", at.x, at.y)
-            }
+            // Named when it had a name. "Click on Send" reads back better than
+            // a coordinate, and the history is what the model reasons from.
+            Step::Point { at, act, say, control } => match control {
+                Some(name) => format!("{act:?} on {name:?} -- {say}"),
+                None => format!("{act:?} at ({:.0}, {:.0}) -- {say}", at.x, at.y),
+            },
             Step::Open { url, .. } => format!("Opened {url}"),
             Step::Press { keys, .. } => format!("Pressed {keys}"),
             Step::Run { command, .. } => format!("Ran `{command}`"),
@@ -339,10 +353,16 @@ impl Step {
     /// Rewrites the coordinate through `f`; other outcomes pass through untouched.
     pub fn map_point(self, f: impl FnOnce(Point) -> Point) -> Self {
         match self {
-            Step::Point { at, say, act } => Step::Point {
+            Step::Point {
+                at,
+                say,
+                act,
+                control,
+            } => Step::Point {
                 at: f(at),
                 say,
                 act,
+                control,
             },
             other => other,
         }
@@ -1145,6 +1165,7 @@ mod tests {
     #[test]
     fn the_same_action_is_recognised_through_different_words() {
         let here = |x: f64, y: f64, say: &str| Step::Point {
+            control: None,
             at: Point { x, y },
             say: say.into(),
             act: Act::Click,
@@ -1173,7 +1194,21 @@ mod tests {
     /// same pixel and none of them worked.
     #[test]
     fn history_says_where_it_clicked() {
+        // And says *what* it clicked when the system named it. A coordinate is
+        // what we had to write down when a pixel was all we knew; a name is what
+        // the model can actually reason about next turn.
+        let named = Step::Point {
+            control: Some("Send".into()),
+            at: Point { x: 10.0, y: 20.0 },
+            say: "Sending it".into(),
+            act: Act::Click,
+        };
+        let line = named.recap();
+        assert!(line.contains("Send"), "the name is missing from {line:?}");
+        assert!(!line.contains("10"), "a name beats a coordinate: {line:?}");
+
         let s = Step::Point {
+            control: None,
             at: Point {
                 x: 1106.4,
                 y: 385.9,
