@@ -697,18 +697,22 @@ pub fn control_at(
 
 /// The role, in a word someone would use out loud.
 fn role_word(role: &str) -> &str {
-    match role {
-        "AXButton" => "button",
-        "AXMenuItem" | "AXMenuBarItem" => "menu",
-        "AXCheckBox" => "checkbox",
-        "AXRadioButton" => "option",
-        "AXPopUpButton" => "dropdown",
-        "AXTextField" | "AXTextArea" => "text field",
-        "AXLink" => "link",
-        "AXTab" => "tab",
-        "AXRow" | "AXCell" => "row",
-        "AXDisclosureTriangle" => "twisty",
-        other => other.strip_prefix("AX").unwrap_or(other),
+    // The prefix is a macOS habit, not a meaning. UI Automation answers "Button"
+    // where AX answers "AXButton", and the model should be shown the same word
+    // either way -- it is describing what is on screen, not which framework
+    // reported it.
+    match role.strip_prefix("AX").unwrap_or(role) {
+        "Button" => "button",
+        "MenuItem" | "MenuBarItem" => "menu",
+        "CheckBox" => "checkbox",
+        "RadioButton" => "option",
+        "PopUpButton" => "dropdown",
+        "TextField" | "TextArea" => "text field",
+        "Link" => "link",
+        "Tab" => "tab",
+        "Row" | "Cell" => "row",
+        "DisclosureTriangle" => "twisty",
+        other => other,
     }
 }
 
@@ -1004,6 +1008,31 @@ mod tests {
         assert_eq!(v["x"], 12);
         assert_eq!(v["y"], 7);
         assert!(first_json("no object here").is_none());
+    }
+
+    /// The same control, described the same way, whichever system reported it.
+    ///
+    /// macOS says "AXButton" and UI Automation says "Button". If those reach the
+    /// model as different words it will reason about them as different things,
+    /// and a prompt that was tuned on one platform quietly means something else
+    /// on the other.
+    #[test]
+    fn a_button_is_a_button_on_every_platform() {
+        for (mac, elsewhere) in [
+            ("AXButton", "Button"),
+            ("AXMenuItem", "MenuItem"),
+            ("AXTextField", "TextField"),
+            ("AXRow", "Row"),
+            ("AXLink", "Link"),
+        ] {
+            assert_eq!(
+                role_word(mac),
+                role_word(elsewhere),
+                "{mac} and {elsewhere} are the same control described differently"
+            );
+        }
+        // And anything neither list has arrives unmangled rather than as a guess.
+        assert_eq!(role_word("Thermostat"), "Thermostat");
     }
 
     /// The prompt numbers a list and the reply names a number. If those two

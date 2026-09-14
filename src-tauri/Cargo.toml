@@ -93,5 +93,8 @@ objc2-image-io = { version = "0.3.2", features = ["CGImageDestination"] }
 objc2-screen-capture-kit = { version = "0.3.2", features = ["SCShareableContent", "SCScreenshotManager", "SCStream", "SCError"] }
 objc2-speech = { version = "0.3.2", features = ["SFSpeechRecognizer", "SFSpeechRecognitionRequest", "SFSpeechRecognitionResult", "SFSpeechRecognitionTask", "SFTranscription", "SFErrors"] }
 
+[target.'cfg(target_os = "windows")'.dependencies]
+uiautomation = "0.25.1"
+
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }

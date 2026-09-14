@@ -15,6 +15,8 @@
 //! replacement for one.
 #[cfg(target_os = "macos")]
 mod imp {
+    use super::{usable, Control};
+
     use core_foundation::array::{
         CFArrayGetCount, CFArrayGetTypeID, CFArrayGetValueAtIndex, CFArrayRef,
     };
@@ -65,17 +67,6 @@ mod imp {
         "AXCell",
         "AXDisclosureTriangle",
     ];
-
-    /// A control the system says is there.
-    #[derive(Debug, Clone, PartialEq)]
-    pub struct Control {
-        pub role: String,
-        pub label: String,
-        /// Centre, in global screen points -- the same space clicks are posted
-        /// in, so this needs no conversion and no screenshot to be meaningful.
-        pub at: (f64, f64),
-        pub size: (f64, f64),
-    }
 
     fn attr(el: Ref, name: &str) -> Option<CFType> {
         let key = CFString::new(name);
@@ -198,31 +189,6 @@ mod imp {
         }
     }
 
-    /// Everything the caller has to be able to rely on, in one place.
-    pub(super) fn usable(
-        role: String,
-        label: String,
-        frame: Option<((f64, f64), (f64, f64))>,
-    ) -> Option<Control> {
-        let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
-        if label.is_empty() {
-            return None;
-        }
-        let (at, size) = frame?;
-        // A closed menu reports (0, 982) and no size at all: its items exist but
-        // have nowhere to be until the menu opens. Clicking the centre of a zero
-        // sized rectangle is clicking the wrong thing, confidently.
-        if size.0 < 2.0 || size.1 < 2.0 {
-            return None;
-        }
-        Some(Control {
-            role,
-            label: label.chars().take(80).collect(),
-            at: (at.0 + size.0 / 2.0, at.1 + size.1 / 2.0),
-            size,
-        })
-    }
-
     /// The controls the given process is willing to describe.
     pub fn controls(pid: i32) -> Vec<Control> {
         if !unsafe { AXIsProcessTrusted() } {
@@ -256,19 +222,218 @@ mod imp {
     }
 }
 
-#[cfg(not(target_os = "macos"))]
+#[cfg(target_os = "windows")]
 mod imp {
-    #[derive(Debug, Clone, PartialEq)]
-    pub struct Control {
-        pub role: String,
-        pub label: String,
-        pub at: (f64, f64),
-        pub size: (f64, f64),
+    //! The same question, asked of UI Automation.
+    //!
+    //! Windows' answer to the accessibility tree, and the reason this port is
+    //! worth making: the fast path on macOS is not a macOS idea, it is "ask the
+    //! system where the button is", and Windows has been able to answer that
+    //! since Vista.
+    //!
+    //! **Written without being run.** It cannot be compiled from the machine it
+    //! was written on, let alone tested, so treat every line as a first draft.
+    //! The parts that decide what a control *is* -- [`super::usable`], the
+    //! matching in [`super::obvious`] -- are shared with macOS and tested there;
+    //! what is unproven is only the walk that produces them.
+    use super::{usable, Control};
+    use uiautomation::controls::ControlType;
+    use uiautomation::{UIAutomation, UIElement, UITreeWalker};
+
+    /// The same limits as the macOS walk, for the same reasons: the point is to
+    /// be quicker than a screenshot, and a tree that takes a second has already
+    /// lost to the thing it was replacing.
+    const BUDGET: std::time::Duration = std::time::Duration::from_millis(900);
+    const MAX_ELEMENTS: usize = 6_000;
+    const MAX_DEPTH: usize = 60;
+
+    /// Control types worth clicking. The rest is layout -- panes, groups,
+    /// separators -- and counting those would bury the real ones.
+    fn actionable(kind: ControlType) -> Option<&'static str> {
+        Some(match kind {
+            ControlType::Button => "Button",
+            ControlType::SplitButton => "Button",
+            ControlType::MenuItem => "MenuItem",
+            ControlType::CheckBox => "CheckBox",
+            ControlType::RadioButton => "RadioButton",
+            ControlType::ComboBox => "PopUpButton",
+            ControlType::Edit => "TextField",
+            ControlType::Document => "TextArea",
+            ControlType::Hyperlink => "Link",
+            ControlType::TabItem => "Tab",
+            ControlType::ListItem => "Row",
+            ControlType::TreeItem => "Row",
+            ControlType::DataItem => "Row",
+            _ => return None,
+        })
     }
-    pub fn controls(_pid: i32) -> Vec<Control> {
+
+    /// What the element calls itself.
+    ///
+    /// `Name` is the label a screen reader would read, which is the one a person
+    /// would say out loud. `HelpText` is the tooltip, and stands in for the many
+    /// toolbar buttons that are an icon with no visible text.
+    fn own_label(el: &UIElement) -> Option<String> {
+        for got in [el.get_name(), el.get_help_text()] {
+            if let Ok(s) = got {
+                if !s.trim().is_empty() {
+                    return Some(s);
+                }
+            }
+        }
+        None
+    }
+
+    /// The text inside an unnamed control.
+    ///
+    /// Same problem as macOS, where a Finder row is the click target and the
+    /// filename lives in a static text inside it. A Windows list item is
+    /// usually named directly, but a custom one often is not.
+    fn inner_text(walker: &UITreeWalker, el: &UIElement, depth: usize) -> String {
+        if depth > 3 {
+            return String::new();
+        }
+        let mut parts: Vec<String> = Vec::new();
+        let mut child = walker.get_first_child(el).ok();
+        while let Some(c) = child {
+            match own_label(&c) {
+                Some(s) => parts.push(s),
+                None => {
+                    let deeper = inner_text(walker, &c, depth + 1);
+                    if !deeper.is_empty() {
+                        parts.push(deeper);
+                    }
+                }
+            }
+            if parts.len() >= 4 {
+                break;
+            }
+            child = walker.get_next_sibling(&c).ok();
+        }
+        parts.join(" ")
+    }
+
+    fn walk(
+        walker: &UITreeWalker,
+        el: &UIElement,
+        depth: usize,
+        seen: &mut usize,
+        out: &mut Vec<Control>,
+        began: std::time::Instant,
+    ) {
+        if *seen >= MAX_ELEMENTS || depth > MAX_DEPTH || began.elapsed() > BUDGET {
+            return;
+        }
+        *seen += 1;
+
+        if let Some(role) = el.get_control_type().ok().and_then(actionable) {
+            let label = own_label(el).unwrap_or_else(|| inner_text(walker, el, 0));
+            // Screen pixels, which is the space clicks are posted in -- the same
+            // promise the macOS side makes, so nothing downstream has to know
+            // which platform it came from.
+            let frame = el.get_bounding_rectangle().ok().map(|r| {
+                (
+                    (r.get_left() as f64, r.get_top() as f64),
+                    (
+                        (r.get_right() - r.get_left()) as f64,
+                        (r.get_bottom() - r.get_top()) as f64,
+                    ),
+                )
+            });
+            if let Some(c) = usable(role.to_string(), label, frame) {
+                out.push(c);
+            }
+        }
+
+        let mut child = walker.get_first_child(el).ok();
+        while let Some(c) = child {
+            walk(walker, &c, depth + 1, seen, out, began);
+            if began.elapsed() > BUDGET {
+                return;
+            }
+            child = walker.get_next_sibling(&c).ok();
+        }
+    }
+
+    pub fn controls(pid: i32) -> Vec<Control> {
+        let Ok(automation) = UIAutomation::new() else {
+            return Vec::new();
+        };
+        let Ok(root) = automation.get_root_element() else {
+            return Vec::new();
+        };
+        // The control view, not the raw one: the raw tree includes every
+        // implementation detail the framework happens to have, and is enormous.
+        let Ok(walker) = automation.get_control_view_walker() else {
+            return Vec::new();
+        };
+
+        let began = std::time::Instant::now();
+        let (mut seen, mut out) = (0usize, Vec::new());
+
+        // This process's top-level windows, the same starting point as `roots`
+        // on macOS. An application with no window exposes nothing, which reads
+        // exactly like an application that exposes nothing -- a distinction that
+        // cost an afternoon on the other platform.
+        let mut window = walker.get_first_child(&root).ok();
+        while let Some(w) = window {
+            if w.get_process_id().map(|p| p as i32) == Ok(pid) {
+                walk(&walker, &w, 1, &mut seen, &mut out, began);
+            }
+            if began.elapsed() > BUDGET {
+                break;
+            }
+            window = walker.get_next_sibling(&w).ok();
+        }
+        out
+    }
+}
+
+#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+mod imp {
+    /// Nothing, honestly. A platform with no tree falls back to the vision
+    /// model, which is slower and less accurate and works.
+    pub fn controls(_pid: i32) -> Vec<super::Control> {
         Vec::new()
     }
 }
+
+/// A control the system says is there.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Control {
+    pub role: String,
+    pub label: String,
+    /// Centre, in global screen points -- the same space clicks are posted
+    /// in, so this needs no conversion and no screenshot to be meaningful.
+    pub at: (f64, f64),
+    pub size: (f64, f64),
+}
+
+/// Everything the caller has to be able to rely on, in one place.
+pub fn usable(
+    role: String,
+    label: String,
+    frame: Option<((f64, f64), (f64, f64))>,
+) -> Option<Control> {
+    let label = label.split_whitespace().collect::<Vec<_>>().join(" ");
+    if label.is_empty() {
+        return None;
+    }
+    let (at, size) = frame?;
+    // A closed menu reports (0, 982) and no size at all: its items exist but
+    // have nowhere to be until the menu opens. Clicking the centre of a zero
+    // sized rectangle is clicking the wrong thing, confidently.
+    if size.0 < 2.0 || size.1 < 2.0 {
+        return None;
+    }
+    Some(Control {
+        role,
+        label: label.chars().take(80).collect(),
+        at: (at.0 + size.0 / 2.0, at.1 + size.1 / 2.0),
+        size,
+    })
+}
+
 
 pub use imp::*;
 
@@ -459,9 +624,11 @@ mod matching {
     }
 }
 
-#[cfg(all(test, target_os = "macos"))]
+// Not gated to a platform: `usable` is the shared rule about what counts as a
+// control, and it has to mean the same thing wherever the tree came from.
+#[cfg(test)]
 mod tests {
-    use super::imp::usable;
+    use super::usable;
 
     /// Everything downstream assumes a control can be clicked. These are the
     /// ways one cannot.

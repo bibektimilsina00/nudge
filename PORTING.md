@@ -33,11 +33,27 @@ be built from a Mac -- both cross-compiles die inside third-party build scripts,
 what it returns, so a platform where it answers nothing is a platform where the
 guard never fires and every password manager gets photographed.
 
+## Written but never run
+
+**The Windows accessibility tree.** `uiautomation` is Windows-only, so it cannot
+be compiled from a Mac, let alone exercised -- the `portable` feature does not
+help here. Every line of `ax::imp` for Windows is a first draft.
+
+What is *not* a first draft is everything around it. `Control`, the `usable`
+rule that rejects a control with no name or no place, the numbering the model is
+shown, and the matching that decides a goal is obvious -- all shared, all tested
+on macOS. Windows supplies only the walk.
+
+Expect to fix, in rough order of likelihood: the property names on `UIElement`,
+whether `get_control_view_walker` is the right walker, and whether enumerating
+top-level windows by process id actually finds them. The shape is right; the
+calls may not be.
+
 ## Missing
 
 | | what happens without it | what to use |
 |---|---|---|
-| accessibility tree | falls back to the vision model: slower and less accurate, but works | `uiautomation` (Windows), `atspi` (Linux) |
+| accessibility tree, Linux | falls back to the vision model: slower and less accurate, but works | `atspi` |
 | system voice | `speech_engine = "gemini"` works over the network | `tts` |
 | is audio playing | reports silence; the model guesses from the picture | WASAPI / PulseAudio |
 
