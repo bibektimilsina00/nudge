@@ -292,9 +292,9 @@ function Item({
 /**
  * One stop on the rail.
  *
- * The active mark is a bar on the edge rather than a filled pill. A filled tab
- * says "this is a button that is on"; a bar in the margin says "you are here",
- * which is what a rail is for.
+ * Where you are is carried by the raised background alone. A coloured bar in the
+ * margin was tried and is one signal too many at this size -- the rail is three
+ * icons tall, so which one is lit is never in doubt without help.
  */
 function Rail({
   active,
@@ -319,14 +319,6 @@ function Rail({
         active ? "bg-raised text-white" : "text-white/35 hover:bg-hover hover:text-white/70",
       ].join(" ")}
     >
-      <span
-        aria-hidden
-        className={[
-          "absolute -left-[9px] w-[2px] rounded-full bg-accent",
-          "transition-all duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
-          active ? "h-[15px] opacity-100" : "h-0 opacity-0",
-        ].join(" ")}
-      />
       {children}
     </button>
   );
