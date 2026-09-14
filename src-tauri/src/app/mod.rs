@@ -22,6 +22,7 @@ pub fn run() {
             let cfg = Config::load()?;
             let hotkey = cfg.hotkey.clone();
             let cfg_engine = cfg.speech_engine.clone();
+            keep_a_log();
             let voice = Voice(VoiceMode::from_config(cfg.speak, &cfg.speech_engine).into());
             let nudge = Nudge::new(cfg)?;
             println!("nudge: provider = {}", nudge.provider_name());
@@ -99,3 +100,41 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("nudge failed to start");
 }
+
+/// Send everything printed to a file as well as wherever it was going.
+///
+/// Not for the user -- for us. Launched from a terminal the output is right
+/// there, but a permission prompt is attributed to whatever *started* the app,
+/// so anything needing a new grant has to be opened the normal way, and then
+/// stdout goes nowhere. Every measurement this project has made was read out of
+/// a terminal, and the first one that mattered was lost exactly this way.
+#[cfg(target_os = "macos")]
+fn keep_a_log() {
+    use std::os::unix::io::AsRawFd;
+    // Not `temp_dir`, which is a per-user folder buried under /var/folders with
+    // a name nobody can type. This file exists to be tailed.
+    let path = std::path::Path::new("/tmp/nudge.log");
+    let Ok(file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    else {
+        return;
+    };
+    // Only when nothing is watching. A terminal that launched us is a better
+    // place for this than a file nobody opens, and duplicating it into both is
+    // how you end up reading a stale copy.
+    let attached = unsafe { libc::isatty(std::io::stderr().as_raw_fd()) } == 1;
+    if attached {
+        return;
+    }
+    unsafe {
+        libc::dup2(file.as_raw_fd(), std::io::stdout().as_raw_fd());
+        libc::dup2(file.as_raw_fd(), std::io::stderr().as_raw_fd());
+    }
+    std::mem::forget(file);
+    println!("\n--- nudge started {} ---", std::process::id());
+}
+
+#[cfg(not(target_os = "macos"))]
+fn keep_a_log() {}
