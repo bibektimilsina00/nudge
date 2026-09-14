@@ -45,10 +45,10 @@ export function Row({
     <Tag
       onClick={onClick}
       className={[
-        "flex w-full items-center gap-2.5 rounded-[6px] bg-raised px-2.5 text-left",
-        "on-glass",
+        "flex w-full items-center gap-2.5 rounded-xl bg-[#1e1e1e] px-2.5 text-left",
+        "inset-ring-1 inset-ring-white/[0.09]",
         compact ? "h-[38px]" : sub ? "py-2" : "h-[40px]",
-        onClick ? "transition-colors duration-150 hover:bg-hover" : "",
+        onClick ? "transition-colors duration-150 hover:bg-[#262626]" : "",
         danger ? "text-[#ff5f57]" : "",
       ].join(" ")}
     >
@@ -57,7 +57,7 @@ export function Row({
         <span className="flex items-center gap-1.5">
           <span className="truncate text-[12px]">{label}</span>
           {badge && (
-            <span className="rounded bg-accent px-1 py-px text-[8.5px] font-bold tracking-wide text-white">
+            <span className="rounded bg-accent px-1 py-px text-[8.5px] font-bold tracking-wide text-black">
               {badge}
             </span>
           )}

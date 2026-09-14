@@ -110,7 +110,7 @@ export function Artifacts({ made }: { made: Made[] }) {
           key={m.path}
           onClick={() => void invoke("open_artifact", { path: m.path })}
           title={m.path}
-          className="flex max-w-full items-center gap-1.5 rounded-[6px] bg-white/[0.07] py-1 pr-2 pl-1.5 text-[10.5px] text-white/75 transition-colors duration-150 hover:bg-white/[0.13] hover:text-white active:scale-[0.97]"
+          className="flex max-w-full items-center gap-1.5 rounded-lg bg-white/[0.07] py-1 pr-2 pl-1.5 text-[10.5px] text-white/75 transition-colors duration-150 hover:bg-white/[0.13] hover:text-white active:scale-[0.97]"
         >
           <svg viewBox="0 0 16 16" className="size-3 shrink-0 text-white/45" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 1.5H4.5A1.5 1.5 0 0 0 3 3v10a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 13 13V5.5Z" />
@@ -154,7 +154,7 @@ export function Commands({ ran }: { ran: Ran[] }) {
           taller than the thing it lives in. */}
       <div className="mt-1.5 max-h-44 space-y-1.5 overflow-y-auto">
         {ran.map((r, i) => (
-          <div key={i} className="rounded-[6px] bg-black/40 p-1.5">
+          <div key={i} className="rounded-lg bg-black/40 p-1.5">
             <code className="block font-mono text-[10px] break-all text-[#8ec6ff]">
               <span className="text-white/25">$ </span>
               {r.command}
@@ -238,7 +238,7 @@ function Tile({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
       aria-label={`${agent.title} — expand`}
       title={agent.title}
       style={{ backgroundColor: c.bg, boxShadow: `0 6px 20px ${c.glow}` }}
-      className="relative grid size-[38px] shrink-0 place-items-center rounded-[7px] text-white transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-105 active:scale-[0.97]"
+      className="relative grid size-[38px] shrink-0 place-items-center rounded-[11px] text-white transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-105 active:scale-[0.97]"
     >
       {/* Behind the tile, so the tile itself never moves -- a button that
           breathes is harder to hit than one that sits still. */}
@@ -246,7 +246,7 @@ function Tile({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
         <span
           aria-hidden
           style={{ backgroundColor: c.bg }}
-          className="absolute inset-0 rounded-[7px] motion-safe:animate-halo"
+          className="absolute inset-0 rounded-[11px] motion-safe:animate-halo"
         />
       )}
       {/* The tile is what is on screen almost all the time -- the card is
@@ -284,8 +284,8 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
     <div className="w-full">
       <div
         className={[
-          "rounded-[8px] bg-hover p-3.5 text-white backdrop-blur-xl",
-          "on-glass",
+          "rounded-2xl bg-[#141824] p-3.5 text-white backdrop-blur-xl",
+          "inset-ring-1 inset-ring-white/[0.12]",
           agent.state === "running"
             ? "shadow-[0_8px_28px_rgba(10,132,255,0.35)]"
             : "shadow-[0_8px_28px_rgba(0,0,0,0.5)]",
@@ -295,14 +295,14 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
           <Face state={agent.state} step={agent.step} />
           <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold">{agent.title}</h1>
           <span
-            className={`rounded-[4px] px-2 py-[2px] text-[9px] font-bold tracking-wide ${TONE[agent.state].pill}`}
+            className={`rounded-full px-2 py-[2px] text-[9px] font-bold tracking-wide ${TONE[agent.state].pill}`}
           >
             {TONE[agent.state].label}
           </span>
           <button
             onClick={onCollapse}
             aria-label="Collapse"
-            className="grid size-[20px] place-items-center rounded-[6px] text-white/40 transition-colors duration-150 hover:bg-white/10 hover:text-white"
+            className="grid size-[20px] place-items-center rounded-full text-white/40 transition-colors duration-150 hover:bg-white/10 hover:text-white"
           >
             <svg viewBox="0 0 12 12" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
               <path d="M2.5 6h7" />
@@ -311,7 +311,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
           <button
             onClick={() => void invoke("dismiss_agent", { id: agent.id })}
             aria-label="Dismiss"
-            className="grid size-[20px] place-items-center rounded-[6px] text-white/40 transition-colors duration-150 hover:bg-white/10 hover:text-white"
+            className="grid size-[20px] place-items-center rounded-full text-white/40 transition-colors duration-150 hover:bg-white/10 hover:text-white"
           >
             <svg viewBox="0 0 12 12" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
               <path d="M3 3l6 6M9 3l-6 6" />
@@ -345,7 +345,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
             </span>
             <button
               onClick={() => void invoke("stop_agent", { id: agent.id })}
-              className="rounded-[6px] bg-white/10 px-2.5 py-1 text-[11px] font-medium transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
+              className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-medium transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
             >
               Stop
             </button>
@@ -387,7 +387,7 @@ function Question({ id, question }: { id: number; question: string }) {
         onChange={(e) => setText(e.target.value)}
         placeholder="Type your answer…"
         spellCheck={false}
-        className="mt-2 w-full rounded-[6px] bg-black/40 px-2.5 py-1.5 text-[11.5px] text-white outline-none on-glass placeholder:text-white/25 focus:inset-ring-1 focus:inset-ring-[#0a84ff]"
+        className="mt-2 w-full rounded-lg bg-black/40 px-2.5 py-1.5 text-[11.5px] text-white outline-none inset-ring-1 inset-ring-white/[0.12] placeholder:text-white/25 focus:inset-ring-[#0a84ff]"
       />
     </form>
   );

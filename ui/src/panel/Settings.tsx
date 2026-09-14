@@ -61,19 +61,13 @@ export function Settings({
 
       <Section title="Connections">
         {/* Wired: opens the browser. */}
-        <Row
-          icon={<I.Grid />}
-          label="Integrations"
-          sub="Connect the apps you already use"
-          chevron
-          onClick={onIntegrations}
-        />
+        <Row icon={<I.Grid />} label="Integrations" chevron onClick={onIntegrations} />
         <Row icon={<I.Bolt />} label="Skills" sub="Power-ups that attach to Nudge" chevron />
       </Section>
 
       <Section title="Customization">
         <Row icon={<I.TextIcon />} label="Dictation" badge="NEW" value="Automatic" chevron />
-        <Row icon={<I.Keyboard />} label="Shortcuts" sub="Every key Nudge listens for" chevron />
+        <Row icon={<I.Keyboard />} label="Shortcuts" chevron />
         {/* Wired. */}
         <Row
           icon={<I.Arrow />}

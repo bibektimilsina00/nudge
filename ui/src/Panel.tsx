@@ -105,13 +105,13 @@ export default function Panel() {
     <div className="flex w-full justify-center">
       <div
         className={[
-          "overflow-hidden text-white select-none",
+          "overflow-hidden bg-black text-white select-none",
           // The busy pill is a strip in the menu bar, not a panel: a big radius
           // on something 34px tall reads as a lozenge stuck to the notch.
           // Matching the notch exactly is what makes the pill read as part of the
           // hardware. The open panel is far bigger than the notch and carries a
           // slightly larger radius, or 12px on a 500px sheet looks like a mistake.
-          open ? "glass bg-ink rounded-b-[14px]" : "notch-corner bg-black",
+          open ? "rounded-b-[20px]" : "notch-corner",
           // No shadow while open. The panel is black on a dark menu bar, so the
           // drop shadow never read as depth -- it read as a grey smear along the
           // bottom edge. The resting pill keeps a faint one so it separates from
@@ -158,11 +158,11 @@ export default function Panel() {
               // rather than a row with something floating in it -- and a 30px
               // target instead of a 15px glyph with padding round it.
               className={[
-                "grid size-[26px] shrink-0 place-items-center rounded-[6px]",
+                "grid size-[26px] shrink-0 place-items-center rounded-full",
                 "transition-colors duration-150",
                 view === "settings"
-                  ? "bg-hover text-white"
-                  : "text-white/45 hover:bg-raised hover:text-white/80",
+                  ? "bg-[#2e2e2e] text-white"
+                  : "text-white/45 hover:bg-[#1e1e1e] hover:text-white/80",
               ].join(" ")}
             >
               <Gear />
@@ -187,7 +187,7 @@ export default function Panel() {
               <p className="mt-0.5 text-[10.5px] text-white/40">
                 Skills give Nudge superpowers
               </p>
-              <button className="mt-2.5 grid size-[44px] place-items-center rounded-[6px] bg-hover text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-hover">
+              <button className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-[#272727] text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-[#303030]">
                 +
               </button>
             </section>
@@ -218,9 +218,9 @@ export default function Panel() {
               <button
                 onClick={() => openIntegrations("home")}
                 aria-label="Browse integrations"
-                className="flex h-[30px] flex-1 items-center rounded-[6px] bg-raised px-1.5 text-left transition-colors duration-150 hover:bg-hover on-glass"
+                className="flex h-[30px] flex-1 items-center rounded-[10px] bg-[#1e1e1e] px-1.5 text-left transition-colors duration-150 hover:bg-[#262626] inset-ring-1 inset-ring-white/[0.09]"
               >
-                <span className="grid size-[22px] place-items-center rounded-[5px] bg-white/[0.11] text-[13px] font-light text-white/60">
+                <span className="grid size-[22px] place-items-center rounded-md bg-white/[0.11] text-[13px] font-light text-white/60">
                   +
                 </span>
                 <span className="ml-2 text-[11px] text-white/35">Add an integration</span>
@@ -228,7 +228,7 @@ export default function Panel() {
 
               <Perch docked={docked} onToggle={() => dock(!docked)} />
 
-              <button className="grid size-[30px] place-items-center rounded-[6px] bg-raised text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 on-glass">
+              <button className="grid size-[30px] place-items-center rounded-[10px] bg-[#1e1e1e] text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 inset-ring-1 inset-ring-white/[0.09]">
                 i
               </button>
             </div>
@@ -256,20 +256,14 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
     <button
       onClick={onToggle}
       aria-pressed={docked}
-      className="flex h-[30px] items-center gap-2 rounded-[6px] bg-raised pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-hover on-glass"
+      className="flex h-[30px] items-center gap-2 rounded-full bg-[#1e1e1e] pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-[#262626] inset-ring-1 inset-ring-white/[0.09]"
     >
-      {/* A socket, carved rather than drawn.
-          The inner shadow is what makes it read as a dimple in the surface
-          instead of a dark disc printed on it -- so the cat sits *in* something,
-          and the empty one is a place rather than a circle. It deepens when empty,
-          because a hole with nothing in it is the state worth noticing. */}
       <span
         className={[
-          "grid size-[24px] shrink-0 place-items-center overflow-hidden rounded-full",
-          "transition-[box-shadow,background-color] duration-300",
-          docked
-            ? "bg-black/35 shadow-[inset_0_1px_2px_rgba(0,0,0,0.55)]"
-            : "bg-black/45 shadow-[inset_0_2px_4px_rgba(0,0,0,0.75),inset_0_0_0_1px_rgba(255,255,255,0.07)]",
+          "grid size-[24px] shrink-0 place-items-center rounded-full overflow-hidden",
+          "transition-colors duration-300",
+          // Empty, the socket still reads as a spot something belongs in.
+          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
         ].join(" ")}
       >
         <span
@@ -330,8 +324,8 @@ function Tab({
     <button
       onClick={onClick}
       className={[
-        "flex items-center gap-1.5 rounded-[6px] px-2 py-[3px] text-[11px] transition-colors duration-150",
-        active ? "bg-hover text-white" : "text-white/40 hover:text-white/65",
+        "flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px] transition-colors duration-150",
+        active ? "bg-[#2e2e2e] text-white" : "text-white/40 hover:text-white/65",
       ].join(" ")}
     >
       {icon}
@@ -343,7 +337,7 @@ function Tab({
 /** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
 function Key({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-[5px] bg-raised px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-white/65 on-glass">
+    <kbd className="rounded-[5px] bg-[#262626] px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-white/65 inset-ring-1 inset-ring-white/[0.08]">
       {children}
     </kbd>
   );

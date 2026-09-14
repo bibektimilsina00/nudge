@@ -50,10 +50,10 @@ function Card({ agent }: { agent: Agent }) {
   return (
     <div
       className={[
-        "rounded-[6px] p-2.5",
+        "rounded-xl p-2.5 inset-ring-1",
         running
-          ? "bg-hover on-glass"
-          : "bg-raised on-glass",
+          ? "bg-[#141824] inset-ring-white/[0.12]"
+          : "bg-[#1e1e1e] inset-ring-white/[0.09]",
       ].join(" ")}
     >
       <div className="flex items-center gap-2">
@@ -103,11 +103,10 @@ function progress(a: Agent) {
 
 function Empty() {
   return (
-    <div className="flex flex-1 flex-col items-center px-6 pt-6 text-center">
-      {/* The thing itself, idling. A drawing of a sparkle said "agents" the way
-          a road sign says "deer" -- this says it by being one, sitting there
-          waiting for something to do, which is exactly the state being
-          described. */}
+    <div className="flex flex-1 flex-col items-center px-6 pt-8 text-center">
+      {/* The thing itself, idling. A sparkle said "agents" the way a road sign
+          says "deer"; this says it by being one, waiting for something to do --
+          which is exactly the state being described. */}
       <Face state="done" step={0} size={64} />
       <h2 className="mt-2.5 text-[12.5px] font-medium">No agents yet</h2>
       <p className="mt-1 max-w-[300px] text-[10.5px] leading-snug text-white/35">
