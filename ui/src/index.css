@@ -121,22 +121,26 @@ body {
  *   blur      what is behind it is present but unreadable
  *   saturate  colour survives the blur -- without it the backdrop goes grey and
  *             the whole thing looks like frosted plastic
- *   a lit top edge, because a pane of glass catches light along its upper rim and
- *             this is the single detail that sells the material
- *   a hairline all round, so it has an edge rather than fading out
+ *   a hairline down the sides and along the bottom, so it has an edge rather than
+ *             fading out -- but never across the top, which is joined to the
+ *             menu bar and has no edge to draw
  */
 .glass {
   backdrop-filter: blur(28px) saturate(180%);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
-  /* Inset only. A drop shadow was tried here and it is the same mistake the
-     original code already had a comment warning about: the panel hangs from a
-     dark menu bar, so a shadow never reads as depth -- it reads as a grey smear
-     along the edges. */
+  /* Three edges, not four, and no lit rim.
+   *
+   * A pane of glass catches light along its top edge, which is why that rim is
+   * usually the detail that sells the material -- but this panel is *attached* to
+   * the menu bar. It has no top edge exposed, so a line drawn there reads as a
+   * seam between two things rather than as the top of one thing.
+   *
+   * Left, right and bottom only. No drop shadow either: the original code already
+   * had a comment about that, and it was right. */
   box-shadow:
-    /* the lit rim, inside the top edge */
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.14),
-    /* the edge itself */
-    inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+    inset 1px 0 0 0 rgba(255, 255, 255, 0.07),
+    inset -1px 0 0 0 rgba(255, 255, 255, 0.07),
+    inset 0 -1px 0 0 rgba(255, 255, 255, 0.07);
 }
 
 /* Content sitting on glass needs its own faint lift, or every row reads as a
