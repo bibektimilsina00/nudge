@@ -2,6 +2,8 @@
 
 **The layer everything else sits under.**
 
+*It looks like it cannot do anything. It can do everything.*
+
 You do not open a terminal, find the right agent, and type at it. You say what you
 want, out loud, to something that can already see your screen — and it works out
 whether that is a click, a command, a page to read, or a job to hand to a
@@ -49,6 +51,46 @@ seconds end to end.
 The picture is not going away. Canvases, games, video and custom-drawn interfaces
 expose nothing, and a closed menu has no geometry until it opens. But it is now
 the fallback under a fallback rather than the way things get done.
+
+### The shape it has to keep
+
+**It should look like it cannot do anything, and be able to do everything.**
+
+That is the product, stated as one sentence, and it is a constraint rather than a
+mood. A cat in the notch. No window. No sidebar, no roster, no canvas, no
+greeting. You hold a key, you say a thing, it happens, and the screen goes back to
+being yours. Meanwhile underneath it drives applications, runs processes, reads
+files, delegates to other agents and orchestrates work that takes minutes.
+
+The gap between those two is the whole idea. Everything else in the category is
+sized like what it can do -- a window, because it is important; a sidebar, because
+there is a lot of it; a greeting, because you have arrived somewhere. Nudge is
+sized like an accessory and works like an operating system.
+
+**What this rules out, which is the useful part:**
+
+- **No capability gets a panel.** MCP adds a hundred tools and adds no UI. Parity
+  with a general agent (§2.4) means more *power*, never more *surface*.
+- **The panel is for settings, not for work.** If something is used while working,
+  it belongs in the voice loop or the agent card, not behind a tab.
+- **Growth goes down, not out.** When there is more to do, it does more per
+  sentence -- not more per screen.
+- **The cat carries what a UI would.** State, personality, attention, progress. A
+  status pill says RUNNING once; something alive says it continuously and costs no
+  layout.
+
+**The two problems this creates, named so they get solved rather than discovered:**
+
+**Discovery.** An interface that shows nothing teaches nothing. Nobody guesses
+that the thing in the notch can refactor a repository. The answer has to be the
+voice loop itself -- *"what can you do?"* is a question it should answer well, and
+capability should surface when it is relevant rather than sitting in a menu
+nobody opens. Unsolved; worth solving properly.
+
+**Being taken seriously.** Something that looks like a toy has to earn real work.
+The agent card is the existing answer -- it shows the plan, the commands it ran
+and the files it made -- and it is the right one: not a promise on a landing page
+but a receipt, after the fact, for something you watched happen.
 
 ### What exists
 
@@ -157,6 +199,11 @@ become local.
 can do.** Not because the list is the product -- the screen is -- but because
 "bounded subset, plus the screen" is a harder thing to choose than "everything
 they do, plus the screen", and the second one is reachable.
+
+**None of it may grow the interface.** See §1, *The shape it has to keep*: the
+point of this product is the distance between how small it looks and what it can
+do, and every item below closes that distance if it arrives as a panel. Parity is
+measured in what it can be asked to do, never in what it shows.
 
 Measured against the code rather than guessed, this is the actual gap:
 
@@ -381,12 +428,19 @@ tried, what worked, and the three ideas that were measured and abandoned.
    but turned from a constant in the source into something a person can widen on
    purpose, visibly, with today's behaviour as the default.
 
-8. **Memory.** Per-app notes, written from failure, injected only when that app is
+8. **Discovery.** The cost of §1's shape: an interface that shows nothing teaches
+   nothing, and nobody guesses that the thing in the notch can refactor a
+   repository. The answer has to live in the voice loop rather than in a menu --
+   *"what can you do?"* answered well, and capability surfacing when it is
+   relevant. Not urgent while there is one user who wrote it; the first real
+   blocker on the second one.
+
+9. **Memory.** Per-app notes, written from failure, injected only when that app is
    in front: *"CapCut: the timeline view means a project is open."* Earned once
    the loop is known to work -- memory that records a broken loop's habits is
    worse than none.
-9. **Signing and notarisation**, before anyone else can run it.
-10. **Windows, when there are Windows users.** The platform seam is drawn and the
+10. **Signing and notarisation**, before anyone else can run it.
+11. **Windows, when there are Windows users.** The platform seam is drawn and the
    other side of it is written -- `xcap`, `enigo`, `device_query`,
    `active-win-pos-rs`, and a UI Automation tree -- but none of it has ever been
    compiled for the target, because it cannot be from a Mac. See
