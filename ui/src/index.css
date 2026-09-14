@@ -3,16 +3,21 @@
 @theme {
   --color-accent: #7c6cff;
 
-  /* Glass, not paint.
+  /* Glass, done in CSS rather than by the window.
    *
-   * The window carries a real NSVisualEffectView behind the webview, so these
-   * surfaces are deliberately *not* opaque -- anything solid here would cover the
-   * material and leave a grey rectangle wearing a highlight.
+   * A window-level NSVisualEffectView was tried and is wrong here. The panel
+   * window never resizes -- it is permanently the open size, transparent, and CSS
+   * decides what is visible -- and a window material does not care about CSS. It
+   * painted all 560x420 points of it, so a grey rectangle sat on screen whether
+   * the panel was open or not.
    *
-   * The closed pill is the exception and stays pure black: it is pretending to be
-   * the notch, and the notch is not translucent.
+   * So the material lives on the element that is actually visible. The window
+   * staying transparent is what lets anything through at all.
+   *
+   * Dark enough to read against a bright wallpaper: glass you can read your own
+   * files through is a screenshot, not an interface.
    */
-  --color-ink: rgba(12, 12, 14, 0.62);
+  --color-ink: rgba(10, 10, 12, 0.86);
   --color-raised: rgba(255, 255, 255, 0.07);
   --color-hover: rgba(255, 255, 255, 0.12);
   --color-hair: rgba(255, 255, 255, 0.09);
