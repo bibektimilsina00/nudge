@@ -4,545 +4,454 @@
 
 *It looks like it cannot do anything. It can do everything.*
 
-You do not open a terminal, find the right agent, and type at it. You say what you
-want, out loud, to something that can already see your screen — and it works out
-whether that is a click, a command, a page to read, or a job to hand to a
-specialist.
-
-Coding agents will keep getting better. That is fine: Nudge is not trying to beat
-them at writing code. It is trying to be the thing you talk to, which then talks
-to them. One voice, one cursor, one place that knows what is on your screen and
-what you asked for ten seconds ago.
-
-> Rewritten twice. It began as a companion that pointed at buttons, and most of
-> what it used to say was about keeping up with a similar product -- that framing
-> is gone, see §7. Rewritten again once the speed work finished and the
-> accessibility tree replaced guessing at pixels, because a plan that describes a
-> solved problem as the next one is worse than no plan.
-
 ---
 
-## 1. What it is
+## 1. The product
 
-Four surfaces, and a rule about which to reach for. Every cost below is measured,
-not estimated -- see [FINDINGS.md](FINDINGS.md).
+### The sentence
 
-| Surface | What it is for | Cost |
-|---|---|---|
-| **Facts** | What macOS already knows: frontmost app, window title, whether audio is playing | 50ms |
-| **Tree** | What macOS says is *on screen*: every control, its name, its exact rectangle | 200ms |
-| **Tools** | Commands, files, the web. No screen involved | one call |
-| **Screen** | A picture, for anything the tree does not expose | 61ms to take, ~6s for the model to read, right about two thirds of the time |
+**Nudge is how you operate your computer when you no longer want to operate it
+yourself.**
 
-**The rule, and the one idea this project keeps rediscovering:** use the cheapest
-surface that can actually answer. Prefer the shortcut to the menu, the command to
-the click, the data to the picture of the data. Every tool added here should make
-Nudge reach for the screen *less*, and the measure of a good one is how much it
-shrinks that set.
+Not an assistant you consult, not a chat window you paste into. The layer between
+you and the machine: you say what you want, and the machine does it, using the
+same software you would have used.
 
-**The tree is new and it moved the floor.** Before it, finding a button meant a
-model guessing at pixels: several seconds, and wrong about a third of the time,
-with the misses landing 12 to 87 pixels out. The tree answers *where the Send
-button is* in 200ms, exactly, for no tokens -- so the model now chooses from a
-numbered list rather than aiming, and when a request names one control
-unambiguously it never reaches a model at all. *"Click the View menu"* is 0.3
-seconds end to end.
-
-The picture is not going away. Canvases, games, video and custom-drawn interfaces
-expose nothing, and a closed menu has no geometry until it opens. But it is now
-the fallback under a fallback rather than the way things get done.
+Every other agent is limited to what has an API. They reach files, shells, HTTP,
+repositories -- and they all stop at the same wall: software with no API cannot be
+touched. Nudge goes through the wall by using software the way a person does. It
+reads the screen, finds the control, presses it. So the set of things it can do is
+not *what has been integrated* but **what you can do on this machine**, which is a
+much larger set and a permanently larger one.
 
 ### The shape it has to keep
 
-**It should look like it cannot do anything, and be able to do everything.**
+A cat in the notch. No window, no sidebar, no roster, no canvas, no greeting. You
+hold a key, you say a thing, it happens, and the screen goes back to being yours.
+Underneath it drives applications, runs processes, reads files, delegates to other
+agents and orchestrates work that takes minutes.
 
-That is the product, stated as one sentence, and it is a constraint rather than a
-mood. A cat in the notch. No window. No sidebar, no roster, no canvas, no
-greeting. You hold a key, you say a thing, it happens, and the screen goes back to
-being yours. Meanwhile underneath it drives applications, runs processes, reads
-files, delegates to other agents and orchestrates work that takes minutes.
+**The gap between those two is the whole idea.** Everything else in the category is
+sized like what it can do -- a window because it is important, a sidebar because
+there is a lot of it. Nudge is sized like an accessory and works like an operating
+system.
 
-The gap between those two is the whole idea. Everything else in the category is
-sized like what it can do -- a window, because it is important; a sidebar, because
-there is a lot of it; a greeting, because you have arrived somewhere. Nudge is
-sized like an accessory and works like an operating system.
+This is a constraint, not a mood. It rules things out, which is the useful part:
 
-**What this rules out, which is the useful part:**
+- **No capability gets a panel.** MCP will add a hundred tools and no interface.
+- **The panel is for settings, not for work.** Anything used *while* working
+  belongs in the voice loop or the agent card.
+- **Growth goes down, not out.** More to do means more per sentence, never more
+  per screen.
+- **The cat carries what a UI would** -- state, attention, progress.
 
-- **No capability gets a panel.** MCP adds a hundred tools and adds no UI. Parity
-  with a general agent (§2.4) means more *power*, never more *surface*.
-- **The panel is for settings, not for work.** If something is used while working,
-  it belongs in the voice loop or the agent card, not behind a tab.
-- **Growth goes down, not out.** When there is more to do, it does more per
-  sentence -- not more per screen.
-- **The cat carries what a UI would.** State, personality, attention, progress. A
-  status pill says RUNNING once; something alive says it continuously and costs no
-  layout.
+An operator cannot be a window, because a window competes for the screen with the
+very software it is supposed to be operating. That is why everyone who builds one
+drifts into being a destination you go *to* and stops being a layer that sits
+*over*. Staying in the notch is not modesty; it is the only shape that works.
 
-**The two problems this creates, named so they get solved rather than discovered:**
+### Where it ends up
 
-**Discovery.** An interface that shows nothing teaches nothing. Nobody guesses
-that the thing in the notch can refactor a repository. The answer has to be the
-voice loop itself -- *"what can you do?"* is a question it should answer well, and
-capability should surface when it is relevant rather than sitting in a menu
-nobody opens. Unsolved; worth solving properly.
+**You run your whole computer through the notch.** Not most of it, not the parts
+with integrations -- all of it.
 
-**Being taken seriously.** Something that looks like a toy has to earn real work.
-The agent card is the existing answer -- it shows the plan, the commands it ran
-and the files it made -- and it is the right one: not a promise on a landing page
-but a receipt, after the fact, for something you watched happen.
-
-### What exists
-
-Twenty-one outcomes the model can choose between:
-
-- **Screen** -- `point` (by control name or by pixel; click, double, hover),
-  `press`, `type`, `launch`, `open`
-- **Files** -- `read`, `write`, `edit`, `show`
-- **World** -- `run`, `start`, `output`, `kill`, `fetch`, `search`
-- **Coordination** -- `plan`, `task`, `agent`, `question`, `workspace`,
-  `done`/`unsure`/`reply`
-
-Plus: voice in and out with transcription on the machine, a notch dock, an agent
-card with its plan and its commands and the files it made, a privacy guard that
-refuses to photograph password managers, and a workspace boundary that nothing
-reaches past.
-
-**And two instruments, because the numbers above had to come from somewhere:**
-
-- `make picks` -- does it choose the control you meant? Offline, instant, fifteen
-  cases. Reports wrong picks separately from fall-throughs and never averages
-  them, because one costs four seconds and the other clicks the wrong thing.
-- `make bench` -- can a model find a control in a picture? Ten saved screenshots
-  with recorded answers. Good for latency, too small for accuracy, and it measures
-  the surface the tree replaced -- kept for the cases that still need it.
-
-Plus `cargo run --example captime` for what looking at the screen costs, and a
-timing line on every turn naming each stage.
-
----
-
-## 2. Where it is going
-
-### 2.1 Orchestration
-
-Nudge already delegates: `task` hands a scoped job to a headless subagent that
-cannot touch the cursor, which is why several can run at once. The next step is
-that a subagent need not be *ours*.
-
-Asked to refactor something large, the right move is not for Nudge to write the
-code. It is to hand the job to whatever coding agent is installed, watch it work,
-and report back -- the same shape as `task`, with a different worker.
-
-What that needs:
-
-- **Running a long process and reading its output.** `run` is read-only and
-  blocks for twenty seconds; an agent CLI runs for minutes and streams. This is
-  the single largest missing capability, and everything else in this section
-  waits on it.
-- **A different permission for a different worker.** Our shell allow-list exists
-  because a model asked to delete something tried `rm`. An external agent *will*
-  write files and make commits -- that is what it is for. It needs its own
-  boundary: a workspace it may change, a confirmation before anything leaves the
-  machine, and the whole of its output visible afterwards.
-- **Knowing what is installed.** The same problem as applications, one layer up.
-
-### 2.2 The whole machine, from the notch
-
-Where this ends up, stated so the intermediate decisions can be checked against
-it: **you run your computer through Nudge.** Not most of it, not the parts with
-integrations -- all of it, from a key held down in the notch.
-
-Underneath, it uses whatever is installed. A coding agent, a CLI, a shell, an
+Underneath it uses whatever is installed: a coding agent, a CLI, a shell, an
 application driven through its own interface. **The person is not meant to know
-which.** They install a coding agent once, authenticate it, and never open it
-again; they say "clean this up" and it happens. Jarvis, with a cat.
+which.** They install a coding agent once, authenticate it, never open it again,
+say *"clean this up"*, and it happens. Jarvis, with a cat.
 
-**What that requires, beyond doing the work:**
-
-- **Delegation is infrastructure, not a feature.** Choosing between agents is
-  Nudge's job, not a choice to present. The card reports *what was done* -- the
-  plan, the commands, the files -- and not *who did it*.
-- **Nudge owns every failure.** When the agent underneath breaks, nobody sees that
-  agent break. They see Nudge fail. So errors have to be rewritten into something
-  about the task rather than passed up as a stack trace from a program the person
-  does not know is running.
-- **Setup has to be invisible too.** "Install and forget" means detecting what is
-  on the machine, working with whatever is there, and asking for the rest once, in
-  plain language, at the moment it would help. Provisioning is a capability this
-  does not have.
-- **Credentials.** The unglamorous blocker. A coding agent needs authenticating,
-  and if it is never opened, that has to happen somewhere else.
-
-**The tension, named rather than discovered:** *"they do not need to know"* reads
-badly next to *"something is silently running programs on my machine."* Those are
-reconcilable, but only on purpose:
+The tension in that, named rather than discovered: *"they do not need to know"*
+reads badly beside *"something is silently running programs on my machine."* The
+two reconcile only on purpose:
 
 > **Never needs to know. Can always find out.**
 
 Invisible by default, inspectable on demand. The agent card is already the right
-shape for this -- a receipt after the fact, not a dialog before it -- and the
-privacy guard, the workspace and the allow-list are what make "I did not watch"
-a safe thing to say.
+shape -- a receipt after the fact, not a dialog before it.
 
-### 2.3 Where this sits
+### What it makes of everything else
 
-Worth writing down, because the field moved twice while this was being built and
-both moves were *away* from where Nudge stands.
+Other agents stop being products you choose between and become **tools it calls**.
+You do not open a coding agent; you say what you want and Nudge picks one, watches
+it, and reports. Same for whatever replaces it next year, and there will be one.
 
-**OpenClaw** is the local agent now -- a quarter of a million stars inside two
-months, its author gone to OpenAI to run personal agents, the project handed to a
-foundation. It reads and writes files, runs shell commands, browses, sends email,
-manages a calendar, and reaches you through WhatsApp or Telegram or Slack. It is
-very good and it is free.
+That is the durable position: **the model layer keeps changing hands, the
+interface layer does not.**
 
-**It cannot see your screen, and it cannot drive one.** That is not a feature it
-has not got round to; it is a different architecture. Everything it does goes
-through an API, a file, or a shell. Half of what people actually want to automate
-lives in an application with none of those.
+---
 
-**HeyClicky** was in this space and left it. It was a small thing in the menu bar
-that listened and clicked; it is now a full window with a sidebar, a roster of
-named assistants and a greeting. That is the same shape as every other agent
-product, and it competes with Claude Desktop rather than with this.
+## 2. Where it is now
 
-So the position is narrow and currently empty: **the agent that works the
-graphical interface, by voice, without taking over the screen.**
+### What works
 
-### 2.4 What makes it defensible
+**The loop.** Hold a key, speak, and it acts: clicking, typing, pressing keys,
+launching apps, opening URLs, reading and writing files, running commands,
+starting long processes, fetching pages, searching the web, planning, delegating.
+Twenty-one outcomes the model chooses between. Agents run unattended with a
+budget, a card showing their plan and their work, and an instant stop.
 
-Not features. Four things, and the fourth is new:
+**Grounding, which changed shape.** The accessibility tree reports every control
+on screen -- name, role, exact rectangle -- in about 200ms, for no tokens. So:
 
-- **It can see your screen and drive it.** The thing a terminal-bound agent
-  structurally cannot do, and the thing the biggest player in the category has
-  chosen not to build.
-- **It asks the system rather than guessing.** The accessibility tree gives exact
-  rectangles for named controls in 200ms. A competitor bolting screen control onto
-  a shell agent would start with screenshots and a vision model, which is where
-  this project started and spent a day climbing out of.
-- **You talk to it, and it never takes the screen.** No window to find, no prompt
-  to type, nothing to paste. It borrows the pointer for 150ms and gives it back.
-- **It is local and open.** Transcription happens on the machine and never leaves
-  it; screenshots do not either, and anyone can check that claim. For anyone under
-  an NDA, in healthcare or in finance, "where do the screenshots go?" is a hard
-  blocker a closed binary cannot answer.
+- The model picks a control from a numbered list rather than aiming at a pixel.
+- When a request names exactly one control, it never reaches a model at all:
+  *"click the View menu"* is about 0.3 seconds end to end.
+- Menus are pressed through the accessibility API without touching the pointer.
+- Everything else is still a picture and a model, right about two thirds of the
+  time.
 
-The last two are the ones a funded competitor cannot copy without cannibalising
-something -- a window app cannot become ambient, and a hosted product cannot
-become local.
+**Speed.** A turn is about 4.5 seconds and roughly 95% of that is the model.
+Everything else totals about 0.22s. What that took is in
+[SPEED.md](SPEED.md) and [FINDINGS.md](FINDINGS.md); what matters here is that
+latency is no longer a project, and three plausible-sounding ideas were measured
+and abandoned rather than built.
 
-### 2.5 Parity, then the screen on top
+**Privacy, as a property rather than a promise.** Transcription happens on the
+machine. Screenshots never leave it. The guard refuses to photograph password
+managers and windows whose titles name a secret.
 
-**The goal: everything a general local agent can do, as a subset of what Nudge
-can do.** Not because the list is the product -- the screen is -- but because
-"bounded subset, plus the screen" is a harder thing to choose than "everything
-they do, plus the screen", and the second one is reachable.
+**Boundaries that exist because something went wrong without them.** A workspace
+nothing reaches past. A shell allow-list of 38 programs with read-only
+subcommands. One cursor, one agent. Ask before replacing a file.
 
-**None of it may grow the interface.** See §1, *The shape it has to keep*: the
-point of this product is the distance between how small it looks and what it can
-do, and every item below closes that distance if it arrives as a panel. Parity is
-measured in what it can be asked to do, never in what it shows.
+### What is built but unproven
 
-Measured against the code rather than guessed, this is the actual gap:
+Listed because "built" and "works" are different claims, and this project has
+confused them before.
 
-| | Them | Here | What it needs |
-|---|---|---|---|
-| Shell | anything | 38 programs, read-only subcommands | a way to widen it on purpose |
-| Files | anywhere | workspace only | granted paths, not a deleted boundary |
-| HTTP | full client | `fetch`, GET only, no auth | a real request tool |
-| Email · calendar · chat | native | nothing | MCP, almost certainly |
-| Extensibility | plugins | nothing | MCP |
-| Learned behaviour | skills | nothing | §5.3, memory |
+| | What is unknown |
+|---|---|
+| **Multi-monitor** | The arithmetic is tested including negative origins. Whether one window really spans two displays at that level has never run on two displays. |
+| **Orchestrating another agent** | `claude`, `codex` and `agy` are verified by execution. `opencode` and `aider` come from documentation. No end-to-end run of the whole flow. |
+| **The panel flicker fix** | Two plausible causes addressed. Neither verifiable without watching a Space transition on the machine it happens on. |
+| **The Windows port** | The seam is drawn, the portable side is written and runs on macOS behind a feature flag, and the UI Automation tree has never been compiled. See [PORTING.md](PORTING.md). |
 
-**MCP does most of this, and that is the whole argument for doing it early.**
-Email, calendar, Slack, Notion, GitHub, databases -- those servers exist and are
-maintained by other people. Writing six integrations by hand buys six
-integrations; speaking MCP buys the ones that exist now and the ones written next
-year. It moves from item 7 in §5.3 to somewhere near the front.
+### What is broken
 
-**The part that needs design rather than deletion.** Every boundary here is a
-scar. The shell is read-only because a model reached for `rm` to get around a
-refusal. Files are workspace-bound because the first thing that wrote a file put
-it in this repository's root. One agent owns the cursor because two of them sent
-a voice note to a real person.
+- **Not distributable.** Not notarised; `spctl` rejects it. The signing identity
+  is one machine's certificate. Nobody else can run this.
+- **It says things that are not true.** Asked when macOS 27 ships, on a machine
+  running macOS 27, after a successful web search, it answered 2036. Nothing in
+  the project can currently detect that.
 
-So parity cannot mean removing them. It means replacing a fixed answer with a
-decision someone makes:
+---
 
-- **Widening is explicit and visible.** A setting, a per-task grant, a prompt --
-  not a longer constant in the source.
-- **The default stays where it is.** Someone who never opens settings keeps
-  today's boundaries, which is the right default for a thing that listens all day.
+## 3. What stands between here and there
+
+Five groups. Everything in §4 belongs to one of them.
+
+**Trust.** It has to be right, and it has to be checkable. Today one of the two
+harnesses measures control selection well, the other measures pixel-grounding on
+ten cases which is too few to mean anything, and neither can see whether an answer
+is true.
+
+**Reach.** A general local agent does more than this does: any shell command, any
+file, real HTTP, email, calendar, chat. Those are not features to copy one by one
+-- most arrive through one decision (MCP) and one design (boundaries that a person
+can widen).
+
+**Invisibility.** The end state needs Nudge to use what is installed without the
+person knowing, which means noticing what is there, asking for what is missing
+once, authenticating things nobody opens, and translating failures into something
+about the task.
+
+**Learning.** It starts every session knowing nothing about this machine, these
+applications, or what went wrong last time.
+
+**Distribution.** Nobody else can install it.
+
+---
+
+## 4. The path
+
+Ordered. Each one says what it is, why it is here rather than later, and how we
+will know it is finished.
+
+### Phase 1 — Trust
+
+Everything else is worth less until this is done. An operator that is confidently
+wrong will not be given real work, and the more invisible the machinery gets the
+more the one visible thing -- what it tells you -- has to be true.
+
+**1.1 A harness that scores answers, not clicks.**
+
+The gap that let 2036 through. Record questions with known answers, run them
+through the real search-and-answer path, and score what comes back. Unlike the
+screenshot bench this is cheap to grow, so grow it: fifty questions, not ten.
+
+*Done when:* there is a number for how often it is right, and it moves when the
+model or the prompt changes.
+
+**1.2 Verify before asserting.**
+
+A subagent already exists that can search and fetch and cannot touch the cursor --
+which is exactly a fact-checker. Before a step that states a fact, ask an
+independent one to try to refute it. Report what survives; say so when nothing
+does.
+
+This is the useful half of multi-agent orchestration without building an
+orchestration engine. Parallel delegation already exists and is bounded by the
+cursor rather than by the design.
+
+*Done when:* the 2036 case, recorded in 1.1, comes back either right or admitting
+uncertainty.
+
+**1.3 Say what is uncertain.**
+
+Related and cheaper. The model has one voice for *"I clicked Send"* and *"macOS 27
+ships in 2036"*. The first is observed, the second is recalled. A thing that
+distinguishes them out loud is trusted more, not less.
+
+*Done when:* a recalled fact and an observed action do not sound the same.
+
+**1.4 Grow the control cases.**
+
+Fifteen is enough to catch a regression and not enough to find an unknown failure.
+Each one costs a sentence. Cover: dense settings panes, file lists, web content,
+toolbars with icon-only buttons, dialogs, and at least one application that
+exposes nothing so the fallback is exercised.
+
+*Done when:* forty cases, and the wrong-pick count is still zero.
+
+### Phase 2 — Reach
+
+**2.1 MCP.**
+
+Promoted from last place to here. Email, calendar, Slack, GitHub, databases,
+Notion -- those servers exist and other people maintain them. Six integrations
+written by hand buy six integrations; speaking MCP buys the ones that exist now
+and the ones written next year. It is the single decision that closes most of the
+parity gap.
+
+The original reason for deferring it still holds and should be respected rather
+than ignored: a plugin surface over a tool set that is still moving locks in
+shapes that should not be locked. Phase 1 is when the tool set settles.
+
+**It must add no interface.** A hundred new tools, no new panel. Configuration
+lives in a file, not a tab.
+
+*Done when:* an MCP server the project has never heard of can be added to a config
+file and used by voice on the next turn.
+
+**2.2 Boundaries a person can widen.**
+
+The shell allow-list, the workspace, the GET-only fetch. **Not removed** -- every
+one of them is a scar. The shell is read-only because a model reached for `rm` to
+get around a refusal. Files are workspace-bound because the first thing that wrote
+a file put it in this repository's root. One agent owns the cursor because two of
+them sent a voice note to a real person.
+
+Parity means replacing a fixed answer with a decision someone makes:
+
+- **Widening is explicit and visible** -- a setting or a per-task grant, never a
+  longer constant in the source.
+- **The default stays exactly where it is.** Someone who never opens settings
+  keeps today's Nudge, which is right for a thing that listens all day.
 - **What was granted is inspectable.** "It has full shell access" must be
   something you can see, not something you have to remember agreeing to.
 
-That is a different and better answer than either extreme, and it is the only
-version of parity worth having: the general agents are unbounded because nobody
-has done this work, not because it is wrong.
+The general agents are unbounded because nobody has done this work, not because
+it is wrong.
 
-### 2.6 What would make it fail
+*Done when:* a person can grant full shell access on purpose, see that they have,
+and take it back.
 
-Written down so it can be checked rather than discovered.
+**2.3 Real HTTP.**
 
-- ~~**Grounding is not good enough.**~~ **Largely answered, and not by improving
-  the guessing.** The tree gives exact rectangles for anything an application
-  exposes, so the question shrank to *which* control rather than *where* it is.
-  What is left is the gap: applications that expose nothing, where it is still a
-  model looking at a picture and still right about two thirds of the time.
-- **It confidently says things that are not true.** The new one, and the worst
-  one, because it survives every test written so far. Asked when macOS 27 ships,
-  on a machine running macOS 27, after a successful web search, it answered 2036.
-  Neither harness can see that. A fast agent that is wrong is worse than a slow
-  one that is right, and it is the only failure that costs trust rather than
-  seconds.
-- **Too many tools.** A longer menu makes worse choices, and that is measured,
-  not theoretical: this project has watched a model open Messages instead of
-  WhatsApp Web, launch Weather to read a number, and open Terminal to run a
-  command that needs no terminal. Every addition has to earn its line.
-- **The boundaries erode.** Every rule -- workspace, allow-list, one cursor, ask
-  before replacing -- exists because something went wrong without it. "Controls
-  everything" must mean *more* enforcement, not less. A voice note went to a real
-  person the one time two agents shared a cursor.
+`fetch` is a GET with no authentication. Anything that talks to an API needs more,
+and most of the interesting things a person wants automated are behind one.
+
+*Done when:* a request with a method, headers and a body can be made, and refused
+as clearly as the shell refuses.
+
+### Phase 3 — Invisibility
+
+Everything here exists because of §1's end state. None of it is needed while the
+only user wrote the program.
+
+**3.1 Notice what is installed.**
+
+Detect the coding agents, CLIs and tools present, and work with whatever is there
+rather than with a fixed list. Report the absence of something only when it would
+have helped.
+
+**3.2 Ask for what is missing, once.**
+
+In plain language, at the moment it matters: *"I could do that if you install X."*
+Not a setup wizard, not a checklist. The alternative is a person who never
+discovers that their machine is missing the one thing that would have worked.
+
+**3.3 Credentials.**
+
+The unglamorous blocker in the whole vision. A coding agent that is never opened
+still has to be authenticated. Whatever the answer is -- inheriting a session,
+driving a login once through the screen, an explicit hand-off -- it has to exist
+or "install and forget" is not true.
+
+**3.4 Failures that are about the task.**
+
+When the thing underneath breaks, nobody sees it break; they see Nudge fail. A
+CLI's stack trace passed up unedited is a bug report about a program the person
+does not know is running. Errors have to be rewritten into something about what
+they asked for, with the detail still available to anyone who looks.
+
+**3.5 Delegation stops being visible.**
+
+Choosing between agents becomes Nudge's job rather than a choice presented. The
+card reports the plan, the commands and the files -- *what was done* -- and not
+*who did it*.
+
+*Phase 3 is done when:* someone who has never heard of a coding agent can install
+one, forget it, and never be reminded it exists.
+
+### Phase 4 — Learning
+
+**4.1 Memory.**
+
+Per-app notes, written from failure, injected only when that application is in
+front: *"CapCut: the timeline view means a project is open."* Earned once the loop
+is known to work -- memory that records a broken loop's habits is worse than none.
+
+**4.2 Skills, if memory proves out.**
+
+A remembered sequence that worked, replayable by name. The natural extension, and
+the thing every competitor advertises. Deliberately after memory, because a skill
+is a memory that has been promoted.
+
+### Phase 5 — Being usable by anyone else
+
+**5.1 Signing and notarisation.** Developer ID, in CI, before any public link
+exists. Everything above is theoretical until this is done.
+
+**5.2 Discovery.** The cost of §1's shape: an interface that shows nothing teaches
+nothing, and nobody guesses that the thing in the notch can refactor a repository.
+The answer has to live in the voice loop -- *"what can you do?"* answered well, and
+capability surfacing when it is relevant -- rather than in a menu nobody opens.
+The first real blocker on the second user.
+
+**5.3 The resting state.** What is on screen 99% of the time is the pill and the
+cat, and they have had the least attention of anything in the project. If the
+product is the shape, the shape is what needs the work.
+
+### Phase 6 — Elsewhere
+
+**6.1 Windows.** The seam is drawn and the other side is written. Nothing has been
+compiled for the target, because it cannot be from a Mac. Expect a different
+latency profile entirely: a capture is 61ms here through ScreenCaptureKit and a
+hardware encoder, and about 2100ms through the portable path. See
+[PORTING.md](PORTING.md) for which calls to suspect first.
+
+**6.2 Linux.** After Windows. Wayland and X11 handle capture and input injection
+completely differently, so it is two ports wearing one name.
+
+### Running alongside all of it
+
+Not phases, but things that must not be allowed to rot:
+
+- **Prove what is already built.** The four unproven items in §2. The one that
+  matters most is whether an agent knows *not* to delegate a one-line change --
+  the failure nobody notices because it still works.
+- **Nothing reads the diff.** An agent reports what it did and Nudge believes it.
+  `git diff` is one call away and would turn a claim into a check.
+- **Widen the no-model path.** Every phrasing it learns is another turn that costs
+  0.3s instead of 4.5. Cheap and compounding, and safe now that a wrong pick is
+  caught the moment it appears. Typing into a named field and launching apps by
+  name are next.
 
 ---
 
-## 3. What is genuinely broken
+## 5. The safety model, and how it must survive Phase 2
 
-### 3.1 Multi-monitor — built, unverified
+Every rule exists because something went wrong without it:
 
-`capture::grab` takes the display under the pointer, `Shot` records its origin,
-and the overlay spans the union of every screen. The arithmetic is tested,
-including a display above-left with a negative origin.
-
-Untested without the hardware: whether one window really spans two monitors at
-that level. **Do not mark this done until it has run on two screens.**
-
-### 3.2 Not distributable
-
-Not notarised; `spctl` says rejected. The signing identity is pinned to one
-machine's certificate. Nobody else can run this.
-
-*Fix:* Developer ID signing and notarisation in CI, before any public link exists.
-
-### 3.3 Background processes — **done**
-
-`start`, `output` and `kill`. Something that does not finish -- a dev server, a
-build, a watcher, another agent -- is launched and left running, and read from on
-a later turn.
-
-A different boundary from `run`, not a relaxed one. `run` is read-only because a
-model tried `rm` to get around a refusal; this cannot be, because writing is what
-a dev server is for. So the rule changes shape: a short list of what may be
-*started*, rather than a promise about what it does once running. Same syntax
-rules, same workspace, at most four at once.
-
-Everything started is killed when the task ends. A process nobody is watching is
-the whole risk of being able to start one, and a dev server still holding port
-3000 tomorrow would be Nudge's fault.
-
----
-
-## 4. The safety model
-
-Not a section about being careful. A list of rules that are **enforced in Rust**,
-each written after something went wrong.
-
-| Rule | Where | Written because |
-|---|---|---|
-| Never photograph a password manager, or a window whose title names a secret | `core/screen/privacy.rs` | a screenshot of an open `.env` went to a third party during development |
-| Commands are read-only, allow-listed by program, checked per pipeline stage, with shell syntax that chains or redirects refused outright | `core/tools/shell.rs` | asked to replace a file, a model tried `rm` to get around the refusal |
-| Files only inside the workspace; secret-looking paths refused even there | `core/tools/files.rs` | `../../.ssh/authorized_keys` is a path a model can produce |
-| Creating a file is free; replacing one asks, and keeps a copy | `core/tools/files.rs` | permission is not safety -- people say yes to things they misunderstood |
-| One agent owns the cursor; a second is refused, out loud | `core/run/agent.rs` | two agents drove one WhatsApp chat and sent a voice note to a real person |
-| Escape stops everything, checked again immediately before each action | `app/input/cursor.rs` | a stop that waits for the current model call is not a stop |
-
-**The principle:** anything that cannot be undone is guarded in code, not in the
-prompt. Prompt rules were ignored often enough -- three times in one afternoon --
-to stop trusting them with consequences.
-
----
-
-## 5. What to do next
-
-Two things are outstanding. Everything else is a choice rather than a blocker.
-
-### 5.1 The accuracy number — **the question changed**
-
-The screenshot bench measured whether a click lands on the control the model
-named. That was the right question when finding a button meant guessing at
-pixels, and it mostly is not any more: the system reports where the controls are,
-and the job is choosing the right one from a list.
-
-Two things were learned the hard way and both are now written down properly in
-[FINDINGS.md](FINDINGS.md):
-
-**Ten cases cannot measure accuracy.** One hit is thirteen points. Two identical
-runs of the same model scored 50% and 71%. The 29%-against-50% comparison that
-picked the current model is a coin that landed the same way twice. Latency it
-measures well -- six runs at each setting, cleanly separated, no overlap.
-
-**So there is a second harness now**, and it is cheap in the way the first never
-was. `make picks` scores a control list, a goal, and the label that should win --
-no screenshot, no network, milliseconds to run, a sentence to record. Fifteen
-cases, and the awkward ones ("click the thing next to View") are easier to write
-by hand than to stage in front of a real application.
-
-It reports two failures and never averages them, because they are not the same
-kind of mistake:
-
-| | |
+| Rule | What happened |
 |---|---|
-| **fell through** | the model handles it. Four seconds slower, right answer |
-| **WRONG** | clicked something nobody asked for, with nothing watching |
+| Workspace boundary | The first thing that wrote a file put it in this repository's root |
+| Read-only shell, by program | A model reached for `rm` to get around a refusal |
+| One cursor, one agent | Two agents shared a WhatsApp chat and sent a voice note to a real person |
+| Ask before replacing | Self-evident, once |
+| Privacy guard | A password manager is one frontmost window away at all times |
+| Everything started is killed | A dev server still holding port 3000 tomorrow would be Nudge's fault |
 
-Only WRONG exits non-zero. That distinction found a live bug within an hour of
-existing: "click the thing next to View" was clicking View.
-
-**What neither harness can see:** whether the answer is *true*. The same log that
-proved the latency work also has the agent reporting that macOS 27 ships in 2036,
-on a machine running macOS 27, after a successful web search. Nothing here would
-catch that, and it is the failure that costs trust rather than seconds.
-
-### 5.2 Two-display verification
-
-Section F of `results.md`. Needs a second screen -- Sidecar or a virtual display
-will do, and one of the passes should put it **left of** or **above** the main
-one, because that is where the negative origins are.
-
-### 5.3 Then, in order
-
-Latency came off this list today. A turn is 4.5 seconds and everything that is
-not the model accounts for 0.22 of it -- see [SPEED.md](SPEED.md) for what was
-tried, what worked, and the three ideas that were measured and abandoned.
-
-1. ~~**Background processes.**~~ **Done** -- see §3.3.
-2. ~~**Latency.**~~ **Done.** Overhead 6.5s to 0.22s. The screenshot went from
-   1769ms to 61, transcription from 1300ms to 190 and off the network entirely,
-   and "click the View menu" now takes 0.3 seconds because it never reaches the
-   model at all.
-3. **Whether the answers are true.** The one genuinely unmeasured thing, and the
-   only kind of wrong that costs trust rather than time. It needs a harness that
-   scores *answers* rather than clicks, which neither existing one does.
-4. **Widen the no-model path.** Every phrasing it learns is another turn that
-   costs 0.3s instead of 4.5. Cheap, compounding, and now safe to do because
-   `picks` catches a wrong match the moment it appears. Typing into a named
-   field and launching apps by name are the next two.
-5. **Orchestrating an external agent — built, not yet proven.**
-
-   Nudge finds which coding agents are on the machine, knows the name people
-   call each one by, and knows how to run it unattended. The job goes through
-   `start`, so it runs in the same workspace, its output is read a piece at a
-   time, its exit code is reported, and it is killed when the task ends.
-
-   Verified by execution rather than memory, which mattered: two of the three
-   invocations written from memory were wrong, and both failed in the way that
-   looks like nothing happening. `claude -p` alone stops dead the first time it
-   wants to edit a file, and `agy -p --mode ...` swallows the next flag as its
-   prompt, runs, exits zero and does nothing that was asked.
-
-   **What is left, and why it is parked rather than finished:**
-
-   - **No end-to-end run yet.** Section I of `results.md` has the four tests. The
-     one that matters most is I4 -- whether it knows *not* to delegate a one-line
-     change, which is the failure nobody notices because it still works.
-   - **`opencode` and `aider` are unverified.** Not installed here, so their forms
-     come from documentation. Marked as such in the code.
-   - **Nothing reads the diff.** The agent reports what it did and Nudge believes
-     it. `git diff` is one `run` away and would turn a claim into a check.
-6. **MCP, for parity.** Promoted from last place. It was going to be the
-   extensibility story once the tool set settled; it is now the cheapest route to
-   §2.4, because email, calendar, Slack, GitHub and the rest already exist as
-   servers someone else maintains. Six integrations written by hand buy six
-   integrations. Speaking MCP buys every one that exists and every one written
-   next year.
-
-   The original reason for deferring it still stands and is worth holding to: a
-   plugin surface over a tool set that is still moving locks in shapes that should
-   not be locked. So the internal tools want to settle first -- but "settle" is
-   now weeks away rather than a phase.
-
-7. **The boundaries, made adjustable.** The shell allow-list, the workspace, the
-   GET-only fetch. Not removed -- see §2.4 for why every one of them is a scar --
-   but turned from a constant in the source into something a person can widen on
-   purpose, visibly, with today's behaviour as the default.
-
-8. **Invisible setup.** What §2.2 needs and does not have: noticing what is
-   installed, working with whatever is there, and asking for the rest once, in
-   plain language, when it would help. Includes the unglamorous half --
-   authenticating a coding agent that its owner never opens.
-
-9. **Failures that are about the task.** Also from §2.2. When the thing underneath
-   breaks, nobody sees it break; they see Nudge fail. A CLI's stack trace passed
-   up unedited is a bug report about a program the person does not know is
-   running.
-
-10. **Discovery.** The cost of §1's shape: an interface that shows nothing teaches
-   nothing, and nobody guesses that the thing in the notch can refactor a
-   repository. The answer has to live in the voice loop rather than in a menu --
-   *"what can you do?"* answered well, and capability surfacing when it is
-   relevant. Not urgent while there is one user who wrote it; the first real
-   blocker on the second one.
-
-11. **Memory.** Per-app notes, written from failure, injected only when that app is
-   in front: *"CapCut: the timeline view means a project is open."* Earned once
-   the loop is known to work -- memory that records a broken loop's habits is
-   worse than none.
-12. **Signing and notarisation**, before anyone else can run it.
-13. **Windows, when there are Windows users.** The platform seam is drawn and the
-   other side of it is written -- `xcap`, `enigo`, `device_query`,
-   `active-win-pos-rs`, and a UI Automation tree -- but none of it has ever been
-   compiled for the target, because it cannot be from a Mac. See
-   [PORTING.md](PORTING.md) for what is done, what is missing, and which calls to
-   suspect first. Expect a very different latency profile: a capture is 61ms here
-   through ScreenCaptureKit and a hardware encoder, and about 2100ms through the
-   portable path.
-
-
-### Deliberately not doing
-
-- `glob` and `grep` as separate tools -- `run` covers both, and three ways to do
-  one thing is worse than one.
-- `apply_patch` -- exists for git workflows across a repo; `edit` covers the need.
-- Deleting files. Small value, no undo, and `.nudge-backups` cannot save a file
-  that is gone. If it ever arrives it moves things to the Trash.
-- Writing outside the workspace. That boundary is what makes the rest acceptable.
+**"Controls everything" has to mean more enforcement, not less.** Phase 2 widens
+what is possible; it must widen what is *recorded* by the same amount. The test
+for any new reach: can the person see afterwards what was done with it?
 
 ---
 
-## 6. Debt marked in the code
+## 6. How we will know
 
-Every deliberate shortcut carries a `ponytail:` comment naming its ceiling and the
-upgrade path. `grep -rn "ponytail:" src-tauri/src` is the live ledger.
+Four instruments. Each answers one question and none answers another's.
 
-| Where | Ceiling | Upgrade |
+| | Question | State |
 |---|---|---|
-| `core/screen/capture.rs` | deprecated `CGWindowListCreateImageFromArray` | ScreenCaptureKit, when Apple removes it |
-| `core/voice/transcribe.rs` | speech-to-text over the network | `SFSpeechRecognizer`, on-device -- also removes a round trip |
-| `core/screen/facts.rs` | audio is device-wide, so another app's chime reads as playing | per-process attribution needs an audio tap, a permission prompt and a thread |
-| `app/input/cursor.rs` | 60Hz cursor and button poll | drop to 30Hz if battery complains |
-| `core/screen/launch.rs` | flat scan of application directories | `mdfind` if apps are missed |
-| `core/run/session.rs` | one session, so a subagent carries its own history instead | a real multi-session store, when something needs two at once |
+| `make picks` | Does it choose the control you meant? | 15 cases, offline, instant. Wrong picks reported separately from fall-throughs and never averaged |
+| `make bench` | Can a model find a control in a picture? | 10 cases. Good for latency, too small for accuracy, and measures the surface the tree replaced |
+| the timing line | Where did this turn's time go? | Every turn, every stage |
+| `cargo run --example captime` | What does looking at the screen cost? | On demand |
+
+**Missing, and Phase 1.1:** does it tell the truth?
+
+Two lessons from building these, worth keeping:
+
+- **Ten cases cannot measure accuracy.** One hit is thirteen points; two identical
+  runs scored 50% and 71%. Latency the same harness measures well.
+- **Verify the instrument before trusting the result.** A domain check silently
+  started answering "taken" for everything after a rate limit. A benchmark that
+  cannot fail is not measuring anything.
 
 ---
 
-## 7. What this document used to say
+## 7. Deliberately not doing
 
-It was written to compare Nudge against a similar product, feature by feature.
-That framing is gone, for two reasons.
+- **A window.** Ever. See §1.
+- **Streaming the model's reply.** Measured four times: the first chunk arrives at
+  6.26s of a 6.36s call, because it thinks throughout and then emits in 0.15s.
+  Worth 2%.
+- **A running capture stream.** Would remove 56ms of a 61ms capture and cost
+  continuous screen recording.
+- **A workflow scripting engine.** Parallel delegation already exists and is
+  bounded by the cursor, not the design. The one useful idea from it -- verify
+  before asserting -- is Phase 1.2 and needs no engine.
+- **Trading accuracy for speed.** Measured once, properly: 29% against 50%. A fast
+  wrong click costs more than a slow right one, and it costs it in trust.
+- **Feature parity with any specific competitor.** Parity with what a *general
+  agent can do* is §4 Phase 2. Parity with a product is the losing side of every
+  fight.
 
-**Feature parity is the losing side of every fight.** They ship faster in their
-own codebase, they have users telling them what is broken, and their audience is
-not clonable. "Same but mine" is not a reason for anyone to switch.
+---
 
-**And the interesting part turned out to be elsewhere.** The things that actually
-moved this project were not on anyone's feature list: preferring a keyboard
-shortcut to a menu because menus cannot be clicked reliably; resolving key codes
-through the layout in use because not every keyboard is QWERTY; waiting for the
-screen to stop moving instead of guessing at a delay; asking the system whether
-audio is playing instead of asking a model to look at a still frame.
+## 8. Debt, marked in the code
 
-None of those are features. They are the difference between something that works
-and something that demos.
+Searchable with `ponytail:`. The ones that matter:
 
-The running log of what each test run taught is in [FINDINGS.md](FINDINGS.md),
-and the test passes themselves are in [results.md](results.md).
+- **`CGWindowListCreateImageFromArray`** is still the fallback under
+  ScreenCaptureKit. Fine, and it should stay: the fast path needs macOS 14 and a
+  current screen-recording grant.
+- **The JPEG encode** is now the largest part of taking a screenshot -- about 180ms
+  of a 296ms capture through the slow path. Only worth touching if capture matters
+  again.
+- **`done` is filled by tools that never touch the screen**, so the turn after a
+  `read` still waits for the screen to settle. Knowing which steps move the screen
+  is the fix, and the safe direction is to assume they all do.
+- **Audio is the whole output device.** Another application's notification chime
+  reads as audio playing. Per-process attribution needs a tap on the stream.
+- **The no-model path is English-only.** The verbs and the relational words are
+  English strings. A language boundary, not an OS one, and it will follow to every
+  platform.
+
+---
+
+## 9. What this document used to say
+
+It began as a plan for a companion that pointed at buttons, and most of it was
+about keeping up with a similar product. That product has since moved to a full
+window with a sidebar and a roster, which is the shape everything else in the
+category has. The framing is gone and so is the comparison.
+
+It was rewritten again when the speed work finished and the accessibility tree
+replaced guessing at pixels, because a plan that describes a solved problem as the
+next one is worse than no plan.
+
+This version is the first one written from a finished vision backwards, rather
+than from the current code forwards.
