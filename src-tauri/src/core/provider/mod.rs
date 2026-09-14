@@ -1307,6 +1307,12 @@ mod tests {
         // Guessing at an app that is not installed is the failure this prevents.
         let p = prompt(&ask("open something", &[], false));
         assert!(p.contains("Applications this machine can launch"));
+
+        // Only against the real macOS lookup. Under `portable` this machine runs
+        // the code written for everywhere else, which looks where Linux keeps its
+        // applications and correctly finds nothing on a Mac -- a combination that
+        // exists only in this test run.
+        #[cfg(not(feature = "portable"))]
         assert!(
             p.contains("Safari"),
             "a Mac always has Safari; got a short list?"

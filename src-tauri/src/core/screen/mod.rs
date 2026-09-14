@@ -27,21 +27,21 @@ pub mod ax;
 pub mod capture;
 #[cfg(target_os = "macos")]
 pub mod fast;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "portable")))]
 pub mod click;
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "portable"))]
 #[path = "elsewhere/click.rs"]
 pub mod click;
 pub mod facts;
 pub mod haptics;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "portable")))]
 pub mod keyboard;
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "portable"))]
 #[path = "elsewhere/keyboard.rs"]
 pub mod keyboard;
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "portable")))]
 pub mod launch;
-#[cfg(not(target_os = "macos"))]
+#[cfg(any(not(target_os = "macos"), feature = "portable"))]
 #[path = "elsewhere/launch.rs"]
 pub mod launch;
 pub mod privacy;

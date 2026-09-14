@@ -83,7 +83,7 @@ pub fn frontmost() -> Option<(String, String)> {
 ///
 /// Layer 0 only: menus, the Dock and our own overlay live above it, and the
 /// window list is already in front-to-back order.
-#[cfg(target_os = "macos")]
+#[cfg(all(target_os = "macos", not(feature = "portable")))]
 pub fn frontmost_window() -> Option<(i32, String, String)> {
     use core_foundation::base::{CFType, TCFType};
     use core_foundation::dictionary::CFDictionary;
@@ -133,9 +133,16 @@ pub fn frontmost_window() -> Option<(i32, String, String)> {
     None
 }
 
-#[cfg(not(target_os = "macos"))]
+/// The frontmost window, anywhere.
+///
+/// Not a nicety. [`blocked_by`] is given what this returns, so a platform where
+/// this answers `None` is a platform where the privacy guard never fires and
+/// every password manager gets photographed. It is the first thing a port must
+/// make work, before anything that takes a picture.
+#[cfg(any(not(target_os = "macos"), feature = "portable"))]
 pub fn frontmost_window() -> Option<(i32, String, String)> {
-    None
+    let w = active_win_pos_rs::get_active_window().ok()?;
+    Some((w.process_id as i32, w.app_name, w.title))
 }
 
 #[cfg(test)]

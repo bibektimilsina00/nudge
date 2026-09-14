@@ -230,6 +230,42 @@ fn capture_png(
     None
 }
 
+/// One frame, through a crate that works on every platform.
+///
+/// Picks the display the pointer is on, the same as the macOS path, because a
+/// coordinate is only meaningful once you know which screen it came from.
+#[cfg(any(not(target_os = "macos"), feature = "portable"))]
+fn portable(max_edge: u32, origin: (f64, f64), logical: (f64, f64)) -> Option<Shot> {
+    let monitors = xcap::Monitor::all().ok()?;
+    let here = monitors
+        .iter()
+        .find(|m| {
+            let (x, y) = (m.x().unwrap_or(0) as f64, m.y().unwrap_or(0) as f64);
+            (x - origin.0).abs() < 1.0 && (y - origin.1).abs() < 1.0
+        })
+        .or_else(|| monitors.first())?;
+
+    let shot = here.capture_image().ok()?;
+    let img = image::DynamicImage::ImageRgba8(shot);
+    let img = if img.width().max(img.height()) > max_edge {
+        img.resize(max_edge, max_edge, image::imageops::FilterType::Triangle)
+    } else {
+        img
+    };
+    let mut bytes = Vec::new();
+    img.write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
+        &mut Cursor::new(&mut bytes),
+        QUALITY,
+    ))
+    .ok()?;
+    Some(Shot {
+        bytes,
+        sent: (img.width(), img.height()),
+        logical,
+        origin,
+    })
+}
+
 /// Capture whichever display the pointer is on.
 ///
 /// The geometry is read per capture rather than once at startup. It used to be
@@ -238,6 +274,15 @@ fn capture_png(
 /// silently wrong until Nudge was restarted.
 pub fn grab(max_edge: u32) -> Result<Shot> {
     let (origin, logical, id) = active_display();
+
+    // Anywhere else, one cross-platform crate. Slower than what follows -- it
+    // has no equivalent of handing a CGImage straight to a hardware encoder --
+    // but a port that cannot see the screen cannot do anything at all, and none
+    // of the numbers measured on macOS transfer regardless.
+    #[cfg(any(not(target_os = "macos"), feature = "portable"))]
+    if let Some(shot) = portable(max_edge, origin, logical) {
+        return Ok(shot);
+    }
 
     // ScreenCaptureKit and the system's own JPEG encoder, which between them do
     // in 60ms what the code below does in 1769 -- see `fast`. The pixels never

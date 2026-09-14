@@ -15,6 +15,10 @@ name = "probe"
 path = "src/bin/probe.rs"
 
 [[example]]
+name = "portable"
+path = "examples/portable.rs"
+
+[[example]]
 name = "jpegtime"
 path = "examples/jpegtime.rs"
 
@@ -45,14 +49,24 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 [build-dependencies]
 tauri-build = { version = "2", features = [] }
 
+[features]
+# Compile the cross-platform implementations even on macOS, so they can be built
+# and run on the machine doing the porting. Without this the `elsewhere/` code is
+# never compiled here, and code that is never compiled is code that does not work.
+portable = []
+
 [dependencies]
+active-win-pos-rs = "0.11.0"
 async-trait = "0.1.92"
 base64 = "0.23.1"
 cpal = "0.17.3"
+device_query = "4.0.1"
 dirs = "7.0.0"
 dom_smoothie = "0.18.1"
+enigo = "0.3.0"
 hound = "3.5.1"
 image = { version = "0.25.6", default-features = false, features = ["jpeg", "png"] }
+open = "5.4.4"
 reqwest = { version = "0.13.3", default-features = false, features = ["json", "rustls", "charset", "http2"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.151"
@@ -61,6 +75,7 @@ tauri-plugin-global-shortcut = "2.3.2"
 thiserror = "2.0.20"
 tokio = { version = "1.53.1", features = ["time"] }
 toml = "1.0.7"
+xcap = "0.9.8"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6.2"
