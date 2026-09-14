@@ -258,24 +258,32 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
       aria-pressed={docked}
       className="flex h-[30px] items-center gap-2 rounded-full bg-raised pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
     >
-      {/* The empty spot is the cat, faded -- not a circle it might fit into.
-          A round socket described the hole rather than what was missing, and
-          the one thing the button has to say is *which* thing is out. Greyed
-          and dimmed, it reads as an outline of where it sits; at full colour it
-          reads as still being there. */}
-      <span className="grid size-[24px] shrink-0 place-items-center">
+      {/* A socket, carved rather than drawn.
+          The inner shadow is what makes it read as a dimple in the surface
+          instead of a dark disc printed on it -- so the cat sits *in* something,
+          and the empty one is a place rather than a circle. It deepens when empty,
+          because a hole with nothing in it is the state worth noticing. */}
+      <span
+        className={[
+          "grid size-[24px] shrink-0 place-items-center overflow-hidden rounded-full",
+          "transition-[box-shadow,background-color] duration-300",
+          docked
+            ? "bg-black/35 shadow-[inset_0_1px_2px_rgba(0,0,0,0.55)]"
+            : "bg-black/45 shadow-[inset_0_2px_4px_rgba(0,0,0,0.75),inset_0_0_0_1px_rgba(255,255,255,0.07)]",
+        ].join(" ")}
+      >
         <span
           className={[
-            "block transition-[transform,opacity,filter] duration-300",
+            "block transition-[transform,opacity] duration-300",
             docked
-              ? "scale-[0.42] opacity-100 [filter:grayscale(0)] ease-[cubic-bezier(0.34,1.4,0.44,1)]"
-              : "scale-[0.38] opacity-[0.28] [filter:grayscale(1)] ease-[cubic-bezier(0.4,0,1,1)]",
+              ? "scale-[0.42] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
+              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
           ].join(" ")}
         >
           <Companion mode="idle" anchored />
         </span>
       </span>
-      {docked ? "Let Nudge out" : "Call Nudge back"}
+      {docked ? "Release" : "Call back"}
     </button>
   );
 }
