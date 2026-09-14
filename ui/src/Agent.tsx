@@ -284,8 +284,8 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
     <div className="w-full">
       <div
         className={[
-          "rounded-[8px] bg-[#141824] p-3.5 text-white backdrop-blur-xl",
-          "inset-ring-1 inset-ring-white/[0.12]",
+          "rounded-[8px] bg-hover p-3.5 text-white backdrop-blur-xl",
+          "on-glass",
           agent.state === "running"
             ? "shadow-[0_8px_28px_rgba(10,132,255,0.35)]"
             : "shadow-[0_8px_28px_rgba(0,0,0,0.5)]",
@@ -387,7 +387,7 @@ function Question({ id, question }: { id: number; question: string }) {
         onChange={(e) => setText(e.target.value)}
         placeholder="Type your answer…"
         spellCheck={false}
-        className="mt-2 w-full rounded-[6px] bg-black/40 px-2.5 py-1.5 text-[11.5px] text-white outline-none inset-ring-1 inset-ring-white/[0.12] placeholder:text-white/25 focus:inset-ring-[#0a84ff]"
+        className="mt-2 w-full rounded-[6px] bg-black/40 px-2.5 py-1.5 text-[11.5px] text-white outline-none on-glass placeholder:text-white/25 focus:inset-ring-1 focus:inset-ring-[#0a84ff]"
       />
     </form>
   );

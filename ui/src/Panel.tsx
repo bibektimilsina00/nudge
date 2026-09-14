@@ -218,7 +218,7 @@ export default function Panel() {
               <button
                 onClick={() => openIntegrations("home")}
                 aria-label="Browse integrations"
-                className="flex h-[30px] flex-1 items-center rounded-[6px] bg-raised px-1.5 text-left transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
+                className="flex h-[30px] flex-1 items-center rounded-[6px] bg-raised px-1.5 text-left transition-colors duration-150 hover:bg-hover on-glass"
               >
                 <span className="grid size-[22px] place-items-center rounded-[5px] bg-white/[0.11] text-[13px] font-light text-white/60">
                   +
@@ -228,7 +228,7 @@ export default function Panel() {
 
               <Perch docked={docked} onToggle={() => dock(!docked)} />
 
-              <button className="grid size-[30px] place-items-center rounded-[6px] bg-raised text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 inset-ring-1 inset-ring-hair">
+              <button className="grid size-[30px] place-items-center rounded-[6px] bg-raised text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 on-glass">
                 i
               </button>
             </div>
@@ -256,7 +256,7 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
     <button
       onClick={onToggle}
       aria-pressed={docked}
-      className="flex h-[30px] items-center gap-2 rounded-[6px] bg-raised pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
+      className="flex h-[30px] items-center gap-2 rounded-[6px] bg-raised pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-hover on-glass"
     >
       {/* A socket, carved rather than drawn.
           The inner shadow is what makes it read as a dimple in the surface
@@ -343,7 +343,7 @@ function Tab({
 /** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
 function Key({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-[5px] bg-raised px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-white/65 inset-ring-1 inset-ring-hair">
+    <kbd className="rounded-[5px] bg-raised px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-white/65 on-glass">
       {children}
     </kbd>
   );

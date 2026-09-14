@@ -83,7 +83,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
         <button
           onClick={onBack}
           aria-label="Back"
-          className="grid size-[21px] shrink-0 place-items-center rounded-[6px] bg-[#1e1e1e] text-white/70 transition-colors duration-150 hover:bg-[#262626] hover:text-white"
+          className="grid size-[21px] shrink-0 place-items-center rounded-[6px] bg-raised text-white/70 transition-colors duration-150 hover:bg-hover hover:text-white"
         >
           <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M9.5 3.5 5 8l4.5 4.5" />
@@ -93,7 +93,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
       </header>
 
       <div className="px-3.5 pb-2.5">
-        <div className="flex h-[30px] items-center gap-2 rounded-[6px] bg-[#1e1e1e] px-2.5 inset-ring-1 inset-ring-white/[0.09]">
+        <div className="flex h-[30px] items-center gap-2 rounded-[6px] bg-raised px-2.5 on-glass">
           <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-white/35" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
             <circle cx="7.2" cy="7.2" r="4.2" />
             <path d="m10.4 10.4 2.6 2.6" />
@@ -122,7 +122,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
 
 function Card({ service }: { service: Service }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-[6px] bg-[#1e1e1e] p-2.5 inset-ring-1 inset-ring-white/[0.09]">
+    <div className="flex items-start gap-2.5 rounded-[6px] bg-raised p-2.5 on-glass">
       <span
         className="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-bold"
         style={{
