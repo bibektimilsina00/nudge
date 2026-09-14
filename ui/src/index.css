@@ -1,7 +1,15 @@
 @import "tailwindcss";
 
 @theme {
-  --color-accent: #ff2d55;
+  --color-accent: #7c6cff;
+
+  /* A layered surface rather than flat black. Three steps is enough to separate
+     the rail from the content from a pressed row, and few enough that nothing
+     has to be remembered. */
+  --color-ink: #0c0c10;
+  --color-raised: #15151b;
+  --color-hover: #1d1d25;
+  --color-hair: rgba(255, 255, 255, 0.07);
 
   /* The pill's bottom corners.
    *

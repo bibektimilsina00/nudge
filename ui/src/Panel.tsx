@@ -38,10 +38,10 @@ const SHORTCUTS: [string, string[]][] = [
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[238px]",
-  agents: "h-[320px]",
-  settings: "h-[640px]",
-  integrations: "h-[640px]",
+  home: "h-[276px]",
+  agents: "h-[330px]",
+  settings: "h-[560px]",
+  integrations: "h-[560px]",
 } as const;
 
 export default function Panel() {
@@ -105,29 +105,17 @@ export default function Panel() {
     <div className="flex w-full justify-center">
       <div
         className={[
-          "overflow-hidden bg-black text-white select-none",
-          // The busy pill is a strip in the menu bar, not a panel: a big radius
-          // on something 34px tall reads as a lozenge stuck to the notch.
-          // Matching the notch exactly is what makes the pill read as part of the
-          // hardware. The open panel is far bigger than the notch and carries a
-          // slightly larger radius, or 12px on a 500px sheet looks like a mistake.
-          open ? "rounded-b-[20px]" : "notch-corner",
-          // No shadow while open. The panel is black on a dark menu bar, so the
-          // drop shadow never read as depth -- it read as a grey smear along the
-          // bottom edge. The resting pill keeps a faint one so it separates from
-          // the wallpaper behind the menu bar.
+          "overflow-hidden bg-ink text-white select-none",
+          // The closed pill still matches the notch exactly -- that illusion is
+          // the product's one piece of hardware theatre and is worth keeping.
+          // Everything below it is new.
+          open ? "rounded-b-[18px] inset-ring-1 inset-ring-hair" : "notch-corner",
           open ? "" : "shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
-          // One curve for both dimensions, so it unfolds rather than growing in
-          // two directions at slightly different rates.
           "transition-[width,height] duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           open
-            ? `${HEIGHT[view]} w-[540px]`
+            ? `${HEIGHT[view]} w-[520px]`
             : busy
-              // Both pills are the notch's own height, so the strip reads as the
-              // hardware getting wider rather than as a bar hanging below it.
               ? "h-(--notch-h) w-[300px]"
-              // At rest it holds only the companion, so it needs to be barely
-              // wider than the notch rather than a bar parked across the menu bar.
               : "h-(--notch-h) w-[220px]",
         ].join(" ")}
       >
@@ -135,106 +123,71 @@ export default function Panel() {
 
         <div
           className={[
-            "flex flex-col transition-opacity duration-200",
+            "flex transition-opacity duration-200",
             HEIGHT[view],
             open ? "opacity-100 delay-150" : "pointer-events-none opacity-0",
           ].join(" ")}
         >
-          <header className="flex items-center gap-1.5 px-3 pt-2.5">
-            <Tab active={view === "home"} icon={<Home />} onClick={() => setView("home")}>
-              Home
-            </Tab>
-            <Tab active={view === "agents"} icon={<Sparkle />} onClick={() => setView("agents")}>
-              Agents
-            </Tab>
-            <span className="flex-1" />
-            <button
-              // Settings toggles against wherever you were, rather than always
-              // dumping you on Home when you leave it.
+          {/* The rail.
+              Tabs across the top put the middle of the header behind the notch,
+              which is why the old one had to be 540px wide to keep them clear of
+              it. Down the side, nothing is ever behind the notch and the width is
+              free to be whatever the content wants. */}
+          <nav className="flex w-[54px] shrink-0 flex-col items-center gap-1 border-r border-hair pt-2.5 pb-2">
+            <Rail active={view === "home"} label="Home" onClick={() => setView("home")}>
+              <Home />
+            </Rail>
+            <Rail active={view === "agents"} label="Agents" onClick={() => setView("agents")}>
+              <Sparkle />
+            </Rail>
+            <Rail
+              active={view === "settings" || view === "integrations"}
+              label="Settings"
               onClick={() => setView((v) => (v === "settings" ? "home" : "settings"))}
-              aria-label="Settings"
-              aria-pressed={view === "settings"}
-              // Same height as the tabs beside it, so the header reads as one row
-              // rather than a row with something floating in it -- and a 30px
-              // target instead of a 15px glyph with padding round it.
-              className={[
-                "grid size-[26px] shrink-0 place-items-center rounded-full",
-                "transition-colors duration-150",
-                view === "settings"
-                  ? "bg-[#2e2e2e] text-white"
-                  : "text-white/45 hover:bg-[#1e1e1e] hover:text-white/80",
-              ].join(" ")}
             >
               <Gear />
-            </button>
-          </header>
+            </Rail>
 
-          {view === "agents" ? (
-            <Agents />
-          ) : view === "integrations" ? (
-            <Integrations onBack={() => setView(cameFrom)} />
-          ) : view === "settings" ? (
-            <Settings
-              docked={docked}
-              onDock={dock}
-              onIntegrations={() => openIntegrations("settings")}
-            />
-          ) : (
-          <>
-          <div className="grid flex-1 grid-cols-[1fr_auto] gap-4 px-3.5 pt-1.5">
-            <section>
-              <h2 className="text-[13.5px] font-semibold tracking-tight">Add skills</h2>
-              <p className="mt-0.5 text-[10.5px] text-white/40">
-                Skills give Nudge superpowers
-              </p>
-              <button className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-[#272727] text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-[#303030]">
-                +
-              </button>
-            </section>
+            <span className="flex-1" />
 
-            <section className="w-[214px]">
-              <h3 className="mb-1.5 text-[10.5px] text-white/45">⌘ Shortcuts</h3>
-              <dl className="space-y-[6px]">
-                {SHORTCUTS.map(([name, keys]) => (
-                  <div key={name} className="flex items-center justify-between gap-2">
-                    <dt className="truncate text-[10.5px] text-white/45">{name}</dt>
-                    <dd className="flex shrink-0 gap-1">
-                      {keys.map((k) => (
-                        <Key key={k}>{k}</Key>
-                      ))}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          </div>
+            {/* The companion's perch, at the foot of the rail. It used to sit in a
+                row of three buttons on Home, where it read as a setting. Here it
+                reads as where the cat lives. */}
+            <Perch docked={docked} onToggle={() => dock(!docked)} />
+          </nav>
 
-          <div className="px-3.5 pb-3">
-            <p className="mb-1.5 text-[10.5px] text-white/40">Integrations</p>
-            <div className="flex items-center gap-2">
-              {/* The whole field opens the browser, not just the little square --
-                  a 26px target inside a 34px row that looks pressable is a
-                  needlessly small thing to hit. */}
-              <button
-                onClick={() => openIntegrations("home")}
-                aria-label="Browse integrations"
-                className="flex h-[30px] flex-1 items-center rounded-[10px] bg-[#1e1e1e] px-1.5 text-left transition-colors duration-150 hover:bg-[#262626] inset-ring-1 inset-ring-white/[0.09]"
-              >
-                <span className="grid size-[22px] place-items-center rounded-md bg-white/[0.11] text-[13px] font-light text-white/60">
-                  +
-                </span>
-                <span className="ml-2 text-[11px] text-white/35">Add an integration</span>
-              </button>
-
-              <Perch docked={docked} onToggle={() => dock(!docked)} />
-
-              <button className="grid size-[30px] place-items-center rounded-[10px] bg-[#1e1e1e] text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 inset-ring-1 inset-ring-white/[0.09]">
-                i
-              </button>
+          <div className="flex min-w-0 flex-1 flex-col">
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              {view === "agents" ? (
+                <Agents />
+              ) : view === "integrations" ? (
+                <Integrations onBack={() => setView(cameFrom)} />
+              ) : view === "settings" ? (
+                <Settings
+                  docked={docked}
+                  onDock={dock}
+                  onIntegrations={() => openIntegrations("settings")}
+                />
+              ) : (
+                <HomeView onIntegrations={() => openIntegrations("home")} />
+              )}
             </div>
+
+            {/* The footer.
+                Raycast's idea and a good one: the keys live in the chrome rather
+                than in a panel you have to navigate to, so they are there while
+                you are doing the thing rather than only while you are reading
+                about it. It also gives the window a bottom edge, which a floating
+                list of sections never had. */}
+            <footer className="flex h-[30px] shrink-0 items-center gap-2 border-t border-hair px-3 text-[10px] text-white/35">
+              <span className="text-white/50">Hold</span>
+              <Key>⌃ control</Key>
+              <span>to talk</span>
+              <span className="flex-1" />
+              <Key>esc</Key>
+              <span>stop</span>
+            </footer>
           </div>
-          </>
-          )}
         </div>
       </div>
     </div>
@@ -242,51 +195,12 @@ export default function Panel() {
 }
 
 /**
- * The companion's perch: a socket it sits in when parked, and leaps out of when
- * released.
+ * Home, as one list.
  *
- * A button that *is* the thing's home reads better than one labelled "Undock
- * Cursor" -- you can see where it went. The companion cannot literally fly between
- * two windows, so the illusion is scale: releasing it grows and fades it out of the
- * socket, calling it back drops it in from larger with a small overshoot, like
- * something landing.
- */
-function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) {
-  return (
-    <button
-      onClick={onToggle}
-      aria-pressed={docked}
-      className="flex h-[30px] items-center gap-2 rounded-full bg-[#1e1e1e] pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-[#262626] inset-ring-1 inset-ring-white/[0.09]"
-    >
-      <span
-        className={[
-          "grid size-[24px] shrink-0 place-items-center rounded-full overflow-hidden",
-          "transition-colors duration-300",
-          // Empty, the socket still reads as a spot something belongs in.
-          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "block transition-[transform,opacity] duration-300",
-            docked
-              ? "scale-[0.42] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
-              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
-          ].join(" ")}
-        >
-          <Companion mode="idle" anchored />
-        </span>
-      </span>
-      {docked ? "Let Nudge out" : "Call Nudge back"}
-    </button>
-  );
-}
-
-/**
- * Collapsed state: what sits in the notch.
- *
- * No label -- the point of living in the notch is reading as part of the hardware,
- * and a word beside the Apple menu reads as an app announcing itself.
+ * It was a two-column grid with a heading, a big square button and a shortcut
+ * table -- three different shapes competing in 238px. A single column of rows
+ * reads in one pass, and every row is the same target, which matters more than it
+ * sounds when the window is this small.
  */
 function Pill({ open }: { open: boolean }) {
   return (
@@ -309,35 +223,157 @@ function Pill({ open }: { open: boolean }) {
   );
 }
 
-function Tab({
-  active = false,
+function HomeView({ onIntegrations }: { onIntegrations: () => void }) {
+  return (
+    <div className="px-2.5 py-2.5">
+      <ul className="space-y-px">
+        <Item icon="+" label="Add a skill" note="Power-ups that attach to Nudge" />
+        <Item icon="◇" label="Browse integrations" note="Connect the apps you use" onClick={onIntegrations} />
+        <Item icon="✦" label="What's new" note="Recent changes" />
+      </ul>
+
+      <h2 className="mt-3 mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
+        Shortcuts
+      </h2>
+      <dl className="space-y-px">
+        {SHORTCUTS.map(([name, keys]) => (
+          <div
+            key={name}
+            className="flex items-center gap-2 rounded-lg px-1.5 py-[5px]"
+          >
+            <dt className="truncate text-[11px] text-white/55">{name}</dt>
+            <span className="h-px flex-1 bg-hair" />
+            <dd className="flex shrink-0 gap-1">
+              {keys.map((k) => (
+                <Key key={k}>{k}</Key>
+              ))}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
+  );
+}
+
+/** One row of the home list. */
+function Item({
   icon,
-  children,
+  label,
+  note,
   onClick,
 }: {
-  active?: boolean;
-  icon: ReactNode;
-  children: ReactNode;
+  icon: string;
+  label: string;
+  note: string;
+  onClick?: () => void;
+}) {
+  return (
+    <li>
+      <button
+        onClick={onClick}
+        className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-[7px] text-left transition-colors duration-150 hover:bg-hover"
+      >
+        <span className="grid size-[26px] shrink-0 place-items-center rounded-md bg-raised text-[12px] text-white/55 inset-ring-1 inset-ring-hair">
+          {icon}
+        </span>
+        <span className="min-w-0 flex-1">
+          <span className="block truncate text-[11.5px] font-medium">{label}</span>
+          <span className="block truncate text-[10px] text-white/35">{note}</span>
+        </span>
+        <span className="shrink-0 text-[10px] text-white/20">›</span>
+      </button>
+    </li>
+  );
+}
+
+/**
+ * One stop on the rail.
+ *
+ * The active mark is a bar on the edge rather than a filled pill. A filled tab
+ * says "this is a button that is on"; a bar in the margin says "you are here",
+ * which is what a rail is for.
+ */
+function Rail({
+  active,
+  label,
+  onClick,
+  children,
+}: {
+  active: boolean;
+  label: string;
   onClick: () => void;
+  children: ReactNode;
 }) {
   return (
     <button
       onClick={onClick}
+      aria-label={label}
+      aria-pressed={active}
+      title={label}
       className={[
-        "flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px] transition-colors duration-150",
-        active ? "bg-[#2e2e2e] text-white" : "text-white/40 hover:text-white/65",
+        "group relative grid size-[34px] place-items-center rounded-[10px]",
+        "transition-colors duration-150",
+        active ? "bg-raised text-white" : "text-white/35 hover:bg-hover hover:text-white/70",
       ].join(" ")}
     >
-      {icon}
+      <span
+        aria-hidden
+        className={[
+          "absolute -left-[9px] w-[2px] rounded-full bg-accent",
+          "transition-all duration-200 ease-[cubic-bezier(0.23,1,0.32,1)]",
+          active ? "h-[15px] opacity-100" : "h-0 opacity-0",
+        ].join(" ")}
+      />
       {children}
     </button>
   );
 }
 
-/** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
+/**
+ * The companion's perch: a socket it sits in when parked, and leaps out of when
+ * released.
+ *
+ * A button that *is* the thing's home reads better than one labelled "Undock
+ * Cursor" -- you can see where it went. The companion cannot literally fly between
+ * two windows, so the illusion is scale: releasing it grows and fades it out of the
+ * socket, calling it back drops it in from larger with a small overshoot, like
+ * something landing.
+ */
+function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-pressed={docked}
+      aria-label={docked ? "Let Nudge out" : "Call Nudge back"}
+      title={docked ? "Let Nudge out" : "Call Nudge back"}
+      className="grid size-[34px] place-items-center rounded-[10px] transition-colors duration-150 hover:bg-hover"
+    >
+      <span
+        className={[
+          "grid size-[26px] shrink-0 place-items-center overflow-hidden rounded-full",
+          "transition-colors duration-300",
+          // Empty, the socket still reads as a spot something belongs in.
+          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "block transition-[transform,opacity] duration-300",
+            docked
+              ? "scale-[0.46] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
+              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
+          ].join(" ")}
+        >
+          <Companion mode="idle" anchored />
+        </span>
+      </span>
+    </button>
+  );
+}
+
 function Key({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-[5px] bg-[#262626] px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-white/65 inset-ring-1 inset-ring-white/[0.08]">
+    <kbd className="rounded-[4px] bg-raised px-[5px] py-[2px] font-mono text-[9px] leading-none whitespace-nowrap text-white/60 inset-ring-1 inset-ring-hair">
       {children}
     </kbd>
   );

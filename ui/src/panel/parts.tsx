@@ -1,13 +1,22 @@
 import type { ReactNode } from "react";
 
-/** A labelled group of rows, with the small uppercase heading above it. */
+/**
+ * A labelled group of rows.
+ *
+ * One container with hairlines between the rows, rather than a stack of
+ * separately floating cards. A card says "this is its own object"; rows in a
+ * group say "these belong together and you read them downward", which is what a
+ * settings list actually is. It is also quieter: one border instead of six.
+ */
 export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="pt-4 first:pt-2">
-      <h2 className="mb-1.5 pl-1 text-[10px] font-medium tracking-[0.08em] text-white/35 uppercase">
+    <section className="pt-3.5 first:pt-1.5">
+      <h2 className="mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
         {title}
       </h2>
-      <div className="space-y-2">{children}</div>
+      <div className="divide-y divide-hair overflow-hidden rounded-[10px] bg-raised inset-ring-1 inset-ring-hair">
+        {children}
+      </div>
     </section>
   );
 }
@@ -45,19 +54,20 @@ export function Row({
     <Tag
       onClick={onClick}
       className={[
-        "flex w-full items-center gap-2.5 rounded-xl bg-[#1e1e1e] px-2.5 text-left",
-        "inset-ring-1 inset-ring-white/[0.09]",
-        compact ? "h-[38px]" : sub ? "py-2" : "h-[40px]",
-        onClick ? "transition-colors duration-150 hover:bg-[#262626]" : "",
+        // Flat: the group around it carries the surface, so a row only has to
+        // carry its own hover.
+        "flex w-full items-center gap-2.5 px-2.5 text-left",
+        compact ? "h-[34px]" : sub ? "py-[7px]" : "h-[36px]",
+        onClick ? "transition-colors duration-150 hover:bg-hover" : "",
         danger ? "text-[#ff5f57]" : "",
       ].join(" ")}
     >
       {icon && <span className={danger ? "text-[#ff5f57]" : "text-white/45"}>{icon}</span>}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-[12px]">{label}</span>
+          <span className="truncate text-[11.5px]">{label}</span>
           {badge && (
-            <span className="rounded bg-accent px-1 py-px text-[8.5px] font-bold tracking-wide text-black">
+            <span className="rounded bg-accent px-1 py-px text-[8.5px] font-bold tracking-wide text-white">
               {badge}
             </span>
           )}
