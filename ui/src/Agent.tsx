@@ -249,12 +249,13 @@ function Tile({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
           className="absolute inset-0 rounded-[11px] motion-safe:animate-halo"
         />
       )}
-      <svg viewBox="0 0 24 24" className="relative size-[15px]" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-        <rect x="4" y="7" width="16" height="12" rx="3.5" />
-        <path d="M12 7V4" />
-        <circle cx="9.2" cy="13" r="1.1" fill="currentColor" stroke="none" />
-        <circle cx="14.8" cy="13" r="1.1" fill="currentColor" stroke="none" />
-      </svg>
+      {/* The tile is what is on screen almost all the time -- the card is
+          collapsed unless someone opens it -- so this is where being visibly
+          alive actually counts. It was a drawing of a robot, which looks the
+          same whether the agent is working or has been dead for a minute. */}
+      <div className="relative size-[26px]">
+        <Face state={agent.state} step={agent.step} />
+      </div>
       {agent.state === "waiting" && (
         <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-[#e8b027] ring-2 ring-black/60" />
       )}
