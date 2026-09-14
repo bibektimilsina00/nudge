@@ -22,6 +22,12 @@ import { Settings } from "./panel/Settings";
  * display. Only the bottom corners are rounded, because the illusion is that the
  * notch got wider.
  */
+const SHORTCUTS: [string, string[]][] = [
+  ["Talk", ["⌃ control", "⇧ shift", "space"]],
+  ["Next step", ["tap", "⌃⇧ space"]],
+  ["Type", ["tap", "then type"]],
+  ["Stop", ["esc"]],
+];
 
 /**
  * Each view gets the height it needs; the pill is a separate case.
@@ -32,18 +38,17 @@ import { Settings } from "./panel/Settings";
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[262px]",
-  agents: "h-[362px]",
-  settings: "h-[592px]",
-  integrations: "h-[592px]",
-  shortcuts: "h-[300px]",
+  home: "h-[238px]",
+  agents: "h-[320px]",
+  settings: "h-[640px]",
+  integrations: "h-[640px]",
 } as const;
 
 export default function Panel() {
   const [open, setOpen] = useState(false);
   // Three places to be, so a name rather than a pile of booleans that can all be
   // true at once.
-  const [view, setView] = useState<"home" | "agents" | "settings" | "integrations" | "shortcuts">("home");
+  const [view, setView] = useState<"home" | "agents" | "settings" | "integrations">("home");
   // Integrations opens from two places, so "back" has to mean the one you left
   // rather than a fixed destination -- entering from Home and landing in Settings
   // is the kind of small wrongness that makes a panel feel untrustworthy.
@@ -101,19 +106,28 @@ export default function Panel() {
       <div
         className={[
           "overflow-hidden text-white select-none",
-          // Glass when open, solid black when closed.
-          //
-          // The pill is pretending to be the notch, and the notch is a hole in a
-          // screen -- translucent it would read as a smudge on the bezel. Open,
-          // it is a panel floating over your desktop, which is exactly what the
-          // system's own material is for.
-          open ? "glass bg-ink rounded-b-[18px]" : "notch-corner bg-black",
+          // The busy pill is a strip in the menu bar, not a panel: a big radius
+          // on something 34px tall reads as a lozenge stuck to the notch.
+          // Matching the notch exactly is what makes the pill read as part of the
+          // hardware. The open panel is far bigger than the notch and carries a
+          // slightly larger radius, or 12px on a 500px sheet looks like a mistake.
+          open ? "glass bg-ink rounded-b-[20px]" : "notch-corner bg-black",
+          // No shadow while open. The panel is black on a dark menu bar, so the
+          // drop shadow never read as depth -- it read as a grey smear along the
+          // bottom edge. The resting pill keeps a faint one so it separates from
+          // the wallpaper behind the menu bar.
           open ? "" : "shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
+          // One curve for both dimensions, so it unfolds rather than growing in
+          // two directions at slightly different rates.
           "transition-[width,height] duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           open
-            ? `${HEIGHT[view]} w-[520px]`
+            ? `${HEIGHT[view]} w-[540px]`
             : busy
+              // Both pills are the notch's own height, so the strip reads as the
+              // hardware getting wider rather than as a bar hanging below it.
               ? "h-(--notch-h) w-[300px]"
+              // At rest it holds only the companion, so it needs to be barely
+              // wider than the notch rather than a bar parked across the menu bar.
               : "h-(--notch-h) w-[220px]",
         ].join(" ")}
       >
@@ -121,72 +135,106 @@ export default function Panel() {
 
         <div
           className={[
-            "flex transition-opacity duration-200",
+            "flex flex-col transition-opacity duration-200",
             HEIGHT[view],
             open ? "opacity-100 delay-150" : "pointer-events-none opacity-0",
           ].join(" ")}
         >
-          {/* The rail.
-              Tabs across the top put the middle of the header behind the notch,
-              which is why the old one had to be 540px wide to keep them clear of
-              it. Down the side, nothing is ever behind the notch and the width is
-              free to be whatever the content wants. */}
-          <nav className="flex w-[54px] shrink-0 flex-col items-center gap-1 border-r border-hair pt-2.5 pb-2">
-            <Rail active={view === "home"} label="Home" onClick={() => setView("home")}>
-              <Home />
-            </Rail>
-            <Rail active={view === "agents"} label="Agents" onClick={() => setView("agents")}>
-              <Sparkle />
-            </Rail>
-            <Rail
-              active={view === "settings" || view === "integrations"}
-              label="Settings"
+          <header className="flex items-center gap-1.5 px-3 pt-2.5">
+            <Tab active={view === "home"} icon={<Home />} onClick={() => setView("home")}>
+              Home
+            </Tab>
+            <Tab active={view === "agents"} icon={<Sparkle />} onClick={() => setView("agents")}>
+              Agents
+            </Tab>
+            <span className="flex-1" />
+            <button
+              // Settings toggles against wherever you were, rather than always
+              // dumping you on Home when you leave it.
               onClick={() => setView((v) => (v === "settings" ? "home" : "settings"))}
+              aria-label="Settings"
+              aria-pressed={view === "settings"}
+              // Same height as the tabs beside it, so the header reads as one row
+              // rather than a row with something floating in it -- and a 30px
+              // target instead of a 15px glyph with padding round it.
+              className={[
+                "grid size-[26px] shrink-0 place-items-center rounded-full",
+                "transition-colors duration-150",
+                view === "settings"
+                  ? "bg-hover text-white"
+                  : "text-white/45 hover:bg-raised hover:text-white/80",
+              ].join(" ")}
             >
               <Gear />
-            </Rail>
+            </button>
+          </header>
 
-            <span className="flex-1" />
+          {view === "agents" ? (
+            <Agents />
+          ) : view === "integrations" ? (
+            <Integrations onBack={() => setView(cameFrom)} />
+          ) : view === "settings" ? (
+            <Settings
+              docked={docked}
+              onDock={dock}
+              onIntegrations={() => openIntegrations("settings")}
+            />
+          ) : (
+          <>
+          <div className="grid flex-1 grid-cols-[1fr_auto] gap-4 px-3.5 pt-1.5">
+            <section>
+              <h2 className="text-[13.5px] font-semibold tracking-tight">Add skills</h2>
+              <p className="mt-0.5 text-[10.5px] text-white/40">
+                Skills give Nudge superpowers
+              </p>
+              <button className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-hover text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-hover">
+                +
+              </button>
+            </section>
 
-            {/* The companion's perch, at the foot of the rail. It used to sit in a
-                row of three buttons on Home, where it read as a setting. Here it
-                reads as where the cat lives. */}
-            <Perch docked={docked} onToggle={() => dock(!docked)} />
-          </nav>
-
-          <div className="flex min-w-0 flex-1 flex-col">
-            {/* Clear of the notch.
-                The panel is centred on it, so a band across the middle of the top
-                edge is behind real hardware -- anything drawn there is invisible,
-                and worse, silently invisible. The rail is far enough left to be
-                safe; the content is not, so it starts below the notch entirely.
-                One line, and no view has to think about it. */}
-            <div className="h-(--notch-h) shrink-0" aria-hidden />
-
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              {view === "agents" ? (
-                <Agents />
-              ) : view === "shortcuts" ? (
-                <Shortcuts onBack={() => setView("settings")} />
-              ) : view === "integrations" ? (
-                <Integrations onBack={() => setView(cameFrom)} />
-              ) : view === "settings" ? (
-                <Settings
-                  docked={docked}
-                  onDock={dock}
-                  onIntegrations={() => openIntegrations("settings")}
-                  onShortcuts={() => setView("shortcuts")}
-                />
-              ) : (
-                <HomeView
-                  status={status}
-                  onIntegrations={() => openIntegrations("home")}
-                  onAgents={() => setView("agents")}
-                />
-              )}
-            </div>
-
+            <section className="w-[214px]">
+              <h3 className="mb-1.5 text-[10.5px] text-white/45">⌘ Shortcuts</h3>
+              <dl className="space-y-[6px]">
+                {SHORTCUTS.map(([name, keys]) => (
+                  <div key={name} className="flex items-center justify-between gap-2">
+                    <dt className="truncate text-[10.5px] text-white/45">{name}</dt>
+                    <dd className="flex shrink-0 gap-1">
+                      {keys.map((k) => (
+                        <Key key={k}>{k}</Key>
+                      ))}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
           </div>
+
+          <div className="px-3.5 pb-3">
+            <p className="mb-1.5 text-[10.5px] text-white/40">Integrations</p>
+            <div className="flex items-center gap-2">
+              {/* The whole field opens the browser, not just the little square --
+                  a 26px target inside a 34px row that looks pressable is a
+                  needlessly small thing to hit. */}
+              <button
+                onClick={() => openIntegrations("home")}
+                aria-label="Browse integrations"
+                className="flex h-[30px] flex-1 items-center rounded-[10px] bg-raised px-1.5 text-left transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
+              >
+                <span className="grid size-[22px] place-items-center rounded-md bg-white/[0.11] text-[13px] font-light text-white/60">
+                  +
+                </span>
+                <span className="ml-2 text-[11px] text-white/35">Add an integration</span>
+              </button>
+
+              <Perch docked={docked} onToggle={() => dock(!docked)} />
+
+              <button className="grid size-[30px] place-items-center rounded-[10px] bg-raised text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 inset-ring-1 inset-ring-hair">
+                i
+              </button>
+            </div>
+          </div>
+          </>
+          )}
         </div>
       </div>
     </div>
@@ -194,12 +242,51 @@ export default function Panel() {
 }
 
 /**
- * Home, as one list.
+ * The companion's perch: a socket it sits in when parked, and leaps out of when
+ * released.
  *
- * It was a two-column grid with a heading, a big square button and a shortcut
- * table -- three different shapes competing in 238px. A single column of rows
- * reads in one pass, and every row is the same target, which matters more than it
- * sounds when the window is this small.
+ * A button that *is* the thing's home reads better than one labelled "Undock
+ * Cursor" -- you can see where it went. The companion cannot literally fly between
+ * two windows, so the illusion is scale: releasing it grows and fades it out of the
+ * socket, calling it back drops it in from larger with a small overshoot, like
+ * something landing.
+ */
+function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-pressed={docked}
+      className="flex h-[30px] items-center gap-2 rounded-full bg-raised pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-hover inset-ring-1 inset-ring-hair"
+    >
+      <span
+        className={[
+          "grid size-[24px] shrink-0 place-items-center rounded-full overflow-hidden",
+          "transition-colors duration-300",
+          // Empty, the socket still reads as a spot something belongs in.
+          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "block transition-[transform,opacity] duration-300",
+            docked
+              ? "scale-[0.42] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
+              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
+          ].join(" ")}
+        >
+          <Companion mode="idle" anchored />
+        </span>
+      </span>
+      {docked ? "Let Nudge out" : "Call Nudge back"}
+    </button>
+  );
+}
+
+/**
+ * Collapsed state: what sits in the notch.
+ *
+ * No label -- the point of living in the notch is reading as part of the hardware,
+ * and a word beside the Apple menu reads as an app announcing itself.
  */
 function Pill({ open }: { open: boolean }) {
   return (
@@ -222,224 +309,35 @@ function Pill({ open }: { open: boolean }) {
   );
 }
 
-/**
- * Home.
- *
- * It was a list of links -- add a skill, what's new -- which is a menu, and a menu
- * is what you open when you already know what you want. The first thing in the
- * panel should answer the two questions someone actually has on opening it: is
- * this working, and what do I say?
- *
- * So it leads with the state, then with the sentence you are supposed to speak.
- * The links are still here, underneath, where second things go.
- */
-function HomeView({
-  status,
-  onIntegrations,
-  onAgents,
-}: {
-  status: Status;
-  onIntegrations: () => void;
-  onAgents: () => void;
-}) {
-  const said = STATE[status];
-  return (
-    <div className="px-3 py-2.5">
-      {/* Two lines about how things are and what to say, then out of the way. It
-          is worth saying once and is not worth half the panel. */}
-      <div className="flex items-baseline gap-2 px-1">
-        <span className="flex items-center gap-1.5">
-          <span aria-hidden className={`size-[5px] shrink-0 rounded-full ${said.dot}`} />
-          <span className="text-[9.5px] font-medium tracking-[0.08em] text-white/45 uppercase">
-            {said.label}
-          </span>
-        </span>
-      </div>
-      <p className="mt-1 px-1 text-[12.5px] leading-snug font-semibold tracking-tight">
-        Hold <Key big>⌃ control</Key> and say what you want.
-      </p>
-
-      <ul className="mt-3 on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
-        <Item
-          icon={<Sparkle />}
-          label="Agents"
-          note="Tasks Nudge is carrying out"
-          onClick={onAgents}
-        />
-        <Item icon={<Bolt />} label="Skills" note="Power-ups that attach to Nudge" />
-        <Item
-          icon={<Grid />}
-          label="Integrations"
-          note="Connect the apps you already use"
-          onClick={onIntegrations}
-        />
-        <Item icon={<Clock />} label="What's new" note="Recent changes" />
-      </ul>
-    </div>
-  );
-}
-
-/**
- * Shortcuts, behind the menu item that always promised them.
- *
- * They were a table on Home, where they are reference material sitting in the
- * one place that should be about getting started. You look these up once, or
- * when you have forgotten one -- which is what a menu item is for.
- */
-function Shortcuts({ onBack }: { onBack: () => void }) {
-  return (
-    <div className="px-3 py-2.5">
-      <div className="mb-2 flex items-center gap-1.5">
-        <button
-          onClick={onBack}
-          aria-label="Back"
-          className="grid size-[22px] place-items-center rounded-md text-white/45 transition-colors duration-150 hover:bg-hover hover:text-white"
-        >
-          <span className="text-[13px] leading-none">‹</span>
-        </button>
-        <h2 className="text-[12.5px] font-semibold tracking-tight">Shortcuts</h2>
-      </div>
-      <dl className="on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
-        {SHORTCUTS.map(([name, keys]) => (
-          <div key={name} className="flex h-[34px] items-center gap-2 px-2.5">
-            <dt className="min-w-0 flex-1 truncate text-[11px] text-white/65">{name}</dt>
-            <dd className="flex shrink-0 gap-1">
-              {keys.map((k) => (
-                <Key key={k}>{k}</Key>
-              ))}
-            </dd>
-          </div>
-        ))}
-      </dl>
-    </div>
-  );
-}
-
-const SHORTCUTS: [string, string[]][] = [
-  ["Talk", ["⌃ control", "⇧ shift", "space"]],
-  ["Next step", ["tap", "⌃⇧ space"]],
-  ["Type", ["tap", "then type"]],
-  ["Stop", ["esc"]],
-];
-
-
-/** One option on the home list. */
-function Item({
+function Tab({
+  active = false,
   icon,
-  label,
-  note,
-  onClick,
-}: {
-  icon: ReactNode;
-  label: string;
-  note: string;
-  onClick?: () => void;
-}) {
-  return (
-    <li>
-      <button
-        onClick={onClick}
-        className="flex w-full items-center gap-2.5 px-2.5 py-[7px] text-left transition-colors duration-150 hover:bg-hover"
-      >
-        <span className="shrink-0 text-white/45">{icon}</span>
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-[11.5px] font-medium">{label}</span>
-          <span className="block truncate text-[10px] text-white/35">{note}</span>
-        </span>
-        <span className="shrink-0 text-[11px] text-white/20">›</span>
-      </button>
-    </li>
-  );
-}
-
-/** How things are, in a word. */
-const STATE: Record<Status, { label: string; dot: string }> = {
-  idle: { label: "Ready", dot: "bg-[#30d158]" },
-  listening: { label: "Listening", dot: "bg-[#0a84ff] motion-safe:animate-pulse" },
-  thinking: { label: "Thinking", dot: "bg-[#ff9f0a] motion-safe:animate-pulse" },
-  speaking: { label: "Speaking", dot: "bg-[#0a84ff]" },
-  agent: { label: "Working", dot: "bg-[#0a84ff] motion-safe:animate-pulse" },
-  asking: { label: "Needs you", dot: "bg-[#e8b027]" },
-};
-
-function Rail({
-  active,
-  label,
-  onClick,
   children,
+  onClick,
 }: {
-  active: boolean;
-  label: string;
-  onClick: () => void;
+  active?: boolean;
+  icon: ReactNode;
   children: ReactNode;
+  onClick: () => void;
 }) {
   return (
     <button
       onClick={onClick}
-      aria-label={label}
-      aria-pressed={active}
-      title={label}
       className={[
-        "group relative grid size-[34px] place-items-center rounded-[10px]",
-        "transition-colors duration-150",
-        active ? "bg-raised text-white" : "text-white/35 hover:bg-hover hover:text-white/70",
+        "flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px] transition-colors duration-150",
+        active ? "bg-hover text-white" : "text-white/40 hover:text-white/65",
       ].join(" ")}
     >
+      {icon}
       {children}
     </button>
   );
 }
 
-/**
- * The companion's perch: a socket it sits in when parked, and leaps out of when
- * released.
- *
- * A button that *is* the thing's home reads better than one labelled "Undock
- * Cursor" -- you can see where it went. The companion cannot literally fly between
- * two windows, so the illusion is scale: releasing it grows and fades it out of the
- * socket, calling it back drops it in from larger with a small overshoot, like
- * something landing.
- */
-function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) {
+/** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
+function Key({ children }: { children: ReactNode }) {
   return (
-    <button
-      onClick={onToggle}
-      aria-pressed={docked}
-      aria-label={docked ? "Let Nudge out" : "Call Nudge back"}
-      title={docked ? "Let Nudge out" : "Call Nudge back"}
-      className="grid size-[34px] place-items-center rounded-[10px] transition-colors duration-150 hover:bg-hover"
-    >
-      <span
-        className={[
-          "grid size-[26px] shrink-0 place-items-center overflow-hidden rounded-full",
-          "transition-colors duration-300",
-          // Empty, the socket still reads as a spot something belongs in.
-          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "block transition-[transform,opacity] duration-300",
-            docked
-              ? "scale-[0.46] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
-              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
-          ].join(" ")}
-        >
-          <Companion mode="idle" anchored />
-        </span>
-      </span>
-    </button>
-  );
-}
-
-function Key({ children, big }: { children: ReactNode; big?: boolean }) {
-  return (
-    <kbd
-      className={[
-        "on-glass rounded-[4px] bg-raised font-mono leading-none whitespace-nowrap",
-        big ? "px-[6px] py-[3px] text-[12px] text-white/85" : "px-[5px] py-[2px] text-[9px] text-white/60",
-      ].join(" ")}
-    >
+    <kbd className="rounded-[5px] bg-raised px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-white/65 inset-ring-1 inset-ring-hair">
       {children}
     </kbd>
   );
@@ -461,15 +359,10 @@ function Home() {
   );
 }
 
-/** An agent: a head with an antenna and two eyes. A sparkle meant "something
- *  clever happens here", which is what every icon in every product means. */
 function Sparkle() {
   return (
-    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
-      <rect x="2.6" y="5.2" width="10.8" height="8" rx="2.4" />
-      <path d="M8 5.2V2.8" />
-      <circle cx="6" cy="9.2" r="0.9" fill="currentColor" stroke="none" />
-      <circle cx="10" cy="9.2" r="0.9" fill="currentColor" stroke="none" />
+    <svg viewBox="0 0 16 16" className="size-3" {...stroke}>
+      <path d="M8 2.2 9.3 6 13 7.3 9.3 8.6 8 12.4 6.7 8.6 3 7.3 6.7 6Z" />
     </svg>
   );
 }
@@ -484,34 +377,6 @@ function Gear() {
     <svg viewBox="0 0 24 24" className="size-[15px]" {...stroke} strokeWidth={1.8}>
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
-    </svg>
-  );
-}
-
-function Bolt() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
-      <path d="M8.8 2 4 9h3.4l-.6 5L12 7H8.4Z" />
-    </svg>
-  );
-}
-
-function Grid() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
-      <rect x="2.6" y="2.6" width="4.6" height="4.6" rx="1.3" />
-      <rect x="8.8" y="2.6" width="4.6" height="4.6" rx="1.3" />
-      <rect x="2.6" y="8.8" width="4.6" height="4.6" rx="1.3" />
-      <rect x="8.8" y="8.8" width="4.6" height="4.6" rx="1.3" />
-    </svg>
-  );
-}
-
-function Clock() {
-  return (
-    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
-      <circle cx="8" cy="8" r="5.6" />
-      <path d="M8 4.8V8l2.2 1.6" />
     </svg>
   );
 }

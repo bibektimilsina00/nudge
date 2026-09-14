@@ -1,44 +1,13 @@
 import type { ReactNode } from "react";
 
-/**
- * A labelled group of rows.
- *
- * One container with hairlines between the rows, rather than a stack of
- * separately floating cards. A card says "this is its own object"; rows in a
- * group say "these belong together and you read them downward", which is what a
- * settings list actually is. It is also quieter: one border instead of six.
- */
-export function Section({
-  title,
-  columns,
-  children,
-}: {
-  title: string;
-  /** Side by side, each its own card, rather than joined into one list.
-   *
-   *  For rows that are peers rather than a sequence -- Discord and GitHub are two
-   *  places to go, not step one and step two. Joined into a list they became one
-   *  object with a slot cut through it, which is what the gap in a grid looks
-   *  like once the grid is inside a card. */
-  columns?: boolean;
-  children: ReactNode;
-}) {
+/** A labelled group of rows, with the small uppercase heading above it. */
+export function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
-    <section className="pt-3.5 first:pt-1.5">
-      <h2 className="mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
+    <section className="pt-4 first:pt-2">
+      <h2 className="mb-1.5 pl-1 text-[10px] font-medium tracking-[0.08em] text-white/35 uppercase">
         {title}
       </h2>
-      {columns ? (
-        // The card treatment moves onto each child, so the space between them is
-        // background rather than a hole cut through one card.
-        <div className="grid grid-cols-2 gap-1.5 [&>*]:on-glass [&>*]:overflow-hidden [&>*]:rounded-[10px] [&>*]:bg-raised">
-          {children}
-        </div>
-      ) : (
-        <div className="on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
-          {children}
-        </div>
-      )}
+      <div className="space-y-2">{children}</div>
     </section>
   );
 }
@@ -76,10 +45,9 @@ export function Row({
     <Tag
       onClick={onClick}
       className={[
-        // Flat: the group around it carries the surface, so a row only has to
-        // carry its own hover.
-        "flex w-full items-center gap-2.5 px-2.5 text-left",
-        compact ? "h-[34px]" : sub ? "py-[7px]" : "h-[36px]",
+        "flex w-full items-center gap-2.5 rounded-xl bg-raised px-2.5 text-left",
+        "on-glass",
+        compact ? "h-[38px]" : sub ? "py-2" : "h-[40px]",
         onClick ? "transition-colors duration-150 hover:bg-hover" : "",
         danger ? "text-[#ff5f57]" : "",
       ].join(" ")}
@@ -87,7 +55,7 @@ export function Row({
       {icon && <span className={danger ? "text-[#ff5f57]" : "text-white/45"}>{icon}</span>}
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-1.5">
-          <span className="truncate text-[11.5px]">{label}</span>
+          <span className="truncate text-[12px]">{label}</span>
           {badge && (
             <span className="rounded bg-accent px-1 py-px text-[8.5px] font-bold tracking-wide text-white">
               {badge}

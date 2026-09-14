@@ -24,12 +24,10 @@ export function Settings({
   docked,
   onDock,
   onIntegrations,
-  onShortcuts,
 }: {
   docked: boolean;
   onDock: (v: boolean) => void;
   onIntegrations: () => void;
-  onShortcuts: () => void;
 }) {
   const [voice, setVoice] = useState<VoiceMode>("system");
   const [mic, setMic] = useState("…");
@@ -45,16 +43,20 @@ export function Settings({
 
   return (
     <div className="flex-1 overflow-y-auto px-3 pb-3">
-      <Section title="Community" columns>
-        <Row compact icon={<I.Dot className="bg-[#5865f2]" />} label="Discord" />
-        <Row compact icon={<I.Dot className="bg-white/70" />} label="GitHub" />
+      <Section title="Community">
+        <div className="grid grid-cols-2 gap-2">
+          <Row compact icon={<I.Dot className="bg-[#5865f2]" />} label="Discord" />
+          <Row compact icon={<I.Dot className="bg-white/70" />} label="GitHub" />
+        </div>
       </Section>
 
-      <Section title="Support & updates" columns>
-        <Row compact icon={<I.Bulb />} label="Request a feature" />
-        <Row compact icon={<I.Bug />} label="Report a bug" />
-        <Row compact icon={<I.Refresh />} label="Check for updates" />
-        <Row compact icon={<I.Spark />} label="What's new" />
+      <Section title="Support & updates">
+        <div className="grid grid-cols-2 gap-2">
+          <Row compact icon={<I.Bulb />} label="Request a feature" />
+          <Row compact icon={<I.Bug />} label="Report a bug" />
+          <Row compact icon={<I.Refresh />} label="Check for updates" />
+          <Row compact icon={<I.Spark />} label="What's new" />
+        </div>
       </Section>
 
       <Section title="Connections">
@@ -71,7 +73,7 @@ export function Settings({
 
       <Section title="Customization">
         <Row icon={<I.TextIcon />} label="Dictation" badge="NEW" value="Automatic" chevron />
-        <Row icon={<I.Keyboard />} label="Shortcuts" sub="Every key Nudge listens for" chevron onClick={onShortcuts} />
+        <Row icon={<I.Keyboard />} label="Shortcuts" sub="Every key Nudge listens for" chevron />
         {/* Wired. */}
         <Row
           icon={<I.Arrow />}
