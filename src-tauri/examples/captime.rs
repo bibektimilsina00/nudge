@@ -24,24 +24,24 @@ fn main() {
         println!("  grab({edge:<4})            {:>7.0}ms", median(runs));
     }
 
-    // Where it goes. Not where anyone assumed: the resize and the JPEG were
-    // tuned carefully and are a tenth of it.
-    let t = Instant::now();
-    let full = nudge_lib::core::screen::capture::grab(1280).expect("grab");
-    let whole = t.elapsed().as_secs_f32() * 1000.0;
-
-    let t = Instant::now();
-    let img = image::load_from_memory(&full.bytes).expect("decode");
-    let mut out = Vec::new();
-    img.resize(240, 240, image::imageops::FilterType::Triangle)
-        .write_with_encoder(image::codecs::jpeg::JpegEncoder::new_with_quality(
-            &mut std::io::Cursor::new(&mut out),
-            60,
-        ))
-        .expect("encode");
-    let reencode = t.elapsed().as_secs_f32() * 1000.0;
-    println!("\n  resize + encode         {reencode:>7.0}ms");
-    println!("  compositing             {:>7.0}ms  <- everything else", whole - reencode);
+    // The bytes have to survive the trip. `fingerprint` decodes them on every
+    // turn to decide whether the screen has stopped changing, so a JPEG that is
+    // the right size and unreadable would break the loop quietly.
+    let shot = nudge_lib::core::screen::capture::grab(1280).expect("grab");
+    let decoded = image::load_from_memory(&shot.bytes).expect("the JPEG does not decode");
+    let grey = decoded.to_luma8();
+    let mean = grey.as_raw().iter().map(|p| *p as f64).sum::<f64>() / grey.as_raw().len() as f64;
+    let sd = (grey.as_raw().iter().map(|p| (*p as f64 - mean).powi(2)).sum::<f64>()
+        / grey.as_raw().len() as f64)
+        .sqrt();
+    println!(
+        "\n  {}x{}, {}KB, mean {mean:.0}, sd {sd:.0}{}",
+        decoded.width(),
+        decoded.height(),
+        shot.bytes.len() / 1024,
+        if sd > 5.0 { "" } else { "   <- FLAT, composited nothing" }
+    );
+    assert_eq!((decoded.width(), decoded.height()), shot.sent, "what we sent is not what we said we sent");
 
     let t = Instant::now();
     let f = nudge_lib::core::screen::facts::gather();

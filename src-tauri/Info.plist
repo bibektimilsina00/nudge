@@ -6,6 +6,8 @@
        activation policy is applied in setup(). -->
   <key>LSUIElement</key>
   <true/>
+  <key>NSSpeechRecognitionUsageDescription</key>
+  <string>Nudge turns what you say into words on this Mac, so nothing has to be uploaded to be understood.</string>
   <key>NSMicrophoneUsageDescription</key>
   <string>Nudge listens while you hold the hotkey, so you can ask for help out loud.</string>
 </dict>

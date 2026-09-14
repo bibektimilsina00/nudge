@@ -961,3 +961,46 @@ And a test that passed for the wrong reason, caught by reading it rather than
 running it: a minimum label length of three characters was silently excluding
 "OK" and "No", which are the shortest things anyone actually says, while the
 comment above it claimed they survived.
+
+## The screenshot again: 1769ms to 61ms
+
+After ScreenCaptureKit took compositing from 1529ms to 86ms, the largest part of
+taking a screenshot was no longer taking it. It was the JPEG.
+
+| | ours | the system's |
+|---|---|---|
+| composite + convert pixels | 192ms | 56ms |
+| encode | **167ms** | **4ms** |
+
+Forty times quicker, and the conversion disappears with it: ScreenCaptureKit
+hands over a `CGImage`, ImageIO accepts a `CGImage`, so on this path **the pixels
+never pass through Rust at all**. No byte-order loop, no intermediate buffer, no
+second copy.
+
+```
+  grab(640)    54ms
+  grab(1280)   57ms      <- the live setting, from 1769ms
+  grab(1920)   58ms
+```
+
+Size barely registers any more; it is one hardware operation whatever the
+dimensions.
+
+### On running a capture stream instead
+
+The plan had `SCStream` for this row -- keep a session running so a frame is
+always in hand, which is what the product we measured against does. It is now
+the wrong thing to build. A stream removes the *compositing*, which is 56ms of a
+61ms capture; it does nothing about the encode, which was the actual cost. And it
+buys that by capturing the screen continuously: CPU and GPU all the time, battery
+while nobody is asking for anything, and a privacy story that is hard to tell
+about an app whose pitch includes refusing to photograph password managers.
+
+**Asking for one frame when one is wanted is now cheaper than keeping one warm.**
+
+### Checked
+
+The bytes have to survive: `fingerprint` decodes them every turn to decide
+whether the screen has stopped changing, so a JPEG that was the right size and
+unreadable would break the loop quietly. It decodes, the dimensions match what we
+claim to have sent, and the brightness has a real spread rather than being flat.

@@ -80,6 +80,62 @@ fn rgb(img: &objc2_core_graphics::CGImage) -> Option<(u32, u32, Vec<u8>)> {
 /// handler that never fires. The caller falls back to the old path, which is
 /// slow and works.
 pub fn grab(display_id: u32, max_edge: u32, exclude_pid: i32) -> Option<image::DynamicImage> {
+    let f = frame(display_id, max_edge, exclude_pid)?;
+    let (w, h, pixels) = rgb(&f)?;
+    image::RgbImage::from_raw(w, h, pixels).map(image::DynamicImage::ImageRgb8)
+}
+
+/// A frame, already a JPEG, without the pixels ever passing through Rust.
+///
+/// The encode used to be the largest part of taking a screenshot -- 167ms in our
+/// own encoder, against 4ms in the system's. ImageIO hands the work to hardware
+/// that exists for this, and because ScreenCaptureKit gives us a `CGImage` it can
+/// be passed straight along: no byte-order conversion, no intermediate buffer, no
+/// second copy. 359ms of work becomes 60.
+///
+/// `None` if any part of it declines, and the caller falls back to doing it the
+/// slow way.
+pub fn jpeg(
+    display_id: u32,
+    max_edge: u32,
+    exclude_pid: i32,
+    quality: f64,
+) -> Option<(Vec<u8>, u32, u32)> {
+    use objc2_core_foundation::{CFDictionary, CFMutableData, CFNumber, CFString, CFType};
+    use objc2_core_graphics::CGImage;
+    use objc2_image_io::{
+        kCGImageDestinationLossyCompressionQuality, CGImageDestinationAddImage,
+        CGImageDestinationCreateWithData, CGImageDestinationFinalize,
+    };
+
+    let frame = frame(display_id, max_edge, exclude_pid)?;
+    let (w, h) = (CGImage::width(Some(&frame)), CGImage::height(Some(&frame)));
+
+    let data = CFMutableData::new(None, 0)?;
+    let kind = CFString::from_static_str("public.jpeg");
+    let dest = unsafe { CGImageDestinationCreateWithData(&data, &kind, 1, None) }?;
+    let q = CFNumber::new_f64(quality);
+    let props = CFDictionary::from_slices(
+        &[unsafe { kCGImageDestinationLossyCompressionQuality }],
+        &[q.as_ref() as &CFType],
+    );
+    unsafe { CGImageDestinationAddImage(&dest, &frame, Some(props.as_opaque())) };
+    if !unsafe { CGImageDestinationFinalize(&dest) } {
+        return None;
+    }
+    Some((data.to_vec(), w as u32, h as u32))
+}
+
+/// The frame itself, before anyone has turned it into anything.
+///
+/// Separate from [`grab`] because the encoder may want it as it is: it arrives
+/// as a `CGImage`, and handing that straight to the system's own JPEG encoder
+/// skips both our pixel conversion and our encoder.
+pub fn frame(
+    display_id: u32,
+    max_edge: u32,
+    exclude_pid: i32,
+) -> Option<objc2_core_foundation::CFRetained<objc2_core_graphics::CGImage>> {
     let content = shareable()?;
 
     let displays = unsafe { content.displays() };
@@ -120,7 +176,9 @@ pub fn grab(display_id: u32, max_edge: u32, exclude_pid: i32) -> Option<image::D
     let (tx, rx) = mpsc::channel();
     let handler = block2::RcBlock::new(
         move |img: *mut objc2_core_graphics::CGImage, _: *mut NSError| {
-            let _ = tx.send(unsafe { img.as_ref() }.and_then(rgb));
+            let kept = unsafe { img.as_ref() }
+                .map(|i| unsafe { objc2_core_foundation::CFRetained::retain(i.into()) });
+            let _ = tx.send(kept);
         },
     );
     unsafe {
@@ -130,8 +188,7 @@ pub fn grab(display_id: u32, max_edge: u32, exclude_pid: i32) -> Option<image::D
             Some(&handler),
         )
     };
-    let (w, h, pixels) = rx.recv_timeout(PATIENCE).ok().flatten()?;
-    image::RgbImage::from_raw(w, h, pixels).map(image::DynamicImage::ImageRgb8)
+    rx.recv_timeout(PATIENCE).ok().flatten()
 }
 
 #[cfg(test)]

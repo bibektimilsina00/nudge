@@ -239,10 +239,25 @@ fn capture_png(
 pub fn grab(max_edge: u32) -> Result<Shot> {
     let (origin, logical, id) = active_display();
 
-    // ScreenCaptureKit first, because it is thirty times quicker and scales the
-    // frame while it composites it -- see `fast`. Everything below is the old
-    // path, kept because this one needs macOS 14 and a current screen recording
-    // grant, and a slow screenshot beats none.
+    // ScreenCaptureKit and the system's own JPEG encoder, which between them do
+    // in 60ms what the code below does in 1769 -- see `fast`. The pixels never
+    // pass through Rust at all on this path: the frame is composited, scaled and
+    // encoded by things built to do it, and what comes back is already the bytes
+    // we send.
+    //
+    // Everything below is the old path, kept because this one wants macOS 14 and
+    // a current screen recording grant, and a slow screenshot beats none.
+    #[cfg(target_os = "macos")]
+    if let Some((bytes, w, h)) = super::fast::jpeg(id, max_edge, std::process::id() as i32, QUALITY as f64 / 100.0)
+    {
+        return Ok(Shot {
+            bytes,
+            sent: (w, h),
+            logical,
+            origin,
+        });
+    }
+
     #[cfg(target_os = "macos")]
     let quick = super::fast::grab(id, max_edge, std::process::id() as i32);
     #[cfg(not(target_os = "macos"))]

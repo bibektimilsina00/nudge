@@ -15,6 +15,14 @@ name = "probe"
 path = "src/bin/probe.rs"
 
 [[example]]
+name = "jpegtime"
+path = "examples/jpegtime.rs"
+
+[[example]]
+name = "ear"
+path = "examples/ear.rs"
+
+[[example]]
 name = "sck"
 path = "examples/sck.rs"
 
@@ -65,7 +73,9 @@ objc2-core-foundation = "0.3.2"
 objc2-core-graphics = "0.3.2"
 objc2-core-media = "0.3.2"
 objc2-foundation = "0.3.2"
+objc2-image-io = { version = "0.3.2", features = ["CGImageDestination"] }
 objc2-screen-capture-kit = { version = "0.3.2", features = ["SCShareableContent", "SCScreenshotManager", "SCStream", "SCError"] }
+objc2-speech = { version = "0.3.2", features = ["SFSpeechRecognizer", "SFSpeechRecognitionRequest", "SFSpeechRecognitionResult", "SFSpeechRecognitionTask", "SFTranscription", "SFErrors"] }
 
 [dev-dependencies]
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }

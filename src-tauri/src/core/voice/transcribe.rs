@@ -16,6 +16,12 @@ use serde_json::json;
 /// non-event as not speaking at all, and being told off for it is worse than it
 /// passing unremarked.
 pub async fn speech_to_text(cfg: &Config, wav: &[u8]) -> Result<Option<String>> {
+    // This machine first, when it will. No upload, no round trip, and it works
+    // with the wifi off -- see `ear`, which declines rather than guesses.
+    if let Some(heard) = super::ear::transcribe(wav) {
+        return Ok(Some(heard));
+    }
+
     let key = cfg
         .key("GEMINI_API_KEY")
         .ok_or_else(|| Error::Voice("voice needs GEMINI_API_KEY (or api_key) set".into()))?;

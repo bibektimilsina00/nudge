@@ -30,6 +30,16 @@ pub fn run() {
                 crate::core::screen::click::may_click(),
                 crate::core::voice::access(),
             );
+
+            // Asked once, at startup, and never waited on. Transcription happens
+            // on this machine when this is granted and over the network when it
+            // is not, so a refusal costs a second a turn and nothing else -- which
+            // is not worth interrupting a hotkey press for.
+            crate::core::voice::ear::request_access();
+            println!(
+                "nudge: on-device speech = {}",
+                crate::core::voice::ear::status()
+            );
             println!(
                 "nudge: voice = {:?} ({})",
                 crate::core::voice::speech::chosen_voice(),
