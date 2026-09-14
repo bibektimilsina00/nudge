@@ -43,25 +43,27 @@ export function Settings({
 
   return (
     <div className="flex-1 overflow-y-auto px-3 pb-3">
-      <Section title="Community">
-        <div className="grid grid-cols-2 gap-2">
-          <Row compact icon={<I.Dot className="bg-[#5865f2]" />} label="Discord" />
-          <Row compact icon={<I.Dot className="bg-white/70" />} label="GitHub" />
-        </div>
+      <Section title="Community" columns>
+        <Row compact icon={<I.Dot className="bg-[#5865f2]" />} label="Discord" />
+        <Row compact icon={<I.Dot className="bg-white/70" />} label="GitHub" />
       </Section>
 
-      <Section title="Support & updates">
-        <div className="grid grid-cols-2 gap-2">
-          <Row compact icon={<I.Bulb />} label="Request a feature" />
-          <Row compact icon={<I.Bug />} label="Report a bug" />
-          <Row compact icon={<I.Refresh />} label="Check for updates" />
-          <Row compact icon={<I.Spark />} label="What's new" />
-        </div>
+      <Section title="Support & updates" columns>
+        <Row compact icon={<I.Bulb />} label="Request a feature" />
+        <Row compact icon={<I.Bug />} label="Report a bug" />
+        <Row compact icon={<I.Refresh />} label="Check for updates" />
+        <Row compact icon={<I.Spark />} label="What's new" />
       </Section>
 
       <Section title="Connections">
         {/* Wired: opens the browser. */}
-        <Row icon={<I.Grid />} label="Integrations" chevron onClick={onIntegrations} />
+        <Row
+          icon={<I.Grid />}
+          label="Integrations"
+          sub="Connect the apps you already use"
+          chevron
+          onClick={onIntegrations}
+        />
         <Row icon={<I.Bolt />} label="Skills" sub="Power-ups that attach to Nudge" chevron />
       </Section>
 

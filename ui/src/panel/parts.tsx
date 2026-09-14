@@ -8,15 +8,37 @@ import type { ReactNode } from "react";
  * group say "these belong together and you read them downward", which is what a
  * settings list actually is. It is also quieter: one border instead of six.
  */
-export function Section({ title, children }: { title: string; children: ReactNode }) {
+export function Section({
+  title,
+  columns,
+  children,
+}: {
+  title: string;
+  /** Side by side, each its own card, rather than joined into one list.
+   *
+   *  For rows that are peers rather than a sequence -- Discord and GitHub are two
+   *  places to go, not step one and step two. Joined into a list they became one
+   *  object with a slot cut through it, which is what the gap in a grid looks
+   *  like once the grid is inside a card. */
+  columns?: boolean;
+  children: ReactNode;
+}) {
   return (
     <section className="pt-3.5 first:pt-1.5">
       <h2 className="mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
         {title}
       </h2>
-      <div className="on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
-        {children}
-      </div>
+      {columns ? (
+        // The card treatment moves onto each child, so the space between them is
+        // background rather than a hole cut through one card.
+        <div className="grid grid-cols-2 gap-1.5 [&>*]:on-glass [&>*]:overflow-hidden [&>*]:rounded-[10px] [&>*]:bg-raised">
+          {children}
+        </div>
+      ) : (
+        <div className="on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
+          {children}
+        </div>
+      )}
     </section>
   );
 }
