@@ -460,9 +460,17 @@ pub fn obvious<'a>(goal: &str, controls: &'a [Control]) -> Option<&'a Control> {
     let goal = normalise(goal);
     // Only an instruction to press something. Everything else -- a question, a
     // description, a multi-step task -- is for the model.
-    let rest = ["click ", "press ", "tap ", "hit ", "choose ", "select "]
-        .iter()
-        .find_map(|verb| goal.strip_prefix(verb))?;
+    // Words that can only mean "act on that thing on the screen".
+    const PLAIN: [&str; 6] = ["click ", "press ", "tap ", "hit ", "choose ", "select "];
+    // And words that usually mean that, but sometimes mean something else
+    // entirely. "Open Safari" is a request to launch an application, and if
+    // Safari happens to be frontmost there is a menu called Safari to click --
+    // so these carry an extra condition below.
+    const LOOSE: [&str; 4] = ["open ", "go to ", "switch to ", "show me "];
+
+    let plain = PLAIN.iter().find_map(|v| goal.strip_prefix(v));
+    let loose = LOOSE.iter().find_map(|v| goal.strip_prefix(v));
+    let rest = plain.or(loose)?;
 
     // Naming a control is not always asking for it. "The thing next to View"
     // names View in order to point somewhere else, and matching on the name
@@ -511,7 +519,21 @@ pub fn obvious<'a>(goal: &str, controls: &'a [Control]) -> Option<&'a Control> {
     let all_within = hits
         .iter()
         .all(|(_, label)| contains_phrase(&longest.1, label));
-    all_within.then_some(longest.0)
+    if !all_within {
+        return None;
+    }
+
+    // The extra condition for the looser verbs. A menu bar item is named after
+    // the application as often as not -- Safari, Finder, Chrome -- so "open
+    // Safari" lands on one whether or not a menu was ever wanted. Saying "menu"
+    // settles it, and not saying it leaves this for the model, which can see
+    // that the request was to launch something.
+    let menu_bar = longest.0.role.contains("MenuBar");
+    if plain.is_none() && menu_bar && !contains_phrase(rest, "menu") {
+        return None;
+    }
+
+    Some(longest.0)
 }
 
 /// Lowercased, with the decoration people do not say out loud removed.
@@ -578,6 +600,41 @@ mod matching {
     /// Every one of these has to fall through to the model. A fast path that is
     /// sometimes wrong is worse than no fast path, because nothing behind it
     /// disagrees.
+    /// The same intention said a different way is the same intention. "Open the
+    /// View menu" was taking fifteen times as long as "click the View menu" for
+    /// no reason anyone could have explained to a user.
+    #[test]
+    fn the_looser_verbs_mean_the_same_thing() {
+        let menus = [
+            Control { role: "AXMenuBarItem".into(), label: "View".into(), at: (10.0, 10.0), size: (40.0, 30.0) },
+            Control { role: "AXMenuBarItem".into(), label: "Safari".into(), at: (60.0, 10.0), size: (50.0, 30.0) },
+        ];
+        for said in [
+            "open the View menu",
+            "go to the View menu",
+            "switch to the View menu",
+            "show me the View menu",
+        ] {
+            assert_eq!(obvious(said, &menus).unwrap().label, "View", "{said:?}");
+        }
+
+        // And the reason those verbs needed a condition the others do not. A
+        // menu bar item is named after its application as often as not, so this
+        // reads as a request to launch Safari and lands on a menu instead.
+        assert!(
+            obvious("open Safari", &menus).is_none(),
+            "\"open Safari\" is a request to launch an application"
+        );
+        // Saying menu settles it.
+        assert_eq!(obvious("open the Safari menu", &menus).unwrap().label, "Safari");
+        // And the plain verbs were never ambiguous: nobody clicks an application.
+        assert_eq!(obvious("click Safari", &menus).unwrap().label, "Safari");
+
+        // The condition is about menu bars, not about everything.
+        let button = [Control { role: "AXButton".into(), label: "Safari".into(), at: (10.0, 10.0), size: (40.0, 30.0) }];
+        assert_eq!(obvious("open Safari", &button).unwrap().label, "Safari");
+    }
+
     #[test]
     fn anything_less_than_obvious_goes_to_the_model() {
         let controls = [c("Send"), c("Send Later"), c("OK")];
