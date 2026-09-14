@@ -26,8 +26,13 @@ than the card.
 
 ## `pointer.riv`
 
-A hand that can point and click, for showing what Nudge did without taking the
-real pointer to do it. Not wired up yet.
+A hand that goes to the control and presses it. Used by `components/Pointer.tsx`
+on the overlay.
+
+The real pointer still travels -- a click is delivered to whatever is under the
+cursor and macOS offers no general way round it, which was measured rather than
+assumed. It goes and comes straight back in about 150ms, hidden while it does,
+and this is what is on screen instead.
 
 | | |
 |---|---|

@@ -36,6 +36,9 @@ pub fn run() {
             let hotkey = cfg.hotkey.clone();
             let cfg_engine = cfg.speech_engine.clone();
             keep_a_log();
+            // Before anything else. If the last run was killed rather than
+            // closed, its pointer is still hidden and nothing else will fix it.
+            crate::core::screen::click::show_the_pointer();
             let voice = Voice(VoiceMode::from_config(cfg.speak, &cfg.speech_engine).into());
             let nudge = Nudge::new(cfg)?;
             println!("nudge: provider = {}", nudge.provider_name());

@@ -22,6 +22,10 @@ fn keys() -> Vec<Keycode> {
     DeviceState::new().get_keys()
 }
 
+/// Nothing to undo: this platform never hides the pointer, because it has no
+/// way to put it back that is worth the risk of not.
+pub fn show_the_pointer() {}
+
 pub fn cursor() -> Option<Point> {
     let (x, y) = enigo().ok()?.location().ok()?;
     Some(Point {

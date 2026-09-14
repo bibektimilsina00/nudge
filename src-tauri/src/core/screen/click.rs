@@ -131,7 +131,55 @@ pub fn move_to(at: Point) -> Result<()> {
     click_inner(at, 0)
 }
 
+/// The pointer, out of sight for as long as this lives.
+///
+/// The cursor has to travel to the control and back, and that journey is the
+/// only part of a click anyone sees. Hidden, what is left is the hand in the
+/// overlay arriving and pressing -- which is the thing actually happening.
+///
+/// A guard rather than two calls, because the failure here is severe and silent:
+/// a pointer hidden and never restored is invisible until something else on the
+/// machine happens to show it, and the usual response to that is a forced
+/// restart. `Drop` runs on the way out however this returns, including while
+/// unwinding from a panic.
+///
+/// `CGDisplayHideCursor` is also counted rather than boolean, so an unbalanced
+/// hide leaks permanently -- which is why [`show_the_pointer`] runs at startup.
+struct Hidden;
+
+impl Hidden {
+    fn now() -> Option<Self> {
+        use core_graphics::display::CGDisplay;
+        CGDisplay::main().hide_cursor().ok().map(|_| Hidden)
+    }
+}
+
+impl Drop for Hidden {
+    fn drop(&mut self) {
+        use core_graphics::display::CGDisplay;
+        let _ = CGDisplay::main().show_cursor();
+    }
+}
+
+/// Undo any hide left over from a previous run.
+///
+/// The counter survives the process that incremented it. If Nudge was killed
+/// outright -- not panicked, killed -- its guard never ran, and the pointer is
+/// still invisible on a machine where nothing else is going to fix it. Called at
+/// startup, several times, because the count is not readable and over-showing is
+/// harmless.
+pub fn show_the_pointer() {
+    use core_graphics::display::CGDisplay;
+    for _ in 0..4 {
+        let _ = CGDisplay::main().show_cursor();
+    }
+}
+
 pub fn click(at: Point, times: u8) -> Result<()> {
+    // Out of sight for the trip. Dropped at the end of this function, whatever
+    // happens in the middle.
+    let _hidden = Hidden::now();
+
     // Where the user left it, before we borrow it.
     let theirs = cursor();
     let result = click_inner(at, times.max(1));
