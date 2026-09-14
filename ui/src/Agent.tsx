@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { Face } from "./components/Face";
 
 export type AgentState =
   | { state: "running" }
@@ -290,6 +291,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
         ].join(" ")}
       >
         <header className="flex items-center gap-2">
+          <Face state={agent.state} step={agent.step} />
           <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold">{agent.title}</h1>
           <span
             className={`rounded-full px-2 py-[2px] text-[9px] font-bold tracking-wide ${TONE[agent.state].pill}`}

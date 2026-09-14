@@ -8,6 +8,22 @@ without `strings`.
 
 The companion. Used by `components/Companion.tsx`.
 
+## `agent.riv`
+
+The agent, as something visibly working. Used by `components/Face.tsx` on the
+agent card.
+
+| | |
+|---|---|
+| state machine | `State Machine 1` |
+| inputs | `float`, `recording`, `zoom`, `press` |
+| states | `Floating`, `Listening`, `Talking` |
+
+Read out of the binary rather than guessed, which is why they are written here.
+The component treats every input as optional -- Rive returns null for a name it
+cannot find and says nothing about it, so a rename costs the expression rather
+than the card.
+
 ## `pointer.riv`
 
 A hand that can point and click, for showing what Nudge did without taking the
