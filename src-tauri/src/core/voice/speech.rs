@@ -182,6 +182,7 @@ fn play(wav: &[u8], turn: u64) {
     spawn(Command::new("afplay").arg(&path), turn);
 }
 
+#[cfg(target_os = "macos")]
 fn system(cfg: &Config, text: &str, turn: u64) {
     let mut cmd = Command::new("say");
     if let Some(v) = cfg.speech_voice.clone().or_else(|| best_voice().clone()) {
@@ -215,6 +216,7 @@ fn spawn(cmd: &mut Command, turn: u64) {
 
 /// Which voice the system engine will use, for reporting at startup. A silently
 /// wrong choice here sounds exactly like the feature being broken.
+#[cfg(target_os = "macos")]
 pub fn chosen_voice() -> Option<String> {
     best_voice().clone()
 }
@@ -312,4 +314,23 @@ Anna                de_DE    # Hallo!";
         assert_eq!(u32::from_le_bytes(wav[40..44].try_into().unwrap()), 4);
         assert_eq!(u32::from_le_bytes(wav[4..8].try_into().unwrap()), 40);
     }
+}
+
+/// The system voice, on a platform that has not been taught how yet.
+///
+/// Not fatal: `speech_engine = "gemini"` is a network call and works anywhere,
+/// so a port has a voice from the first day. This is the free, offline, instant
+/// one that macOS happens to ship -- `tts` wraps the equivalent on Windows and
+/// Linux, and this is where it would go.
+#[cfg(not(target_os = "macos"))]
+fn system(_cfg: &Config, _text: &str, turn: u64) {
+    // Nothing to spawn, so nothing to reap. `is_playing` reads the child that
+    // was never started and correctly says no.
+    let _ = turn;
+    eprintln!("nudge: no system voice here -- set speech_engine = \"gemini\" for a voice");
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn chosen_voice() -> Option<String> {
+    None
 }

@@ -7,14 +7,42 @@
 //!
 //! [`ax`] is the exception in kind rather than degree: it asks the system what
 //! is on screen instead of photographing it.
+//!
+//! # The platform seam
+//!
+//! Three of these -- [`click`], [`keyboard`] and [`launch`] -- have a second
+//! implementation under `elsewhere/`, chosen by `cfg`. That is where a port
+//! starts: the stubs are the list of what another platform has to answer, each
+//! one documenting what the macOS version had to get right and which crate
+//! covers it elsewhere.
+//!
+//! Everything else here already declines gracefully off macOS -- `capture`
+//! returns nothing, `ax` returns no controls, `facts` knows nothing -- so the
+//! app runs, blind, rather than failing to build.
+//!
+//! The two sides are held together by a test rather than by discipline: add a
+//! function to `click` and forget `elsewhere/click.rs`, and the build breaks
+//! here rather than on someone else's machine months later.
 pub mod ax;
 pub mod capture;
 #[cfg(target_os = "macos")]
 pub mod fast;
+#[cfg(target_os = "macos")]
+pub mod click;
+#[cfg(not(target_os = "macos"))]
+#[path = "elsewhere/click.rs"]
 pub mod click;
 pub mod facts;
 pub mod haptics;
+#[cfg(target_os = "macos")]
 pub mod keyboard;
+#[cfg(not(target_os = "macos"))]
+#[path = "elsewhere/keyboard.rs"]
+pub mod keyboard;
+#[cfg(target_os = "macos")]
+pub mod launch;
+#[cfg(not(target_os = "macos"))]
+#[path = "elsewhere/launch.rs"]
 pub mod launch;
 pub mod privacy;
 
@@ -68,4 +96,40 @@ pub fn look(cfg: &Config) -> Result<Look> {
         controls,
         taken: std::time::Instant::now(),
     })
+}
+
+#[cfg(test)]
+mod seam {
+    /// Every platform-specific module must offer the same functions on both
+    /// sides, or a port compiles on macOS and fails everywhere else -- which is
+    /// exactly the kind of breakage nobody finds until they try.
+    ///
+    /// Reads the source, because the other side is not compiled on this machine
+    /// and so cannot be type-checked here. Crude, and it catches the one thing
+    /// that actually goes wrong: a function added to one side only.
+    #[test]
+    fn both_sides_of_the_platform_seam_offer_the_same_functions() {
+        fn names(src: &str) -> Vec<String> {
+            src.lines()
+                .filter_map(|l| l.trim().strip_prefix("pub fn "))
+                .filter_map(|l| l.split(['(', '<']).next())
+                .map(str::to_string)
+                .collect()
+        }
+
+        for (module, mac, elsewhere) in [
+            ("click", include_str!("click.rs"), include_str!("elsewhere/click.rs")),
+            ("keyboard", include_str!("keyboard.rs"), include_str!("elsewhere/keyboard.rs")),
+            ("launch", include_str!("launch.rs"), include_str!("elsewhere/launch.rs")),
+        ] {
+            let (mut here, mut there) = (names(mac), names(elsewhere));
+            here.sort();
+            there.sort();
+            assert_eq!(
+                here, there,
+                "{module}: the two sides have drifted -- anything only on one list \
+                 is a function a port cannot supply, or one nobody needs"
+            );
+        }
+    }
 }
