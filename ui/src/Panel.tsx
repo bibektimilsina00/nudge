@@ -105,11 +105,14 @@ export default function Panel() {
     <div className="flex w-full justify-center">
       <div
         className={[
-          "overflow-hidden bg-ink text-white select-none",
-          // The closed pill still matches the notch exactly -- that illusion is
-          // the product's one piece of hardware theatre and is worth keeping.
-          // Everything below it is new.
-          open ? "rounded-b-[18px] inset-ring-1 inset-ring-hair" : "notch-corner",
+          "overflow-hidden text-white select-none",
+          // Glass when open, solid black when closed.
+          //
+          // The pill is pretending to be the notch, and the notch is a hole in a
+          // screen -- translucent it would read as a smudge on the bezel. Open,
+          // it is a panel floating over your desktop, which is exactly what the
+          // system's own material is for.
+          open ? "glass bg-ink rounded-b-[18px]" : "notch-corner bg-black",
           open ? "" : "shadow-[0_6px_18px_rgba(0,0,0,0.45)]",
           "transition-[width,height] duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           open
@@ -273,7 +276,7 @@ function Item({
         onClick={onClick}
         className="flex w-full items-center gap-2.5 rounded-lg px-1.5 py-[7px] text-left transition-colors duration-150 hover:bg-hover"
       >
-        <span className="grid size-[26px] shrink-0 place-items-center rounded-md bg-raised text-[12px] text-white/55 inset-ring-1 inset-ring-hair">
+        <span className="on-glass grid size-[26px] shrink-0 place-items-center rounded-md bg-raised text-[12px] text-white/55">
           {icon}
         </span>
         <span className="min-w-0 flex-1">
@@ -373,7 +376,7 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
 
 function Key({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-[4px] bg-raised px-[5px] py-[2px] font-mono text-[9px] leading-none whitespace-nowrap text-white/60 inset-ring-1 inset-ring-hair">
+    <kbd className="on-glass rounded-[4px] bg-raised px-[5px] py-[2px] font-mono text-[9px] leading-none whitespace-nowrap text-white/60">
       {children}
     </kbd>
   );

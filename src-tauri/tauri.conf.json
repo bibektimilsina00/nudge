@@ -43,7 +43,14 @@
         "alwaysOnTop": true,
         "visible": true,
         "shadow": false,
-        "focus": false
+        "focus": false,
+        "windowEffects": {
+          "effects": [
+            "hudWindow"
+          ],
+          "state": "followsWindowActiveState",
+          "radius": 18.0
+        }
       },
       {
         "label": "agents",
@@ -58,7 +65,14 @@
         "alwaysOnTop": true,
         "visible": false,
         "focus": false,
-        "shadow": false
+        "shadow": false,
+        "windowEffects": {
+          "effects": [
+            "hudWindow"
+          ],
+          "state": "followsWindowActiveState",
+          "radius": 18.0
+        }
       }
     ]
   },

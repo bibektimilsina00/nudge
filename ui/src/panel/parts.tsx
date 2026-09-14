@@ -14,7 +14,7 @@ export function Section({ title, children }: { title: string; children: ReactNod
       <h2 className="mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
         {title}
       </h2>
-      <div className="divide-y divide-hair overflow-hidden rounded-[10px] bg-raised inset-ring-1 inset-ring-hair">
+      <div className="on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
         {children}
       </div>
     </section>
