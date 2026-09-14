@@ -38,7 +38,7 @@ const SHORTCUTS: [string, string[]][] = [
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[276px]",
+  home: "h-[286px]",
   agents: "h-[330px]",
   settings: "h-[560px]",
   integrations: "h-[560px]",
@@ -176,20 +176,6 @@ export default function Panel() {
               )}
             </div>
 
-            {/* The footer.
-                Raycast's idea and a good one: the keys live in the chrome rather
-                than in a panel you have to navigate to, so they are there while
-                you are doing the thing rather than only while you are reading
-                about it. It also gives the window a bottom edge, which a floating
-                list of sections never had. */}
-            <footer className="flex h-[30px] shrink-0 items-center gap-2 border-t border-hair px-3 text-[10px] text-white/35">
-              <span className="text-white/50">Hold</span>
-              <Key>⌃ control</Key>
-              <span>to talk</span>
-              <span className="flex-1" />
-              <Key>esc</Key>
-              <span>stop</span>
-            </footer>
           </div>
         </div>
       </div>
@@ -235,17 +221,16 @@ function HomeView({ onIntegrations }: { onIntegrations: () => void }) {
         <Item icon="✦" label="What's new" note="Recent changes" />
       </ul>
 
-      <h2 className="mt-3 mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
+      <h2 className="mt-3.5 mb-1 px-1.5 text-[9.5px] font-medium tracking-[0.09em] text-white/30 uppercase">
         Shortcuts
       </h2>
-      <dl className="space-y-px">
+      {/* The same grouped list as the rows above it. It was a label, a rule and a
+          run of keycaps -- three alignments fighting in each line, and the rule
+          drew the eye to the gap rather than to either end of it. */}
+      <dl className="on-glass divide-y divide-hair overflow-hidden rounded-[10px] bg-raised">
         {SHORTCUTS.map(([name, keys]) => (
-          <div
-            key={name}
-            className="flex items-center gap-2 rounded-lg px-1.5 py-[5px]"
-          >
-            <dt className="truncate text-[11px] text-white/55">{name}</dt>
-            <span className="h-px flex-1 bg-hair" />
+          <div key={name} className="flex h-[30px] items-center gap-2 px-2.5">
+            <dt className="min-w-0 flex-1 truncate text-[11px] text-white/65">{name}</dt>
             <dd className="flex shrink-0 gap-1">
               {keys.map((k) => (
                 <Key key={k}>{k}</Key>

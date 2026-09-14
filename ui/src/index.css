@@ -126,27 +126,65 @@ body {
  *             menu bar and has no edge to draw
  */
 .glass {
-  backdrop-filter: blur(28px) saturate(180%);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  /* Three edges, not four, and no lit rim.
-   *
-   * A pane of glass catches light along its top edge, which is why that rim is
-   * usually the detail that sells the material -- but this panel is *attached* to
-   * the menu bar. It has no top edge exposed, so a line drawn there reads as a
-   * seam between two things rather than as the top of one thing.
-   *
-   * Left, right and bottom only. No drop shadow either: the original code already
-   * had a comment about that, and it was right. */
+  position: relative;
+  /* More blur and more colour than a plain frost. The saturation is what keeps
+     the wallpaper's hue alive underneath -- without it the backdrop turns grey
+     and the panel looks like sandblasted plastic rather than glass. */
+  backdrop-filter: blur(38px) saturate(190%) brightness(1.05);
+  -webkit-backdrop-filter: blur(38px) saturate(190%) brightness(1.05);
+  /* Three edges, never the top: this panel is attached to the menu bar, so a
+     line drawn across it reads as a seam between two things rather than the top
+     of one. No drop shadow either, for the reason the original code already had
+     a comment about. */
   box-shadow:
     inset 1px 0 0 0 rgba(255, 255, 255, 0.07),
     inset -1px 0 0 0 rgba(255, 255, 255, 0.07),
     inset 0 -1px 0 0 rgba(255, 255, 255, 0.07);
 }
 
+/* The gloss.
+ *
+ * Real glass is not a flat tint. Light falls off down the pane, so the top is
+ * slightly brighter than the bottom, and there is a faint sheen where it catches
+ * the room. Two gradients, both very weak -- at these opacities you should not be
+ * able to point at it, only notice that it stopped looking like a rectangle of
+ * paint.
+ *
+ * Pointer-events none, or it would swallow every click in the panel. */
+.glass::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: inherit;
+  background:
+    linear-gradient(
+      to bottom,
+      rgba(255, 255, 255, 0.055) 0%,
+      rgba(255, 255, 255, 0.018) 38%,
+      rgba(255, 255, 255, 0) 72%
+    ),
+    /* and a wide, off-centre highlight, the way a pane catches one light source
+       rather than being lit evenly */
+    radial-gradient(
+      120% 70% at 28% -12%,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(255, 255, 255, 0) 60%
+    );
+}
+
 /* Content sitting on glass needs its own faint lift, or every row reads as a
  * hole cut in the pane rather than a surface resting on it. */
 .on-glass {
+  /* A lit top edge is right *here* -- unlike the panel, a row has a real top edge
+     sitting on the pane, and that single line is what stops it reading as a hole
+     cut in the glass. */
+  background-image: linear-gradient(
+    to bottom,
+    rgba(255, 255, 255, 0.035),
+    rgba(255, 255, 255, 0)
+  );
   box-shadow:
-    inset 0 1px 0 0 rgba(255, 255, 255, 0.06),
-    inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    inset 0 1px 0 0 rgba(255, 255, 255, 0.08),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
