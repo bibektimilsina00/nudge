@@ -299,6 +299,26 @@ pub fn obvious<'a>(goal: &str, controls: &'a [Control]) -> Option<&'a Control> {
         .iter()
         .find_map(|verb| goal.strip_prefix(verb))?;
 
+    // Naming a control is not always asking for it. "The thing next to View"
+    // names View in order to point somewhere else, and matching on the name
+    // alone clicks View with complete confidence. Found by testing the matcher
+    // against phrasings it was never built to handle, which is what that kind of
+    // test is for -- it was live, and it was the exact failure this path is
+    // dangerous for: wrong, fast, and with nothing watching.
+    //
+    // Anything that positions the target relative to something else is a
+    // description rather than a name, and descriptions are what the model is for.
+    const RELATIVE: [&str; 14] = [
+        "next to", "beside", "left of", "right of", "above", "below", "under",
+        "over", "after", "before", "near", "other", "second", "third",
+    ];
+    if RELATIVE
+        .iter()
+        .any(|r| rest.split(' ').any(|w| w == *r) || rest.contains(&format!("{r} ")))
+    {
+        return None;
+    }
+
     let hits: Vec<(&Control, String)> = controls
         .iter()
         .filter_map(|c| {
@@ -414,6 +434,20 @@ mod matching {
         assert!(obvious("the send button is greyed out", &controls).is_none(), "a description");
         assert!(obvious("open the file menu and send", &controls).is_none(), "does not open with a click");
         assert!(obvious("click something else entirely", &controls).is_none(), "nothing matches");
+
+        // Naming a control in order to point somewhere else. Each of these
+        // matched a real control and would have clicked it.
+        let menus = [c("View"), c("Edit")];
+        for said in [
+            "click the thing next to View",
+            "click the button beside View",
+            "click the item below View",
+            "click the second View",
+            "click the other View",
+            "click the one after View",
+        ] {
+            assert!(obvious(said, &menus).is_none(), "{said:?} should have gone to the model");
+        }
         assert!(obvious("click ok", &[]).is_none(), "nothing exposed at all");
 
         // Word boundaries. "ok" inside "bookmark" is not a button called OK.
