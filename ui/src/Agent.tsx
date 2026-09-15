@@ -339,7 +339,10 @@ function Tile({
       </button>
 
       {/* A question outranks the controls: it is the one state that needs a
-          person, and it should not be hidden behind a hover. */}
+          person, and it should not be hidden behind a hover. It sits in the same
+          corner the controls do and clears out of their way when they appear --
+          the tiles are right-aligned, so that corner is the one nearest the
+          pointer coming in from the screen. */}
       {agent.state === "waiting" && (
         <span className="pointer-events-none absolute top-0 right-0 size-2.5 rounded-full bg-[#e8b027] ring-2 ring-black/60 group-hover:opacity-0" />
       )}
@@ -347,7 +350,7 @@ function Tile({
       {/* Stop, and get out of the way. Two different things: one ends the work,
           the other only ends having to look at it, and an agent that keeps
           running is the ordinary reason to want the corner back. */}
-      <div className="pointer-events-none absolute -top-1 -left-1 flex gap-[3px] opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+      <div className="pointer-events-none absolute -top-1 -right-1 flex gap-[3px] opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
         <Dot
           label={`Stop ${agent.title}`}
           tint="#ff5f57"
