@@ -23,7 +23,7 @@ SIGN_ID ?= $(shell cat $(IDENTITY_FILE) 2>/dev/null \
 export APPLE_SIGNING_IDENTITY = $(SIGN_ID)
 
 .DEFAULT_GOAL := help
-.PHONY: truth help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks release ship-check share
+.PHONY: truth help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks release ship-check share site publish
 
 help: ## Show this list
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -63,6 +63,19 @@ probe: ## Ask one question and write hit-<provider>.png -- GOAL="..." required
 	@test -n '$(GOAL)' || { echo 'usage: make probe GOAL="open the UV editor"'; exit 2; }
 	cd src-tauri && $(if $(PROVIDER),NUDGE_PROVIDER=$(PROVIDER)) $(if $(MODEL),NUDGE_MODEL=$(MODEL)) \
 	  cargo run --release --quiet --bin probe -- '$(GOAL)'
+
+site: ## Run the marketing site and its API together
+	@echo "  api  http://localhost:8080/docs"
+	@echo "  web  http://localhost:3000"
+	@trap 'kill 0' EXIT; \
+	  (cd server && uv run uvicorn app.main:app --reload --port 8080) & \
+	  (cd web && pnpm dev) & wait
+
+publish: build ## Publish the current build so the site can serve it -- VERSION=0.1.0
+	@test -n '$(VERSION)' || { echo 'usage: make publish VERSION=0.1.0'; exit 2; }
+	cd server && uv run publish.py \
+	  ../src-tauri/target/release/bundle/dmg/Nudge_$(VERSION)_aarch64.dmg \
+	  --version '$(VERSION)' --platform macos-arm64 --notes '$(NOTES)'
 
 share: ## Pack a build to send someone, with instructions (no Apple account needed)
 	@./scripts/share.sh
