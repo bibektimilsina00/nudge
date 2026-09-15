@@ -1,0 +1,101 @@
+# Build something other people can open, without it depending on one laptop.
+#
+# The certificate and the notarisation credentials live in GitHub secrets rather
+# than on a machine, so a release is a tag rather than a person being available.
+# Everything here mirrors scripts/release.sh, which is what to run locally.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  # So the pipeline can be proven before a tag is cut, which matters because a
+  # signing pipeline that has only ever run once has never really run.
+  workflow_dispatch:
+
+jobs:
+  macos:
+    # Apple silicon. An x86_64 build needs its own runner and its own signing
+    # pass -- there is no universal binary here yet, and pretending otherwise
+    # ships an app that will not start on half the Macs it reaches.
+    runs-on: macos-14
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # pnpm, because that is what the lockfile in ui/ is. Installed before
+      # setup-node so the cache it sets up is the right one.
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      - name: Install the interface
+        run: cd ui && pnpm install --frozen-lockfile
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version '^2' --locked
+
+      - name: Check it still works before signing it
+        run: cd src-tauri && cargo test
+
+      # A throwaway keychain, unlocked for this job only. Importing into the
+      # default login keychain on a shared runner would leave the certificate
+      # sitting there for whatever runs next.
+      - name: Load the signing certificate
+        env:
+          CERT_P12: ${{ secrets.APPLE_CERTIFICATE }}
+          CERT_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signing.keychain-db"
+          PASSWORD="$(uuidgen)"
+          security create-keychain -p "$PASSWORD" "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$PASSWORD" "$KEYCHAIN"
+          echo -n "$CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security import "$RUNNER_TEMP/cert.p12" -k "$KEYCHAIN" \
+            -P "$CERT_PASSWORD" -T /usr/bin/codesign -T /usr/bin/security
+          # Without this, codesign stops to ask for the keychain password and the
+          # job hangs until it times out rather than failing.
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychain -d user -s "$KEYCHAIN" login.keychain-db
+          rm "$RUNNER_TEMP/cert.p12"
+          security find-identity -v -p codesigning "$KEYCHAIN"
+
+      - name: Build, sign, notarise, staple
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: ./scripts/release.sh
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nudge-macos-arm64
+          path: src-tauri/target/release/bundle/dmg/*.dmg
+
+      # Only for a tag. A dispatch run is for proving the pipeline, and a draft
+      # release appearing every time somebody does that is noise.
+      - name: Draft a release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: src-tauri/target/release/bundle/dmg/*.dmg

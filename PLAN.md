@@ -1109,8 +1109,26 @@ out.
 
 ### Phase 5 — Being usable by anyone else
 
-**5.1 Signing and notarisation.** Developer ID, in CI, before any public link
-exists. Everything above is theoretical until this is done.
+**5.1 Signing and notarisation.** *Pipeline built; blocked on a certificate.*
+
+Everything else is written and proven as far as it can be without credentials:
+`scripts/release.sh` builds, signs, notarises, staples and then asks Gatekeeper
+the question another person's Mac will ask; `.github/workflows/release.yml` does
+the same on a tag; the bundle now produces a `.dmg` (verified: contains the app
+and an Applications symlink); hardened runtime is already on. The script's three
+guards were tested and fail before the build rather than after it, which matters
+because notarytool's own error for the wrong certificate type is unhelpful.
+
+What is missing is the one thing this repository cannot contain: a **Developer ID
+Application** certificate. This machine has three Apple Development certificates
+and an Apple Distribution one for another organisation; none of them can be
+notarised. Until then `make ship-check` answers:
+
+```
+src-tauri/target/release/bundle/macos/Nudge.app: rejected
+```
+
+See [RELEASING.md](RELEASING.md) for the three things to obtain and where.
 
 **5.2 Discovery.** The cost of §1's shape: an interface that shows nothing teaches
 nothing, and nobody guesses that the thing in the notch can refactor a repository.

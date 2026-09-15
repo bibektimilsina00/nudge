@@ -12,3 +12,4 @@ dist/
 # Other people's source, kept locally for reference and never shipped.
 clicky/
 opencode/
+.signing-identity-release
