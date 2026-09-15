@@ -81,6 +81,22 @@ pub fn hedged(say: &str) -> bool {
     HEDGES.iter().any(|h| say.contains(h))
 }
 
+/// Is this answer worth the price of a second pass?
+///
+/// Three conditions, and each one removes a slice of the bill:
+///
+/// - It came from looking something up. An answer read off a file has no source
+///   to go back to.
+/// - It is not already an admission. Nothing to refute, everything to lose --
+///   asked to find the fault in "future prices do not exist yet", a checker
+///   produced a share price for next Friday.
+/// - **It states a specific.** The failure this exists for is a confidently
+///   wrong number: 2036, macOS 15, $150,000. An answer with no digit in it is
+///   not that failure, and checking it buys nothing at three times the price.
+fn worth_checking(looked_up: bool, say: &str) -> bool {
+    looked_up && !hedged(say) && say.chars().any(|c| c.is_ascii_digit())
+}
+
 /// Ask a second, independent pass to try to refute the answer.
 ///
 /// The failure this exists for: asked when macOS 27 would be released, on a
@@ -109,9 +125,11 @@ where
     F: FnMut(Step) -> Fut,
     Fut: std::future::Future<Output = Result<String>>,
 {
-    /// Short. It has one thing to establish and the original already did the
-    /// searching, so a checker that needs six turns is not checking.
-    const CHECKS: usize = 4;
+    /// Short, and shortened again once the bill was counted: on the one full
+    /// trace taken, a four-turn checker spent three searches and carried 7,059
+    /// characters to second-guess an answer found with 428. Three turns is two
+    /// searches and a verdict, which is as much as checking one claim deserves.
+    const CHECKS: usize = 3;
     const STANDS: &str = "STANDS";
 
     let task = format!(
@@ -201,6 +219,7 @@ pub async fn run<F, Fut>(
     provider: &dyn Provider,
     workspace: &std::path::Path,
     task: &str,
+    verify: bool,
     mut act: F,
 ) -> Result<Found>
 where
@@ -245,7 +264,7 @@ where
                 // it obligingly produced a share price for next Friday. The
                 // honest answer survived the first pass and was destroyed by
                 // the one meant to protect it.
-                let answer = match looked_up && !hedged(&say) {
+                let answer = match verify && worth_checking(looked_up, &say) {
                     true => scrutinise(provider, task, &say, &mut act).await,
                     false => say,
                 };
@@ -333,6 +352,7 @@ mod tests {
             &p,
             std::path::Path::new("/tmp"),
             "count the files",
+            false,
             |_| async { Ok("a\nb\nc\nd".into()) },
         )
         .await
@@ -361,7 +381,7 @@ mod tests {
                 next: None,
             },
         ]));
-        let found = run(&p, std::path::Path::new("/tmp"), "x", |_| async {
+        let found = run(&p, std::path::Path::new("/tmp"), "x", false, |_| async {
             Err(crate::error::Error::Click("rm is not allowed".into()))
         })
         .await
@@ -379,7 +399,7 @@ mod tests {
             })
             .collect();
         let p = Scripted(std::sync::Mutex::new(forever));
-        let found = run(&p, std::path::Path::new("/tmp"), "x", |_| async {
+        let found = run(&p, std::path::Path::new("/tmp"), "x", false, |_| async {
             Ok(String::new())
         })
         .await
@@ -388,6 +408,20 @@ mod tests {
         assert_eq!(found.steps.len(), MAX_TURNS);
     }
 
+
+    /// The cheapest of the three gates, and the one that removes the most: most
+    /// of what a subagent says has no number in it.
+    #[test]
+    fn only_an_answer_stating_a_specific_is_worth_checking() {
+        use super::worth_checking;
+        assert!(worth_checking(true, "macOS 27 was released on 14 September 2026."));
+        // Nothing was looked up, so there is no source to go back to.
+        assert!(!worth_checking(false, "macOS 27 was released in 2026."));
+        // No specific to be wrong about.
+        assert!(!worth_checking(true, "The page explains how the parser works."));
+        // Already an admission.
+        assert!(!worth_checking(true, "I could not find a date for version 27."));
+    }
 
     #[test]
     fn the_recalled_marker_does_not_stack() {

@@ -156,7 +156,14 @@ impl Nudge {
         F: FnMut(Step) -> Fut,
         Fut: std::future::Future<Output = Result<String>>,
     {
-        crate::core::run::subagent::run(self.provider.as_ref(), &self.workspace(), task, act).await
+        crate::core::run::subagent::run(
+            self.provider.as_ref(),
+            &self.workspace(),
+            task,
+            self.cfg.verify,
+            act,
+        )
+        .await
     }
 
     /// The most recent thing recorded against this session.

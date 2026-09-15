@@ -265,7 +265,10 @@ async fn score() {
                         eprintln!("      retrying in {secs}s: {last}");
                         tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
                     }
-                    match subagent::run(provider, &workspace, &ask, |step| {
+                    // On here regardless of config: this is the harness that
+                    // has to show the checking is worth its bill, and it cannot
+                    // do that with the checking switched off.
+                    match subagent::run(provider, &workspace, &ask, true, |step| {
                         perform(cfg, provider, step)
                     })
                     .await

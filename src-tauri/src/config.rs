@@ -32,6 +32,20 @@ pub struct Config {
     /// a question for the bench rather than an opinion --
     /// `NUDGE_THINK=low cargo run --bin bench` scores hits and latency together.
     pub think: Option<String>,
+    /// Have a second pass try to refute an answer before it is given.
+    ///
+    /// Off by default, and the reason is the cost. Measured on one full trace:
+    /// answering took two model calls carrying 428 characters of search results;
+    /// checking took four more carrying 7,059, because every checker turn
+    /// re-sends the whole prompt plus everything found so far. Three times the
+    /// calls and worse than that in tokens.
+    ///
+    /// Against which it has not yet caught a single real error -- it agreed on
+    /// one run of the macOS case and disagreed on the next, and during
+    /// development it damaged two answers before the guards went in. A three-fold
+    /// bill for an unproven save is not a default; it is an experiment, and it
+    /// stays behind a switch until `make truth` shows it earning the money.
+    pub verify: bool,
     /// Model that turns speech into text. Independent of `model` -- the ear and
     /// the eye are separate choices. Gemini-only for now; needs GEMINI_API_KEY.
     pub voice_model: String,
@@ -72,6 +86,7 @@ impl Default for Config {
             provider: "ollama".into(),
             model: None,
             think: None,
+            verify: false,
             api_key: None,
             // A bare modifier: hold Control to talk, tap it for the next step.
             hotkey: "ctrl".into(),
