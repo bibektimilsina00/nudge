@@ -102,7 +102,19 @@ export function Face({
       style={{
         width: size,
         height: size,
-        filter: hue ? `hue-rotate(${hue}deg)` : undefined,
+        // Softened as well as turned. Rotating a hue keeps whatever saturation
+        // the artwork had, and the artwork is a saturated purple -- so the turns
+        // came out as a fairground: a pink that was almost magenta, a green that
+        // was almost neon. Taking a third of the saturation out and a little
+        // light in gives colours that sit on a desktop instead of shouting at it.
+        //
+        // `hue !== undefined` rather than a truthiness test, because the first
+        // agent's turn is zero degrees and still wants softening -- otherwise it
+        // is the one face that does not match the others.
+        filter:
+          hue !== undefined
+            ? `hue-rotate(${hue}deg) saturate(0.45) brightness(1.3)`
+            : undefined,
       }}
       className={`shrink-0 ${state === "running" ? "motion-safe:animate-breath" : ""}`}
       aria-hidden
