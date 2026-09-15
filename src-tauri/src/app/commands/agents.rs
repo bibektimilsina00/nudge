@@ -82,6 +82,15 @@ pub fn stop_agent(app: AppHandle, id: u64) {
     crate::app::agent::publish(&app);
 }
 
+/// Shrink the agent window to fit what is actually in it.
+///
+/// The interface measures itself and says; nothing else can, because the layout
+/// is the browser's. See [`crate::app::agent::fit`].
+#[tauri::command]
+pub fn fit_agents(app: AppHandle, width: f64, height: f64) {
+    crate::app::agent::fit(&app, width, height);
+}
+
 #[tauri::command]
 pub fn dismiss_agent(app: AppHandle, id: u64) {
     app.state::<Agents>().dismiss(id);

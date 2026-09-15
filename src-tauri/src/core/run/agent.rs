@@ -197,6 +197,34 @@ impl Agents {
     /// two agents fighting over one cursor gets decided. Quit and start again
     /// without the variable.
     pub fn demonstrate(&self) -> u64 {
+        // Four, because four tiles is what the corner has to survive and one tile
+        // proves nothing about how they stack.
+        //
+        // **Four cannot actually happen today.** `start` refuses a second agent
+        // while one is live, because there is one cursor and two agents driving it
+        // sent a voice note to a real person once. These are seeded past that
+        // check on purpose: the layout should be right before the limit is ever
+        // lifted, and finding out then would mean finding out in front of somebody.
+        for (title, status, waiting) in [
+            ("Renaming photos", "Reading the dates off 240 files.", false),
+            ("Drafting the email", "Which address should this go to?", true),
+            ("Running the tests", "Waiting on the build.", false),
+        ] {
+            let id = self.start_now(
+                format!("demonstration: {title}"),
+                title.into(),
+                status.into(),
+                true,
+            );
+            if waiting {
+                self.edit(id, |a| {
+                    a.state = State::Waiting {
+                        question: "Which address should this go to?".into(),
+                    };
+                });
+            }
+        }
+
         let id = self.start_now(
             "tidy up my downloads folder".into(),
             "Tidying downloads".into(),

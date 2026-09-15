@@ -171,6 +171,7 @@ pub fn run() {
             commands::docked,
             commands::set_docked,
             commands::fit_panel,
+            commands::fit_agents,
             commands::skills,
             commands::open_skills_folder,
             commands::set_open_size,

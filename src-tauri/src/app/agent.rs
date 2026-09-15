@@ -89,14 +89,35 @@ pub fn place_window(app: &AppHandle) {
     let Some(win) = app.get_webview_window("agents") else {
         return;
     };
-    // Tall enough for a few stacked cards, wide enough for one. The window never
-    // resizes -- the content lays out from the top-right inside it -- because a
-    // window resize cannot be animated and tears on a Retina display.
+    // A starting size only. It is replaced by [`fit`] as soon as the content has
+    // measured itself, because a transparent window is still a window: at
+    // 360x520 it sat over a swathe of desktop that could no longer be dragged on,
+    // clicked through, or dropped into -- an invisible hole in somebody's screen
+    // whose only tenant was a 46px face.
     let (w, h) = (360.0, 520.0);
     let screen = app.state::<Screen>();
     let _ = win.set_size(tauri::LogicalSize::new(w, h));
     let _ = win.set_position(tauri::LogicalPosition::new(screen.w - w - 16.0, 34.0));
     let _ = win.set_ignore_cursor_events(false);
+}
+
+/// Shrink the window to whatever the content turned out to be.
+///
+/// Called from the interface, which is the only thing that knows: the tiles are
+/// laid out by the browser and their number changes as agents come and go. The
+/// window stays anchored to the top right, so it grows leftwards and downwards
+/// from the corner and never moves under the pointer.
+///
+/// Rounded up by a pixel. A fractional logical size lands between device pixels
+/// on a Retina display and clips the last column of whatever is at the edge.
+pub fn fit(app: &AppHandle, w: f64, h: f64) {
+    let Some(win) = app.get_webview_window("agents") else {
+        return;
+    };
+    let (w, h) = (w.ceil().clamp(56.0, 380.0), h.ceil().clamp(56.0, 560.0));
+    let screen = app.state::<Screen>();
+    let _ = win.set_size(tauri::LogicalSize::new(w, h));
+    let _ = win.set_position(tauri::LogicalPosition::new(screen.w - w - 16.0, 34.0));
 }
 
 fn show_window(app: &AppHandle, visible: bool) {

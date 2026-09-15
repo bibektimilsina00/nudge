@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Face } from "./components/Face";
@@ -185,6 +185,9 @@ export default function AgentCard() {
   // the tile says "still going" and the card is one click away. A question is
   // the exception and opens itself, below.
   const [collapsed, setCollapsed] = useState(true);
+  // Tiles somebody has waved away. Hiding is not stopping -- the agent carries on
+  // and the Agents tab still has it; this is only about the corner of the screen.
+  const [hidden, setHidden] = useState<number[]>([]);
 
   useEffect(() => {
     void invoke<Agent[]>("agents").then(setAgents);
@@ -199,21 +202,52 @@ export default function AgentCard() {
   }, [waiting]);
 
   // Finished work belongs in the Agents tab, not floating over the screen.
-  const live = agents.filter((a) => a.state === "running" || a.state === "waiting");
+  const live = agents
+    .filter((a) => a.state === "running" || a.state === "waiting")
+    // A question un-hides itself: it needs a person, and a hidden tile cannot ask.
+    .filter((a) => a.state === "waiting" || !hidden.includes(a.id));
+
+  // Tell the window how big to be.
+  //
+  // A transparent window is still a window: at its old fixed 360x520 it sat over
+  // a swathe of desktop that could not be dragged on, clicked through or dropped
+  // into -- an invisible hole whose only tenant was a 46px face. Only the browser
+  // knows how big the tiles came out, so the browser says.
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const tell = () => {
+      const r = el.getBoundingClientRect();
+      void invoke("fit_agents", { width: r.width, height: r.height }).catch(() => {});
+    };
+    tell();
+    const watch = new ResizeObserver(tell);
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, [live.length, collapsed]);
+
   if (live.length === 0) return null;
 
   if (collapsed) {
     return (
-      <div className="flex w-full flex-col items-end gap-1.5 p-1">
+      // `w-fit` rather than `w-full`: the element has to be the size of the tiles
+      // for the measurement above to mean anything.
+      <div ref={box} className="flex w-fit flex-col items-end gap-2.5 p-2.5">
         {live.map((a) => (
-          <Tile key={a.id} agent={a} onOpen={() => setCollapsed(false)} />
+          <Tile
+            key={a.id}
+            agent={a}
+            onOpen={() => setCollapsed(false)}
+            onHide={() => setHidden((h) => [...h, a.id])}
+          />
         ))}
       </div>
     );
   }
 
   return (
-    <div className="flex w-full flex-col gap-1.5 p-1">
+    <div ref={box} className="flex w-[340px] flex-col gap-1.5 p-1">
       {live.map((a) => (
         <Card key={a.id} agent={a} onCollapse={() => setCollapsed(true)} />
       ))}
@@ -229,25 +263,79 @@ export default function AgentCard() {
  * squares instead of a count. State is carried by the halo and the dot, not by
  * the colour, or the two meanings would fight.
  */
-function Tile({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
+function Tile({
+  agent,
+  onOpen,
+  onHide,
+}: {
+  agent: Agent;
+  onOpen: () => void;
+  onHide: () => void;
+}) {
+  return (
+    // `group` so the controls appear on hovering anywhere on the tile, not only
+    // on the eight pixels they occupy -- which at this size would be a game.
+    <div className="group relative size-[46px] shrink-0">
+      <button
+        onClick={onOpen}
+        aria-label={`${agent.title} — expand`}
+        title={agent.title}
+        className="grid size-full place-items-center text-white transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-105 active:scale-[0.97]"
+      >
+        <Face state={agent.state} step={agent.step} size={46} />
+      </button>
+
+      {/* A question outranks the controls: it is the one state that needs a
+          person, and it should not be hidden behind a hover. */}
+      {agent.state === "waiting" && (
+        <span className="pointer-events-none absolute top-0 right-0 size-2.5 rounded-full bg-[#e8b027] ring-2 ring-black/60 group-hover:opacity-0" />
+      )}
+
+      {/* Stop, and get out of the way. Two different things: one ends the work,
+          the other only ends having to look at it, and an agent that keeps
+          running is the ordinary reason to want the corner back. */}
+      <div className="pointer-events-none absolute -top-1 -left-1 flex gap-[3px] opacity-0 transition-opacity duration-150 group-hover:pointer-events-auto group-hover:opacity-100">
+        <Dot
+          label={`Stop ${agent.title}`}
+          tint="#ff5f57"
+          onClick={() => void invoke("stop_agent", { id: agent.id }).catch(() => {})}
+        >
+          <path d="M4 4l6 6M10 4l-6 6" />
+        </Dot>
+        <Dot label={`Hide ${agent.title}`} tint="#febc2e" onClick={onHide}>
+          <path d="M3.5 7h7" />
+        </Dot>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * One of the two little controls, sized like the traffic lights people already
+ * know -- which is the whole reason they are round, coloured and in that order.
+ */
+function Dot({
+  label,
+  tint,
+  onClick,
+  children,
+}: {
+  label: string;
+  tint: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
   return (
     <button
-      onClick={onOpen}
-      aria-label={`${agent.title} — expand`}
-      title={agent.title}
-      className="relative grid size-[46px] shrink-0 place-items-center text-white transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-105 active:scale-[0.97]"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      style={{ backgroundColor: tint }}
+      className="grid size-[13px] place-items-center rounded-full text-black/55 ring-1 ring-black/20 transition-transform duration-100 hover:scale-110 active:scale-95"
     >
-      {/* The tile is what is on screen almost all the time -- the card is
-          collapsed unless someone opens it -- so this is where being visibly
-          alive actually counts. It was a drawing of a robot, which looks the
-          same whether the agent is working or has been dead for a minute. */}
-      {/* Sized here, not by the wrapper. `Face` draws at its own `size` and
-          defaults to 22, so a larger box around it only moved the canvas off
-          centre -- which is exactly what it looked like. */}
-      <Face state={agent.state} step={agent.step} size={46} />
-      {agent.state === "waiting" && (
-        <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-[#e8b027] ring-2 ring-black/60" />
-      )}
+      <svg viewBox="0 0 14 14" className="size-[9px]" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round">
+        {children}
+      </svg>
     </button>
   );
 }
