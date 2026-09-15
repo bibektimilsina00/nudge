@@ -2,6 +2,8 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { Choice, Page, Row, Section, Toggle } from "./parts";
 import * as I from "./icons";
+import { LOOKS, DEFAULT_LOOK } from "../companions";
+import { Companion } from "../components/Companion";
 
 type VoiceMode = "off" | "system" | "gemini";
 type Allowed = { key: string; label: string; about: string; on: boolean };
@@ -58,6 +60,7 @@ export function Settings({
   const [brain, setBrain] = useState<Brain | null>(null);
   const [servers, setServers] = useState<[string, string][]>([]);
   const [problem, setProblem] = useState<string | null>(null);
+  const [look, setLook] = useState(DEFAULT_LOOK);
 
   useEffect(() => {
     void invoke<VoiceMode>("voice_mode").then(setVoice);
@@ -65,6 +68,7 @@ export function Settings({
     void invoke<string>("version").then(setVersion);
     void invoke<Allowed[]>("reach").then(setAllowed);
     void invoke<Brain>("brain").then(setBrain);
+    void invoke<string>("look").then(setLook);
     // Servers connect in the background long after this mounts -- `npx` can spend
     // a minute fetching one it has never run -- so this looks again rather than
     // showing "starting…" forever to somebody who opened settings early.
@@ -215,8 +219,59 @@ export function Settings({
 
   if (where === "screen") {
     return (
-      <Page title="On screen" onBack={() => setWhere("root")}>
-        <Section title="Companion">
+      <Page title="Companion" onBack={() => setWhere("root")}>
+        <p className="px-0.5 pt-1 pb-2.5 text-[10.5px] leading-snug text-ink-3">
+          Who follows your cursor.
+        </p>
+        {/* Each one running, not a picture of it. What separates these is how
+            they move -- a still frame of a thing that idles and blinks is a
+            sticker, and picking between stickers tells you nothing about what
+            will be beside your pointer all day. */}
+        <div className="grid grid-cols-2 gap-2">
+          {LOOKS.map((l) => {
+            const on = l.key === look;
+            return (
+              <button
+                key={l.key}
+                onClick={() => {
+                  setLook(l.key);
+                  void invoke("set_look", { key: l.key });
+                }}
+                aria-pressed={on}
+                className={[
+                  "relative flex flex-col items-center rounded-xl bg-raise px-2 pt-3 pb-2.5 text-center",
+                  "transition-colors duration-150 hover:bg-raise-hi",
+                  on ? "inset-ring-1 inset-ring-blue" : "hairline",
+                ].join(" ")}
+              >
+                {on && (
+                  <span className="absolute top-1.5 right-1.5 grid size-[15px] place-items-center text-blue">
+                    <svg viewBox="0 0 16 16" className="size-[13px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                      <path d="m3 8.5 3.5 3.5L13 5" />
+                    </svg>
+                  </span>
+                )}
+                <span className="grid h-[72px] place-items-center">
+                  <span className="scale-[0.92]">
+                    <Companion mode="idle" anchored />
+                  </span>
+                </span>
+                <span className={`text-[12px] ${on ? "font-medium text-white" : "text-ink-2"}`}>
+                  {l.name}
+                </span>
+                <span className="mt-px text-[10px] leading-snug text-ink-3">{l.about}</span>
+              </button>
+            );
+          })}
+        </div>
+        {LOOKS.length === 1 && (
+          <p className="px-0.5 pt-2.5 text-[10px] leading-snug text-ink-3">
+            One so far. More are a file each — the list is in{" "}
+            <code className="text-ink-2">companions.ts</code>.
+          </p>
+        )}
+
+        <Section title="Right now">
           <Choice
             options={[
               { key: "loose", label: "Following your cursor", about: "Where it works. Point and ask." },
@@ -261,9 +316,9 @@ export function Settings({
         />
         <Row
           icon={<I.Arrow />}
-          label="On screen"
-          sub="Where the companion sits"
-          value={docked ? "parked" : "loose"}
+          label="Companion"
+          sub="Which one follows your cursor"
+          value={LOOKS.find((l) => l.key === look)?.name ?? look}
           chevron
           onClick={() => setWhere("screen")}
         />

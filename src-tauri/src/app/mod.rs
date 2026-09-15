@@ -9,7 +9,7 @@ mod ui;
 
 use crate::config::Config;
 use crate::core::run::session::Nudge;
-use state::{Background, Docked, Flag, Grants, Mic, Screen, Settle, Voice, VoiceMode};
+use state::{Background, Docked, Flag, Grants, Look, Mic, Screen, Settle, Voice, VoiceMode};
 use tauri::Manager;
 
 pub fn run() {
@@ -40,6 +40,7 @@ pub fn run() {
             // closed, its pointer is still hidden and nothing else will fix it.
             crate::core::screen::click::show_the_pointer();
             let voice = Voice(VoiceMode::from_config(cfg.speak, &cfg.speech_engine).into());
+            let nudge_look = cfg.companion.clone();
             let nudge = Nudge::new(cfg)?;
             println!("nudge: provider = {}", nudge.provider_name());
             println!(
@@ -116,6 +117,9 @@ pub fn run() {
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));
+            app.manage(Look(std::sync::Mutex::new(
+                nudge_look.unwrap_or_else(|| "cat".into()),
+            )));
             let agents = crate::core::run::agent::Agents::default();
             // Before it is managed, so nothing can look at an empty list first.
             agents.remember();
@@ -221,6 +225,8 @@ pub fn run() {
             commands::set_reach,
             commands::brain,
             commands::retune,
+            commands::look,
+            commands::set_look,
             commands::servers,
             commands::agents,
             commands::answer_agent,

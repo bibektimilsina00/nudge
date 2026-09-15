@@ -1,8 +1,20 @@
 # Assets
 
-Rive animations. Both are binary, so what they contain is written down here --
+Rive animations. They are binary, so what they contain is written down here --
 the names are case-sensitive and there is no way to read them off the file
 without `strings`.
+
+## Adding a companion
+
+Drop the `.riv` in here, add a line to `ui/src/companions.ts`, and it appears in
+the picker. Nothing in Rust knows the names -- the chosen one is stored as a
+string precisely so that adding art never means editing Rust.
+
+What a new one needs: an artboard that reads at 24px (the socket on the home
+page) as well as at full size, and a state machine that idles on its own. The
+point of carrying a 1.9MB runtime is that the thing is alive when nobody is
+asking it for anything; a file that only plays when driven would be better as a
+PNG.
 
 ## `cat.riv`
 

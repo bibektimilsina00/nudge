@@ -101,6 +101,26 @@ impl Flag {
     }
 }
 
+/// Which character the companion wears.
+///
+/// Here rather than in the interface because two windows draw it -- the overlay
+/// when it is loose, the panel when it is parked -- and a preference only one of
+/// them knows about is a companion that changes shape when you dock it.
+///
+/// A string rather than an enum: the whole point is that adding a character is
+/// dropping in a file and naming it, and an enum would make Rust a place you have
+/// to edit to add art.
+pub struct Look(pub std::sync::Mutex<String>);
+
+impl Look {
+    pub fn get(&self) -> String {
+        self.0.lock().unwrap().clone()
+    }
+    pub fn set(&self, key: &str) {
+        *self.0.lock().unwrap() = key.to_string();
+    }
+}
+
 /// Whether the companion is sitting in the panel rather than following the cursor.
 /// Undocking is how you put it to work; docking is how you get your screen back
 /// without quitting.

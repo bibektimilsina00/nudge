@@ -61,6 +61,23 @@ pub fn set_voice_mode(app: AppHandle, mode: String) {
     app.emit("voice-mode", mode).ok();
 }
 
+/// Which character the companion is wearing.
+#[tauri::command]
+pub fn look(app: AppHandle) -> String {
+    app.state::<crate::app::state::Look>().get()
+}
+
+/// Wear a different one.
+///
+/// Broadcast rather than addressed, because both windows draw the companion and
+/// which of them owns it changes with docking -- the same reason `docked` is
+/// emitted to everything.
+#[tauri::command]
+pub fn set_look(app: AppHandle, key: String) {
+    app.state::<crate::app::state::Look>().set(&key);
+    app.emit("look", key).ok();
+}
+
 /// The microphone recording will use.
 #[tauri::command]
 pub fn microphone() -> String {

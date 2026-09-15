@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Alignment, Fit, Layout, useRive } from "@rive-app/react-canvas";
-import cat from "../assets/cat.riv?url";
+import { DEFAULT_LOOK, lookUp, type Look } from "../companions";
 
 export type CompanionMode = "idle" | "listening" | "thinking";
 
@@ -62,14 +63,16 @@ export function Companion({
   const shell = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
 
-  const { RiveComponent } = useRive({
-    src: cat,
-    // Run the machine, do not just play a timeline: this is what gives the idle
-    // its own life instead of a loop we drive.
-    stateMachines: "State Machine 1",
-    autoplay: true,
-    layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
-  });
+  // Which character to wear. Asked for once and then listened for, because the
+  // window that changes it is not this one -- settings live in the panel and the
+  // companion is usually on the overlay.
+  const [key, setKey] = useState(DEFAULT_LOOK);
+  useEffect(() => {
+    void invoke<string>("look").then(setKey).catch(() => {});
+    const sub = listen<string>("look", (e) => setKey(e.payload));
+    return () => void sub.then((un) => un());
+  }, []);
+  const look = lookUp(key);
 
   useEffect(() => {
     if (anchored) return;
@@ -150,7 +153,10 @@ export function Companion({
                 listening ? "scale-110" : mode === "thinking" ? "motion-safe:animate-think" : "",
               ].join(" ")}
             >
-              <RiveComponent className="size-full" />
+              {/* Keyed, so changing character mounts a fresh machine. `useRive`
+                  reads its options once; handed a new `src` in place it keeps
+                  playing the old file and says nothing. */}
+              <Skin key={look.key} look={look} />
             </div>
 
           </div>
@@ -158,4 +164,24 @@ export function Companion({
       </div>
     </div>
   );
+}
+
+/**
+ * One character, running.
+ *
+ * Its own component only so that `key` can force it to rebuild -- see the call
+ * site. Nothing else belongs in here: the trail, the stretch and the fade are all
+ * written straight to the nodes outside, every frame, and must not go through
+ * React at all.
+ */
+function Skin({ look }: { look: Look }) {
+  const { RiveComponent } = useRive({
+    src: look.src,
+    // Run the machine, do not just play a timeline: this is what gives the idle
+    // its own life instead of a loop we drive.
+    stateMachines: look.machine,
+    autoplay: true,
+    layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
+  });
+  return <RiveComponent className="size-full" />;
 }

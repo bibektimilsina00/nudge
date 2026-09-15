@@ -138,6 +138,9 @@ pub struct Config {
     /// anyone. Point this at something real before shipping, or reports are going
     /// into a bin on purpose.
     pub report_url: Option<String>,
+    /// Which character the companion wears -- the key of one of the looks the
+    /// interface offers. Unset is the cat.
+    pub companion: Option<String>,
 }
 
 impl Default for Config {
@@ -163,6 +166,7 @@ impl Default for Config {
             blocked_apps: Vec::new(),
             blocked_titles: Vec::new(),
             report_url: Some("https://httpbin.org/post".into()),
+            companion: None,
         }
     }
 }
