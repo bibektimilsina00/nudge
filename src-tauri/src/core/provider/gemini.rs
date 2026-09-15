@@ -93,6 +93,7 @@ impl Provider for Gemini {
              {{\"kind\":\"kill\",\"id\":1,\"say\":\"...\"}}\n\
              {{\"kind\":\"fetch\",\"url\":\"https://...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"search\",\"query\":\"...\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"mcp\",\"tool\":\"server/name\",\"args\":{{}},\"say\":\"...\"}}\n\
              {{\"kind\":\"task\",\"task\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"show\",\"path\":\"index.html\",\"say\":\"...\"}}\n\
              {{\"kind\":\"workspace\",\"path\":\"~/projects/thing\",\"say\":\"...\"}}\n\
@@ -203,6 +204,7 @@ impl Provider for Gemini {
              {{\"kind\":\"edit\",\"path\":\"...\",\"old\":\"...\",\"new\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"fetch\",\"url\":\"https://...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"search\",\"query\":\"...\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"mcp\",\"tool\":\"server/name\",\"args\":{{}},\"say\":\"...\"}}\n\
              {{\"kind\":\"done\",\"say\":\"what you found, in full\"}}\n\
              {{\"kind\":\"unsure\",\"say\":\"why you could not\"}}",
             prompt(ask)

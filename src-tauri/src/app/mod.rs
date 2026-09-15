@@ -116,6 +116,19 @@ pub fn run() {
             app.manage(Docked(Flag::new(false)));
             app.manage(crate::core::run::agent::Agents::default());
 
+            // Off the startup path on purpose. `npx` may spend a minute fetching
+            // a server it has never run, and the hotkey has to work during that
+            // minute -- so the window appears, the assistant answers, and the
+            // tools arrive when they arrive.
+            let starting = handle.clone();
+            tauri::async_runtime::spawn(async move {
+                starting.state::<Nudge>().connect_tools().await;
+                let n = starting.state::<Nudge>().tools().len();
+                if n > 0 {
+                    println!("nudge: {n} tools from mcp servers");
+                }
+            });
+
             println!(
                 "nudge: windows = {:?}",
                 app.webview_windows().keys().collect::<Vec<_>>()

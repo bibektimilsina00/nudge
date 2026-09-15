@@ -87,6 +87,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         workspace: cfg.workspace_dir().display().to_string(),
         facts: facts::gather(),
         controls: &controls,
+        tools: &[],
     };
     let t1 = std::time::Instant::now();
     let step = tauri::async_runtime::block_on(provider.next_step(&shot, &ask))?;
@@ -105,6 +106,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         provider::Step::Open { url, .. } => println!("  open:   {url}"),
         provider::Step::Press { keys, .. } => println!("  press:  {keys}"),
         provider::Step::Run { command, .. } => println!("  run:    {command}"),
+        provider::Step::Mcp { tool, args, .. } => println!("  tool:   {tool} {args}"),
         provider::Step::Start { command, .. } => println!("  start:  {command}"),
         provider::Step::Output { id, .. } => println!("  output: {id}"),
         provider::Step::Kill { id, .. } => println!("  kill:   {id}"),

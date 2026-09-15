@@ -173,6 +173,19 @@ pub enum Step {
     /// Just talking. Not every hotkey press is a task -- sometimes it is a
     /// question, a greeting, or someone bored at 2am.
     Reply { say: String },
+    /// Run a tool on a Model Context Protocol server.
+    ///
+    /// One shape for every server and every tool there will ever be, which is
+    /// the entire point: the alternative is a `Step` variant per integration and
+    /// a release whenever somebody publishes one.
+    ///
+    /// `tool` is `server/name`, so the model has one string to get right rather
+    /// than two fields to get consistent.
+    Mcp {
+        tool: String,
+        args: serde_json::Value,
+        say: String,
+    },
 }
 
 /// The coding agents installed, and how to run each one unattended.
@@ -244,7 +257,12 @@ impl Step {
             | Step::Fetch { .. }
             | Step::Search { .. }
             | Step::Output { .. }
-            | Step::Task { .. } => true,
+            | Step::Task { .. }
+            // Some of these act rather than look -- creating an issue learns
+            // nothing. But every one of them comes back with what the server
+            // said, and that is a source in the room, which is what this
+            // question is actually asking.
+            | Step::Mcp { .. } => true,
             // Changes the world or says something about it, and learns nothing.
             Step::Point { .. }
             | Step::Done { .. }
@@ -290,6 +308,7 @@ impl Step {
             | Step::Kill { say, .. }
             | Step::Agent { say, .. }
             | Step::Question { question: say }
+            | Step::Mcp { say, .. }
             | Step::Reply { say } => say,
         }
     }
@@ -379,6 +398,7 @@ impl Step {
             Step::Kill { id, .. } => format!("Stopped {id}"),
             Step::Fetch { url, .. } => format!("Read {url}"),
             Step::Search { query, .. } => format!("Searched for {query:?}"),
+            Step::Mcp { tool, args, .. } => format!("Ran {tool} with {}", short(&args.to_string())),
             Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
             Step::Show { path, .. } => format!("Showed {path}"),
             Step::Workspace { path, .. } => format!("Working in {path} now"),
@@ -440,6 +460,12 @@ pub struct Ask<'a> {
     /// and for a menu that has not been opened yet, which has no geometry until
     /// it does. So it is a shortcut, never a replacement for looking.
     pub controls: &'a [crate::core::screen::ax::Control],
+    /// Everything the configured MCP servers said they can do.
+    ///
+    /// Empty when none are configured, which is the default, and the prompt then
+    /// says nothing about them at all -- a section headed "tools you do not have"
+    /// is tokens spent to explain an absence.
+    pub tools: &'a [crate::core::tools::mcp::Tool],
     /// Where commands run and files are written.
     ///
     /// Told, not guessed. Without it a subagent asked to search "this project"
@@ -508,6 +534,24 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 /// *model*, not three people's prompt-writing.
 pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
+    // Named by what they do rather than by the protocol behind them. "You can
+    // speak MCP" is a fact about us; "you can read this person's calendar" is a
+    // fact about what is possible, and only one of those helps.
+    let tools = match ask.tools.is_empty() {
+        true => String::new(),
+        false => format!(
+            "Tools on connected servers. Use `mcp` with the full name and an \
+             `args` object:\n{}\n\nStarred arguments are required. If a call is \
+             refused for the shape of its arguments, read what it said and try \
+             again -- the server is describing itself more precisely than the \
+             list above can.\n\n",
+            ask.tools
+                .iter()
+                .map(|t| format!("  {}", t.line()))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
+    };
     // Said plainly, because from a screenshot alone nothing distinguishes "not
     // done yet" from "did not work", and the model assumes the former.
     let stalled = if ask.stalled {
@@ -555,7 +599,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Paths are relative to it. If you need to know what is in there, look \
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
-         {facts}{controls}\
+         {facts}{controls}{tools}\
          Steps already completed:\n{history}{stalled}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
@@ -973,6 +1017,15 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
         }),
         "unsure" => Some(Step::Unsure { say }),
         "reply" => Some(Step::Reply { say }),
+        "mcp" => Some(Step::Mcp {
+            tool: v["tool"].as_str().unwrap_or_default().to_string(),
+            // Missing means no arguments, which plenty of tools take.
+            args: match v["args"].is_null() {
+                true => serde_json::json!({}),
+                false => v["args"].clone(),
+            },
+            say,
+        }),
         "launch" => Some(Step::Launch {
             app: v["app"].as_str().unwrap_or_default().to_string(),
             say,
@@ -1189,6 +1242,7 @@ mod tests {
             agent: false,
             facts: Default::default(),
             controls: &[],
+            tools: &[],
             workspace: "/tmp/workspace".into(),
         }
     }
@@ -1425,6 +1479,28 @@ mod tests {
     fn the_prompt_explains_when_to_mark_a_fact_as_recalled() {
         let p = prompt(&ask("when did macOS 27 ship?", &[], false));
         assert!(p.contains("recalled: true"));
+    }
+
+    #[test]
+    fn tools_are_listed_only_when_there_are_some() {
+        let quiet = prompt(&ask("do a thing", &[], false));
+        assert!(!quiet.contains("Tools on connected servers"));
+
+        let tool = crate::core::tools::mcp::Tool {
+            server: "files".into(),
+            name: "read_text_file".into(),
+            about: "Read a file from disk.".into(),
+            schema: serde_json::json!({
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"],
+            }),
+        };
+        let mut a = ask("read my notes", &[], false);
+        let tools = [tool];
+        a.tools = &tools;
+        let loud = prompt(&a);
+        assert!(loud.contains("files/read_text_file(path*)"));
+        assert!(loud.contains("Tools on connected servers"));
     }
 
     #[test]

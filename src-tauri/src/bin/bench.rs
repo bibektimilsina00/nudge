@@ -350,6 +350,7 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
             // is exactly the thing the control list is meant to make unnecessary --
             // so a good score here and a good score live are different claims.
             controls: &[],
+            tools: &[],
             goal: &c.goal,
             done: &[],
             stalled: false,

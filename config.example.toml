@@ -82,3 +82,28 @@ think = "low"
 # `cargo run --bin truth -- --verify` turns it on for a scoring run. Nothing else
 # does.
 verify = false
+
+# Servers speaking the Model Context Protocol. None by default.
+#
+# This is how Nudge reaches things that are not on your screen -- your email,
+# your calendar, your issues, your notes. Each server is a few lines here and
+# brings its own tools; there is no panel and nothing to click, because these
+# shapes belong to whoever wrote the server.
+#
+# Started in the background at launch, so a server that takes a minute to fetch
+# itself does not hold up the hotkey. One that fails to start is reported and
+# skipped -- its tools are simply absent, and nothing else stops working.
+#
+# Tokens go in `env`, beside the server that needs them. Nudge has no business
+# holding somebody else's credentials.
+#
+# [[mcp]]
+# name = "files"
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/Notes"]
+#
+# [[mcp]]
+# name = "github"
+# command = "npx"
+# args = ["-y", "@modelcontextprotocol/server-github"]
+# env = { GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_..." }

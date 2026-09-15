@@ -380,23 +380,48 @@ radio buttons sharing a position do not share a name.
 
 ### Phase 2 — Reach
 
-**2.1 MCP.**
+**2.1 MCP.** *Built.*
 
-Promoted from last place to here. Email, calendar, Slack, GitHub, databases,
-Notion -- those servers exist and other people maintain them. Six integrations
-written by hand buy six integrations; speaking MCP buys the ones that exist now
-and the ones written next year. It is the single decision that closes most of the
-parity gap.
+`core/tools/mcp.rs`. JSON-RPC over a child process's stdin and stdout -- the stdio
+transport, not the HTTP one, which is for servers somebody else hosts and brings
+authentication with it.
 
-The original reason for deferring it still holds and should be respected rather
-than ignored: a plugin surface over a tool set that is still moving locks in
-shapes that should not be locked. Phase 1 is when the tool set settles.
+Verified against a server this project had never heard of: `npx -y
+@modelcontextprotocol/server-filesystem` connected, described **14 tools**, read a
+file, and refused a path outside its own directory -- with the refusal arriving as
+an error rather than as an answer. That test is `#[ignore]`d, since it wants `npx`
+and a network; `cargo test --lib mcp -- --ignored` runs it.
 
-**It must add no interface.** A hundred new tools, no new panel. Configuration
-lives in a file, not a tab.
+**No interface was added.** A server is a few lines in `config.toml`. There is no
+panel, no tab and nothing to click, because these shapes belong to whoever wrote
+the server.
+
+Three decisions worth keeping:
+
+- **One mutex per server, held across request and reply.** Calls to one server are
+  therefore serial and the usual id-routing table is unnecessary -- there is only
+  ever one request outstanding. Different servers still run at once, which is the
+  parallelism that matters.
+- **Tools are listed to the model as one line each, not as JSON Schema.** A server
+  with thirty tools would put several thousand tokens of schema into *every* turn,
+  paid on every hotkey press whether or not anything reaches for a tool -- more
+  than the screenshot costs. Names and starred-required argument names instead; a
+  wrong type comes back as an error the model can read, costing one round trip on
+  the rare turn rather than tokens on all of them.
+- **Started in the background.** `npx` may spend a minute fetching a server it has
+  never run, and the hotkey has to work during that minute. A server that fails to
+  start is reported and skipped; its tools are absent and nothing else breaks.
+
+Credentials go in each server's `env`, beside the server that needs them. Nudge
+has no business holding somebody else's token.
+
+*Not yet:* nothing bounds what a tool may do. A filesystem server given `/` can
+write anywhere, and the shell allow-list and workspace rules do not reach inside
+somebody else's process. That is 2.2, and it is now the more urgent half.
 
 *Done when:* an MCP server the project has never heard of can be added to a config
-file and used by voice on the next turn.
+file and used by voice on the next turn. **Done** -- though "by voice" is proven
+only as far as the prompt and the parser; no live spoken turn has run one.
 
 **2.2 Boundaries a person can widen.**
 

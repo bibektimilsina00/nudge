@@ -40,6 +40,23 @@ pub struct Config {
     /// Erratic as well as dear -- those two medium numbers are the same request
     /// twice.
     pub think: Option<String>,
+    /// Servers speaking the Model Context Protocol, started at launch.
+    ///
+    /// Each one is three lines and brings its own tools, which is the point:
+    /// six integrations written here would buy six integrations, and this buys
+    /// the ones that exist now and the ones written next year.
+    ///
+    /// ```text
+    /// [[mcp]]
+    /// name = "files"
+    /// command = "npx"
+    /// args = ["-y", "@modelcontextprotocol/server-filesystem", "/Users/me/Notes"]
+    /// ```
+    ///
+    /// Tokens go in `env` beside the server that needs them, rather than in
+    /// Nudge, which has no business holding somebody else's credentials.
+    #[serde(default)]
+    pub mcp: Vec<crate::core::tools::mcp::Spec>,
     /// Have a second pass try to refute an answer before it is given.
     ///
     /// Off by default, and the reason is the cost. Measured on one full trace:
@@ -95,6 +112,7 @@ impl Default for Config {
             model: None,
             think: None,
             verify: false,
+            mcp: Vec::new(),
             api_key: None,
             // A bare modifier: hold Control to talk, tap it for the next step.
             hotkey: "ctrl".into(),

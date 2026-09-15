@@ -151,6 +151,7 @@ where
             agent: true,
             facts: Default::default(),
             controls: &[],
+            tools: &[],
             workspace: String::new(),
         };
         let Ok(step) = provider.next_step_blind(&ask).await else {
@@ -219,6 +220,7 @@ pub async fn run<F, Fut>(
     provider: &dyn Provider,
     workspace: &std::path::Path,
     task: &str,
+    tools: &[crate::core::tools::mcp::Tool],
     verify: bool,
     mut act: F,
 ) -> Result<Found>
@@ -250,6 +252,7 @@ where
             facts: Default::default(),
             // No screen, so nothing on it.
             controls: &[],
+            tools,
             workspace: workspace.display().to_string(),
         };
         let step = provider.next_step_blind(&ask).await?;
@@ -352,6 +355,7 @@ mod tests {
             &p,
             std::path::Path::new("/tmp"),
             "count the files",
+            &[],
             false,
             |_| async { Ok("a\nb\nc\nd".into()) },
         )
@@ -381,7 +385,7 @@ mod tests {
                 next: None,
             },
         ]));
-        let found = run(&p, std::path::Path::new("/tmp"), "x", false, |_| async {
+        let found = run(&p, std::path::Path::new("/tmp"), "x", &[], false, |_| async {
             Err(crate::error::Error::Click("rm is not allowed".into()))
         })
         .await
@@ -399,7 +403,7 @@ mod tests {
             })
             .collect();
         let p = Scripted(std::sync::Mutex::new(forever));
-        let found = run(&p, std::path::Path::new("/tmp"), "x", false, |_| async {
+        let found = run(&p, std::path::Path::new("/tmp"), "x", &[], false, |_| async {
             Ok(String::new())
         })
         .await

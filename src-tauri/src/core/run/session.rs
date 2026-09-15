@@ -66,6 +66,13 @@ pub struct Nudge {
     laps: Mutex<crate::core::laps::Laps>,
     /// A look taken before the turn that will use it. See [`Nudge::stash`].
     early: Mutex<Option<Look>>,
+    /// Servers started once at launch and kept for the life of the process.
+    ///
+    /// A `OnceLock` because starting them is asynchronous and constructing this
+    /// is not: `npx` may spend a minute fetching a server before it answers, and
+    /// the hotkey has to work during that minute. Until it is filled there are no
+    /// tools, which the prompt handles by saying nothing about tools.
+    mcp: std::sync::OnceLock<crate::core::tools::mcp::Servers>,
 }
 
 impl Nudge {
@@ -78,7 +85,40 @@ impl Nudge {
             moved: Mutex::new(None),
             laps: Mutex::default(),
             early: Mutex::new(None),
+            mcp: std::sync::OnceLock::new(),
         })
+    }
+
+    /// Start the configured MCP servers. Called once, off the startup path.
+    pub async fn connect_tools(&self) {
+        if self.cfg.mcp.is_empty() {
+            return;
+        }
+        let servers = crate::core::tools::mcp::Servers::start(&self.cfg.mcp).await;
+        // Losing the race means another caller already did it, which is fine and
+        // is not worth an error -- the servers this one started are dropped, and
+        // dropping them kills the children.
+        let _ = self.mcp.set(servers);
+    }
+
+    /// What the connected servers can do. Empty until they have connected.
+    pub fn tools(&self) -> &[crate::core::tools::mcp::Tool] {
+        self.mcp.get().map(|s| s.tools()).unwrap_or(&[])
+    }
+
+    /// Run one, naming it the way the model does: `server/tool`.
+    pub async fn run_tool(&self, tool: &str, args: &serde_json::Value) -> Result<String> {
+        let Some(servers) = self.mcp.get() else {
+            return Err(crate::error::Error::Config(
+                "no tool servers are connected".into(),
+            ));
+        };
+        let (server, name) = tool.split_once('/').ok_or_else(|| {
+            crate::error::Error::Config(format!(
+                "{tool:?} is not a tool name -- they look like server/tool"
+            ))
+        })?;
+        servers.call(server, name, args.clone()).await
     }
 
     /// Where commands run and files are written.
@@ -160,6 +200,7 @@ impl Nudge {
             self.provider.as_ref(),
             &self.workspace(),
             task,
+            self.tools(),
             self.cfg.verify,
             act,
         )
@@ -393,6 +434,7 @@ impl Nudge {
             agent,
             facts,
             controls: &controls,
+            tools: self.tools(),
             workspace: self.workspace().display().to_string(),
         };
         // When the system has already named exactly the control that was asked
