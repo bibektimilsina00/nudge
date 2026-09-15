@@ -15,6 +15,8 @@ type Shortcut = {
   keys: string[];
   fixed: string | null;
 };
+type Setup = { workspace: string; suggesting: boolean; steps: number };
+type Server = { name: string; about: string; said: string; failed: boolean };
 type PermitState = "granted" | "denied" | "unasked";
 type Permit = {
   key: string;
@@ -33,7 +35,15 @@ type Brain = {
 };
 
 /** Which page of settings is open. */
-type Where = "root" | "allowed" | "model" | "voice" | "screen" | "permissions" | "keys";
+type Where =
+  | "root"
+  | "allowed"
+  | "model"
+  | "voice"
+  | "screen"
+  | "permissions"
+  | "keys"
+  | "agents";
 
 /**
  * The settings sheet.
@@ -75,7 +85,8 @@ export function Settings({
   const [version, setVersion] = useState("");
   const [allowed, setAllowed] = useState<Allowed[]>([]);
   const [brain, setBrain] = useState<Brain | null>(null);
-  const [servers, setServers] = useState<{ name: string }[]>([]);
+  const [servers, setServers] = useState<Server[]>([]);
+  const [setup, setSetup] = useState<Setup | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
   const [look, setLook] = useState(DEFAULT_LOOK);
   const [permits, setPermits] = useState<Permit[]>([]);
@@ -93,13 +104,14 @@ export function Settings({
     // before they left would still say "not granted" over a grant already
     // working. A second is faster than anybody can tick a box and switch back.
     void invoke<Shortcut[]>("shortcuts").then(setKeys);
+    void invoke<Setup>("agent_setup").then(setSetup);
     const grants = () => void invoke<Permit[]>("permits").then(setPermits);
     grants();
     const watching = window.setInterval(grants, 1000);
     // Servers connect in the background long after this mounts -- `npx` can spend
     // a minute fetching one it has never run -- so this looks again rather than
     // showing "starting…" forever to somebody who opened settings early.
-    const look = () => void invoke<{ name: string }[]>("servers").then(setServers);
+    const look = () => void invoke<Server[]>("servers").then(setServers);
     look();
     const again = window.setInterval(look, 2000);
     return () => {
@@ -147,15 +159,6 @@ export function Settings({
             />
           ))}
         </div>
-        {brain && (
-          <Section title="Works inside">
-            <Row
-              icon={<I.Grid />}
-              label={short(brain.workspace)}
-              sub="What it runs and writes stays here. Set in config.toml."
-            />
-          </Section>
-        )}
       </Page>
     );
   }
@@ -284,6 +287,120 @@ export function Settings({
     );
   }
 
+  if (where === "agents" && setup) {
+    return (
+      <Page title="Agents" onBack={() => setWhere("root")}>
+        <p className="px-0.5 pt-1 pb-2.5 text-[10.5px] leading-snug text-ink-3">
+          Where agents work, and how much rope they get.
+        </p>
+
+        <Section title="Works inside">
+          <button
+            onClick={() =>
+              void invoke<string | null>("pick_workspace")
+                .then((picked) => {
+                  // Nothing picked is a cancel, not a failure.
+                  if (picked) void invoke<Setup>("agent_setup").then(setSetup);
+                })
+                .catch((e) => setProblem(String(e)))
+            }
+            className="flex w-full items-center gap-2.5 rounded-xl bg-raise p-2.5 text-left transition-colors duration-150 hover:bg-raise-hi hairline"
+          >
+            <span className="text-ink-2">
+              <I.Grid />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block truncate text-[12px] font-medium">
+                {short(setup.workspace)}
+              </span>
+              {/* The boundary that makes shell access and file writing acceptable
+                  at all, so it says what it is rather than "Folder". */}
+              <span className="mt-px block text-[10.5px] leading-snug text-ink-3">
+                Everything an agent runs and writes stays in here.
+              </span>
+            </span>
+            <span className="shrink-0 text-[11.5px] text-blue">Change</span>
+          </button>
+          <p className="px-0.5 pt-1.5 text-[10px] leading-snug text-ink-3">
+            Until you quit. Set <code className="text-ink-2">workspace</code> in
+            config.toml to keep it — Nudge will not rewrite that file behind you.
+          </p>
+        </Section>
+
+        <Section title="On its own">
+          <Row
+            icon={<I.Bulb />}
+            label="Suggest things"
+            sub="Let Nudge raise an idea now and then without being asked."
+            trailing={
+              <Toggle
+                on={setup.suggesting}
+                onChange={(on) => {
+                  setSetup({ ...setup, suggesting: on });
+                  void invoke("set_suggesting", { on });
+                }}
+              />
+            }
+          />
+          {/* Stated rather than offered as a dial. The number exists so a model
+              that never finishes gives up instead of clicking forever, and it is
+              not a preference -- but hiding it entirely leaves people guessing
+              why an agent stopped. */}
+          <Row
+            icon={<I.Agent />}
+            label="Gives up after"
+            sub="Long enough for a real task, short enough to stop a loop."
+            value={`${setup.steps} steps`}
+          />
+          <Row
+            icon={<I.Power />}
+            label="Escape stops it"
+            sub="From anywhere, whatever it is in the middle of."
+          />
+        </Section>
+
+        <Section title="Tools they can use">
+          {servers.length === 0 ? (
+            <p className="px-0.5 text-[10.5px] leading-snug text-ink-3">
+              None yet. Each one is three lines in config.toml and brings its own
+              tools.
+            </p>
+          ) : (
+            servers.map((s) => (
+              <div key={s.name} className="flex items-start gap-2.5 rounded-xl bg-raise p-2.5 hairline">
+                <span
+                  className={`mt-px grid size-5 shrink-0 place-items-center rounded-[6px] ${
+                    s.failed ? "bg-[#ff453a]/20 text-[#ff8a80]" : "bg-blue/20 text-blue"
+                  }`}
+                >
+                  <I.Bolt />
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <h3 className="min-w-0 truncate text-[12px] font-medium">{s.name}</h3>
+                    <span
+                      className={`ml-auto shrink-0 text-[10.5px] ${
+                        s.failed ? "text-[#ff8a80]" : "text-ink-3"
+                      }`}
+                    >
+                      {s.said}
+                    </span>
+                  </div>
+                  {/* The name is whatever the config called it. This is what is
+                      actually running, and for a filesystem server the folder is
+                      the whole question. */}
+                  {s.about && (
+                    <p className="mt-px truncate font-mono text-[10px] text-ink-3">{s.about}</p>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </Section>
+      </Page>
+    );
+  }
+
   if (where === "keys") {
     return (
       <Page title="Shortcuts" onBack={() => setWhere("root")}>
@@ -388,10 +505,20 @@ export function Settings({
           onClick={() => setWhere("voice")}
         />
         <Row
+          icon={<I.Agent />}
+          label="Agents"
+          sub="Where they work, and how much rope"
+          value={setup ? short(setup.workspace) : undefined}
+          chevron
+          onClick={() => {
+            setProblem(null);
+            setWhere("agents");
+          }}
+        />
+        <Row
           icon={<I.Grid />}
           label="Integrations"
           sub="Services Nudge can reach"
-          value={servers.length ? `${servers.length} connected` : undefined}
           chevron
           onClick={onIntegrations}
         />

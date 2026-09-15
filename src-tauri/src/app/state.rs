@@ -101,6 +101,13 @@ impl Flag {
     }
 }
 
+/// Whether Nudge may raise a suggestion nobody asked for.
+///
+/// On by default, because an assistant that only ever answers is one people
+/// forget can do anything else -- and off is a real preference, because the same
+/// thing unasked-for is an interruption.
+pub struct Suggesting(pub Flag);
+
 /// The key that summons Nudge, as it stands.
 ///
 /// Changeable, so it cannot live in `cfg` -- and read by the pointer loop sixty

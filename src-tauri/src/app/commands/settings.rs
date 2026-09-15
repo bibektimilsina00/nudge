@@ -695,3 +695,65 @@ mod tests {
         assert_eq!(as_caps("Ctrl+F13"), vec!["⌃ control", "f13"]);
     }
 }
+
+/// How agents are set up, for the page that shows it.
+#[derive(serde::Serialize)]
+pub struct AgentSetup {
+    pub workspace: String,
+    pub suggesting: bool,
+    /// The step budget, shown rather than set -- see the page for why.
+    pub steps: usize,
+}
+
+#[tauri::command]
+pub fn agent_setup(app: AppHandle) -> AgentSetup {
+    AgentSetup {
+        workspace: app
+            .state::<crate::core::run::session::Nudge>()
+            .workspace()
+            .display()
+            .to_string(),
+        suggesting: app.state::<crate::app::state::Suggesting>().0.on(),
+        steps: crate::core::run::agent::MAX_STEPS,
+    }
+}
+
+#[tauri::command]
+pub fn set_suggesting(app: AppHandle, on: bool) {
+    app.state::<crate::app::state::Suggesting>().0.set(on);
+}
+
+/// Choose the folder agents work in.
+///
+/// macOS's own folder chooser through `osascript`, rather than a dependency for
+/// one dialog. It blocks until somebody answers, so it runs off the async runtime;
+/// an empty return is a cancel, which is not an error and must not read as one.
+#[tauri::command]
+pub async fn pick_workspace(app: AppHandle) -> std::result::Result<Option<String>, String> {
+    let chosen = tokio::task::spawn_blocking(|| {
+        std::process::Command::new("/usr/bin/osascript")
+            .arg("-e")
+            .arg(
+                "POSIX path of (choose folder with prompt \"Where should Nudge work?                  Everything it runs and writes stays inside.\")",
+            )
+            .output()
+    })
+    .await
+    .map_err(|e| e.to_string())?
+    .map_err(|e| e.to_string())?;
+
+    let path = String::from_utf8_lossy(&chosen.stdout).trim().to_string();
+    if path.is_empty() {
+        return Ok(None);
+    }
+    // Trailing slash from `POSIX path of`, which would otherwise show up in every
+    // path printed back to somebody.
+    let path = path.trim_end_matches('/').to_string();
+    // Through the same check a spoken "work in my nudge project" goes through.
+    // The boundary is still a boundary -- it has just moved, because somebody
+    // said where to.
+    app.state::<crate::core::run::session::Nudge>()
+        .move_to(&path)
+        .map_err(|e| e.to_string())?;
+    Ok(Some(path))
+}

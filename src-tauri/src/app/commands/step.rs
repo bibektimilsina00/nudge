@@ -427,6 +427,11 @@ fn volunteer_if_it_is_ever_a_good_moment(app: &AppHandle) {
                 .iter()
                 .any(|a| a.eq_ignore_ascii_case(name))
     };
+    // Switched off, nothing is raised unprompted. Asking is untouched -- this is
+    // about Nudge starting the conversation, not about it being able to answer.
+    if !app.state::<crate::app::state::Suggesting>().0.on() {
+        return;
+    }
     let Some(offer) = crate::core::offers::catalogue()
         .into_iter()
         .find(|o| offers.may_volunteer(o, busy, here))

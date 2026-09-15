@@ -1,20 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { invoke } from "@tauri-apps/api/core";
+import { useMemo, useState } from "react";
 
 type Service = { name: string; tint: string; mark: string; dark?: boolean; blurb: string };
-type Server = { name: string; about: string; said: string; failed: boolean };
 
 /**
  * The integrations browser.
  *
- * Two halves, and only the first is real. The tool servers at the top are
- * whatever the config named and are actually connected and actually working; the
- * catalogue underneath is a list of services Nudge does not reach yet, and
- * `Connect` on those is inert.
+ * UI only for now -- nothing here connects to anything, and `Connect` is inert.
  *
- * The real ones go first and say so. A page that opens on a wall of famous logos
- * that do nothing reads as a product that does nothing -- while the thing that
- * does work, and is doing it right now, was not on this page at all.
+ * The real tool servers used to sit at the top of this page, which put working
+ * plumbing above a catalogue of things that do not work yet. They belong with the
+ * agents that use them, and that is where they went.
  *
  * Monogram tiles rather than the real brand marks: shipping other companies'
  * logos into a binary is a licensing question, and a coloured initial carries the
@@ -76,17 +71,6 @@ const SERVICES: Service[] = [
 
 export function Integrations({ onBack }: { onBack: () => void }) {
   const [query, setQuery] = useState("");
-  const [servers, setServers] = useState<Server[]>([]);
-
-  // They connect in the background long after this mounts -- `npx` can spend a
-  // minute fetching a server it has never run -- so this looks again rather than
-  // saying "starting…" forever.
-  useEffect(() => {
-    const look = () => void invoke<Server[]>("servers").then(setServers);
-    look();
-    const again = window.setInterval(look, 2000);
-    return () => window.clearInterval(again);
-  }, []);
 
   // Filtering is real even though connecting is not -- a search box that does
   // nothing is more confusing than no search box.
@@ -130,48 +114,6 @@ export function Integrations({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
-        {servers.length > 0 && !query && (
-          <>
-            <p className="px-0.5 pt-0.5 text-[10.5px] text-ink-3">
-              Connected — tool servers from your config
-            </p>
-            {servers.map((s) => (
-              <div key={s.name} className="flex items-start gap-2.5 rounded-xl bg-raise p-2.5 hairline">
-                <span
-                  className={`grid size-5 shrink-0 place-items-center rounded-[6px] ${
-                    s.failed ? "bg-[#ff453a]/20 text-[#ff8a80]" : "bg-blue/20 text-blue"
-                  }`}
-                >
-                  <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-                    <path d="M9 2 4 9h3.5L7 14l5-7H8.5Z" strokeLinejoin="round" />
-                  </svg>
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-baseline gap-2">
-                    <h3 className="min-w-0 truncate text-[12px] font-semibold">{s.name}</h3>
-                    {/* A count, not a tick. A server you only know the name of is
-                        one you have to trust; one that says it brought fourteen
-                        tools is one you can weigh. */}
-                    <span
-                      className={`ml-auto shrink-0 text-[10.5px] ${
-                        s.failed ? "text-[#ff8a80]" : "text-ink-3"
-                      }`}
-                    >
-                      {s.said}
-                    </span>
-                  </div>
-                  {/* The name is whatever the config called it, and "files" is a
-                      reasonable name that means nothing to a reader. This is what
-                      is actually running. */}
-                  {s.about && (
-                    <p className="mt-px truncate font-mono text-[10px] text-ink-3">{s.about}</p>
-                  )}
-                </div>
-              </div>
-            ))}
-            <p className="px-0.5 pt-2 text-[10.5px] text-ink-3">Not yet reachable</p>
-          </>
-        )}
         {shown.map((s) => (
           <Card key={s.name} service={s} />
         ))}

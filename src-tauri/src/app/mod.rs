@@ -10,7 +10,8 @@ mod ui;
 use crate::config::Config;
 use crate::core::run::session::Nudge;
 use state::{
-    Background, Docked, Flag, Grants, Hotkey, Look, Mic, Screen, Settle, Voice, VoiceMode,
+    Background, Docked, Flag, Grants, Hotkey, Look, Mic, Screen, Settle, Suggesting, Voice,
+    VoiceMode,
 };
 use tauri::Manager;
 
@@ -120,6 +121,7 @@ pub fn run() {
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));
             app.manage(Hotkey(std::sync::Mutex::new(hotkey.clone())));
+            app.manage(Suggesting(Flag::new(true)));
             app.manage(Look(std::sync::Mutex::new(
                 nudge_look.unwrap_or_else(|| "cat".into()),
             )));
@@ -229,6 +231,9 @@ pub fn run() {
             commands::set_reach,
             commands::brain,
             commands::retune,
+            commands::agent_setup,
+            commands::set_suggesting,
+            commands::pick_workspace,
             commands::shortcuts,
             commands::set_shortcut,
             commands::permits,
