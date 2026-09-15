@@ -77,6 +77,10 @@ pub fn catalogue() -> Vec<Offer> {
                 "Find issues about this bug".into(),
                 "Draft a release checklist".into(),
                 "Who reviewed this last?".into(),
+                "What changed since Friday?".into(),
+                "Open a PR for this branch".into(),
+                "Is CI green on main?".into(),
+                "Find the commit that touched this".into(),
             ],
         },
         Offer {
@@ -90,6 +94,10 @@ pub fn catalogue() -> Vec<Offer> {
                 "Move the standup to Thursday".into(),
                 "Find an hour with Sara this week".into(),
                 "Am I free on Friday afternoon?".into(),
+                "When is my next meeting?".into(),
+                "Block out two hours tomorrow".into(),
+                "Cancel the three o'clock".into(),
+                "What is on next Monday?".into(),
             ],
         },
         Offer {
@@ -103,6 +111,10 @@ pub fn catalogue() -> Vec<Offer> {
                 "Reply saying I will be late".into(),
                 "Find the invoice from March".into(),
                 "Draft a reply to the last one".into(),
+                "Who has not answered me?".into(),
+                "Unsubscribe me from this".into(),
+                "Send that file to Sara".into(),
+                "What did the client say?".into(),
             ],
         },
         Offer {
@@ -115,6 +127,10 @@ pub fn catalogue() -> Vec<Offer> {
                 "What did I miss in #general?".into(),
                 "Tell the team I am running late".into(),
                 "Find where we discussed pricing".into(),
+                "Anyone mention me today?".into(),
+                "Summarise the standup thread".into(),
+                "Send this to the design channel".into(),
+                "What is the link they shared?".into(),
             ],
         },
     ]

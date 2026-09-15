@@ -19,6 +19,10 @@
   /* Working. Slow enough to read as breathing rather than as a warning, and
      scale only -- see the note in Face.tsx about why nothing here flashes. */
   --animate-breath: breath 2s ease-in-out infinite;
+  /* The examples drifting past. Linear, because constant motion that eases is
+     motion that looks like it keeps changing its mind. The duration is set per
+     row so the speed stays the same however many items there are. */
+  --animate-drift: drift 30s linear infinite;
   /* Out of the notch, and back into it.
      Not a slide: the bar comes from the black rectangle it is centred under, so
      it grows out of that -- narrow and short, expanding outward and down. The
@@ -55,6 +59,12 @@
       transform: translateY(-12%) scaleX(0.16) scaleY(0.5);
       opacity: 0;
     }
+  }
+
+  @keyframes drift {
+    /* Exactly half, because the list is held twice: at the moment the first copy
+       has left, the second is where the first began. */
+    to { transform: translateX(-50%); }
   }
 
   @keyframes breath {

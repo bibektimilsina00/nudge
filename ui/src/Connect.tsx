@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
@@ -172,69 +172,66 @@ function Marks({ offer }: { offer: Offer }) {
 }
 
 /**
- * The row of things it would be for.
+ * The row of things it would be for, drifting past.
  *
- * Scrolls, and is faded at both ends rather than clipped, because a list cut
- * dead at the edge reads as a rendering fault while one that fades reads as a
- * list with more in it. Faded on the left only once there is something to the
- * left -- a permanent fade over nothing is a shadow with no object.
+ * There are more of these than fit, and a row that overflows silently is a row
+ * whose far half nobody reads. So it moves -- slowly, one pass every few seconds
+ * per item, which is reading speed rather than attention-seeking speed.
+ *
+ * Seamless by holding the list twice and sliding exactly half its width: at the
+ * moment the first copy leaves, the second is where it started, so there is no
+ * point at which it jumps back. The duration scales with the number of items so
+ * that the *speed* is constant -- a fixed duration would make a seven-item row
+ * crawl and a nine-item row race.
+ *
+ * It stops when pointed at, because the one thing somebody does with a moving
+ * list is try to read one item of it.
  */
 function Examples({ examples }: { examples: string[] }) {
-  const rail = useRef<HTMLDivElement>(null);
-  const [edges, setEdges] = useState({ left: false, right: false });
-
-  useEffect(() => {
-    const el = rail.current;
-    if (!el) return;
-    const look = () => {
-      setEdges({
-        left: el.scrollLeft > 4,
-        right: el.scrollLeft + el.clientWidth < el.scrollWidth - 4,
-      });
-    };
-    look();
-    el.addEventListener("scroll", look, { passive: true });
-    const watch = new ResizeObserver(look);
-    watch.observe(el);
-    return () => {
-      el.removeEventListener("scroll", look);
-      watch.disconnect();
-    };
-  }, [examples]);
-
   if (examples.length === 0) return null;
+  // Slow. Each item takes about three and a half seconds to cross, which is
+  // long enough to read one without waiting for it.
+  const seconds = examples.length * 3.5;
 
   return (
-    <div className="relative mt-3">
+    <div className="group relative mt-3 overflow-hidden">
       <div
-        ref={rail}
-        // The scrollbar is hidden rather than styled: this is a row of five
-        // things on a bar hanging off a screen edge, and a scrollbar under it is
-        // a piece of furniture nobody needs to see to use.
-        className="flex gap-2 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+        className="flex w-max gap-2 motion-safe:animate-drift group-hover:[animation-play-state:paused]"
+        style={{ animationDuration: `${seconds}s` }}
       >
+        {/* Twice, and the copy is hidden from anything reading the page aloud --
+            it is the same list, present only so the loop has somewhere to go. */}
         {examples.map((e) => (
-          <span
-            key={e}
-            className="shrink-0 rounded-full bg-white/[0.06] px-3 py-[6px] text-[11.5px] whitespace-nowrap text-white/70 inset-ring-1 inset-ring-white/[0.06]"
-          >
-            {e}
-          </span>
+          <Chip key={e} text={e} />
+        ))}
+        {examples.map((e) => (
+          <Chip key={`again-${e}`} text={e} aria-hidden />
         ))}
       </div>
-      {edges.left && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#0c0c0e] to-transparent"
-        />
-      )}
-      {edges.right && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#0c0c0e] to-transparent"
-        />
-      )}
+
+      {/* Both edges, always. With the row always moving there is always
+          something arriving on one side and leaving on the other, so a fade that
+          appeared and disappeared would be its own distraction. */}
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 left-0 w-12 bg-gradient-to-r from-[#0c0c0e] to-transparent"
+      />
+      <span
+        aria-hidden
+        className="pointer-events-none absolute inset-y-0 right-0 w-12 bg-gradient-to-l from-[#0c0c0e] to-transparent"
+      />
     </div>
+  );
+}
+
+function Chip({ text, ...rest }: { text: string } & React.HTMLAttributes<HTMLSpanElement>) {
+  return (
+    <span
+      {...rest}
+      className="shrink-0 rounded-full bg-white/[0.06] px-3 py-[6px] text-[11.5px] whitespace-nowrap text-white/70 inset-ring-1 inset-ring-white/[0.06]"
+    >
+      {text}
+    </span>
   );
 }
 
