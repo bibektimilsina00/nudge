@@ -102,3 +102,92 @@ export function Toggle({ on, onChange }: { on: boolean; onChange: (on: boolean) 
     </button>
   );
 }
+
+/**
+ * Pick one of a few.
+ *
+ * The rows this replaces either showed a value with no way to change it, or
+ * changed it by cycling on click -- which is the worst of both: you cannot see
+ * what the alternatives are, you cannot go back without going all the way round,
+ * and there is no way to tell a setting with three states from a button.
+ *
+ * So every option is on screen with what it costs beside it. These are choices
+ * between trades -- a slower free model against a fast paid one, no thinking
+ * tokens against thousands -- and an option list that hides the trade is asking
+ * people to guess.
+ */
+export function Choice<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: { key: T; label: string; about?: string }[];
+  value: T;
+  onChange: (v: T) => void;
+}) {
+  return (
+    <div className="overflow-hidden rounded-xl bg-raise hairline [&>*+*]:border-t [&>*+*]:border-line">
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <button
+            key={o.key}
+            onClick={() => onChange(o.key)}
+            aria-pressed={on}
+            className="flex w-full items-start gap-2.5 px-2.5 py-2 text-left transition-colors duration-150 hover:bg-raise-hi"
+          >
+            {/* A tick, not a radio ring. macOS marks the chosen item in a list
+                with a check and leaves the others blank, rather than drawing an
+                empty control beside everything you did not pick. */}
+            <span
+              className={`mt-px grid size-[15px] shrink-0 place-items-center text-blue transition-opacity duration-150 ${
+                on ? "opacity-100" : "opacity-0"
+              }`}
+            >
+              <svg viewBox="0 0 16 16" className="size-[13px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+                <path d="m3 8.5 3.5 3.5L13 5" />
+              </svg>
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className={`block text-[12px] ${on ? "font-medium text-white" : "text-ink-2"}`}>
+                {o.label}
+              </span>
+              {o.about && (
+                <span className="mt-px block text-[10.5px] leading-snug text-ink-3">{o.about}</span>
+              )}
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+/** A page inside settings: a back arrow, a title, and whatever it is about. */
+export function Page({
+  title,
+  onBack,
+  children,
+}: {
+  title: string;
+  onBack: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <header className="flex items-center gap-2.5 px-3 pt-2.5 pb-1">
+        <button
+          onClick={onBack}
+          aria-label="Back"
+          className="grid size-[21px] shrink-0 place-items-center rounded-full bg-raise text-ink-2 transition-colors duration-150 hover:bg-raise-hi hover:text-white"
+        >
+          <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M9.5 3.5 5 8l4.5 4.5" />
+          </svg>
+        </button>
+        <h2 className="text-[13px] font-semibold tracking-tight">{title}</h2>
+      </header>
+      <div className="min-h-0 flex-1 overflow-y-auto px-3 pb-3">{children}</div>
+    </div>
+  );
+}

@@ -220,6 +220,7 @@ pub fn run() {
             commands::reach,
             commands::set_reach,
             commands::brain,
+            commands::retune,
             commands::servers,
             commands::agents,
             commands::answer_agent,

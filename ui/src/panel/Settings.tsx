@@ -1,44 +1,41 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { Row, Section, Toggle } from "./parts";
+import { Choice, Page, Row, Section, Toggle } from "./parts";
 import * as I from "./icons";
 
 type VoiceMode = "off" | "system" | "gemini";
-const VOICE_LABEL: Record<VoiceMode, string> = { off: "Off", system: "System", gemini: "Natural" };
-const NEXT: Record<VoiceMode, VoiceMode> = { off: "system", system: "gemini", gemini: "off" };
-
 type Allowed = { key: string; label: string; about: string; on: boolean };
-type Brain = { provider: string; model: string; think: string; workspace: string };
-
-const PROVIDER: Record<string, string> = {
-  ollama: "Ollama — local and free",
-  gemini: "Gemini",
-  anthropic: "Anthropic",
+type Pick = { key: string; label: string; about: string };
+type Brain = {
+  provider: string;
+  model: string;
+  think: string;
+  workspace: string;
+  providers: Pick[];
+  thinks: Pick[];
 };
+
+/** Which page of settings is open. */
+type Where = "root" | "allowed" | "answering" | "tools" | "screen";
 
 /**
  * The settings sheet.
  *
- * This used to be somebody else's settings sheet. It had a Community section
- * linking to a Discord nobody was in, a Dictation row for a feature that does not
- * exist here, and -- the tell -- Log Out and Delete Account, in an app with no
- * accounts to log out of. Those were not rows adapted from another product, they
- * were *its* rows, kept because the shape looked right.
+ * Two things were wrong with it and they had the same cause.
  *
- * Meanwhile the settings Nudge actually has lived only in a TOML file and the menu
- * bar: which model is answering, what it is allowed to do to your machine, which
- * tool servers arrived, where it may write. The sheet was a stranger's feature
- * list sitting on an app whose own decisions were invisible.
+ * It was flat: every section of every setting on one scroll, so the three grants
+ * that can let a model run any command on your machine sat in the same visual
+ * register as which microphone is selected. A list that long is one nobody reads
+ * to the end, and the things worth reading are the ones that get skipped.
  *
- * So it is built from those instead, under two rules.
+ * And nothing in it could be *chosen*. A row either showed a value with no way to
+ * change it, or changed it by cycling on click -- which is the worst of both,
+ * because you cannot see the alternatives, cannot go back without going all the
+ * way round, and cannot tell a three-state setting from a button.
  *
- * **Nothing inert.** Every row reads or changes something real. The old sheet was
- * mostly placeholders standing in for behaviour that might arrive later, which is
- * how a settings screen teaches people that its switches do nothing.
- *
- * **The dangerous things first.** "Allowed to" is at the top because it is the one
- * section where a wrong answer costs something, and a permission buried under four
- * rows of preferences is a permission nobody audits.
+ * So it is pages now, and the pages are made of pickers. The root says what each
+ * page currently holds, so the common case -- checking rather than changing -- is
+ * answered without opening anything.
  */
 export function Settings({
   docked,
@@ -53,12 +50,14 @@ export function Settings({
   onSkills: () => void;
   onReport: (kind: "bug" | "idea") => void;
 }) {
+  const [where, setWhere] = useState<Where>("root");
   const [voice, setVoice] = useState<VoiceMode>("system");
   const [mic, setMic] = useState("…");
   const [version, setVersion] = useState("");
   const [allowed, setAllowed] = useState<Allowed[]>([]);
   const [brain, setBrain] = useState<Brain | null>(null);
   const [servers, setServers] = useState<[string, string][]>([]);
+  const [problem, setProblem] = useState<string | null>(null);
 
   useEffect(() => {
     void invoke<VoiceMode>("voice_mode").then(setVoice);
@@ -80,94 +79,196 @@ export function Settings({
     void invoke("set_reach", { key, on });
   };
 
-  return (
-    <div className="flex-1 overflow-y-auto px-3 pb-3">
-      {/* First, on purpose. The only section where being wrong costs anything,
-          and a permission under four rows of preferences is one nobody looks at
-          again. */}
-      <Section title="Allowed to">
-        {allowed.map((g) => (
-          <Row
-            key={g.key}
-            icon={<I.Bolt />}
-            label={g.label}
-            sub={g.about}
-            trailing={<Toggle on={g.on} onChange={(v) => allow(g.key, v)} />}
-          />
-        ))}
+  // Asked for, then confirmed. A provider that cannot start -- a missing key is
+  // the usual one -- must leave the working one in place and say why, so the
+  // picker only moves once Rust agrees it moved.
+  const retune = (change: { provider?: string; think?: string }) => {
+    setProblem(null);
+    void invoke("retune", change)
+      .then(() => invoke<Brain>("brain").then(setBrain))
+      .catch((e) => setProblem(String(e)));
+  };
+
+  const open = allowed.filter((g) => g.on).length;
+
+  if (where === "allowed") {
+    return (
+      <Page title="Allowed to" onBack={() => setWhere("root")}>
+        <p className="px-0.5 pt-1 pb-2.5 text-[10.5px] leading-snug text-ink-3">
+          Off, Nudge reads the screen, runs commands that only look, and fetches
+          pages. Each of these lifts one of those limits for as long as it is on.
+        </p>
+        <div className="space-y-2">
+          {allowed.map((g) => (
+            <Row
+              key={g.key}
+              icon={<I.Bolt />}
+              label={g.label}
+              sub={g.about}
+              trailing={<Toggle on={g.on} onChange={(v) => allow(g.key, v)} />}
+            />
+          ))}
+        </div>
         {brain && (
+          <Section title="Works inside">
+            <Row
+              icon={<I.Grid />}
+              label={short(brain.workspace)}
+              sub="What it runs and writes stays here. Set in config.toml."
+            />
+          </Section>
+        )}
+      </Page>
+    );
+  }
+
+  if (where === "answering" && brain) {
+    return (
+      <Page title="Answering" onBack={() => setWhere("root")}>
+        {problem && (
+          <p className="mt-1 mb-2 rounded-xl bg-[#ff453a]/12 p-2 text-[10.5px] leading-snug text-[#ff8a80]">
+            {problem}
+          </p>
+        )}
+        <Section title="Model">
+          <Choice
+            options={brain.providers}
+            value={brain.provider}
+            onChange={(provider) => retune({ provider })}
+          />
+          <p className="px-0.5 pt-1.5 text-[10px] text-ink-3">
+            Using {brain.model}. Name a different one in config.toml.
+          </p>
+        </Section>
+
+        <Section title="Thinking before answering">
+          <Choice
+            options={brain.thinks}
+            value={brain.think}
+            onChange={(think) => retune({ think })}
+          />
+          {/* The one number worth printing in a settings screen: thinking bills
+              at the output rate, five times input, so this outweighs the model. */}
+          <p className="px-0.5 pt-1.5 text-[10px] leading-snug text-ink-3">
+            Thinking is charged at five times the rate of what you send it.
+          </p>
+        </Section>
+
+        <Section title="Speaks back">
+          <Choice
+            options={[
+              { key: "off", label: "Off", about: "Nothing aloud." },
+              { key: "system", label: "System", about: "macOS say. Free, offline, instant." },
+              { key: "gemini", label: "Natural", about: "Much better. A round trip and a charge per step." },
+            ]}
+            value={voice}
+            onChange={(mode) => {
+              setVoice(mode as VoiceMode);
+              void invoke("set_voice_mode", { mode });
+            }}
+          />
+        </Section>
+
+        <Section title="Listens with">
+          <Row icon={<I.MicIcon />} label={mic} sub="Whatever macOS has selected." />
+        </Section>
+      </Page>
+    );
+  }
+
+  if (where === "tools") {
+    return (
+      <Page title="Tools" onBack={() => setWhere("root")}>
+        <div className="space-y-2 pt-1">
           <Row
             icon={<I.Grid />}
-            label="Works inside"
-            sub="What it runs and writes stays here."
-            value={short(brain.workspace)}
+            label="Integrations"
+            sub="Services Nudge can reach"
+            chevron
+            onClick={onIntegrations}
           />
-        )}
-      </Section>
+          <Row
+            icon={<I.Bolt />}
+            label="Skills"
+            sub="Folders of instructions it can follow"
+            chevron
+            onClick={onSkills}
+          />
+        </div>
+        <Section title="Servers">
+          {servers.length === 0 ? (
+            <p className="px-0.5 text-[10.5px] leading-snug text-ink-3">
+              None yet. Each one is three lines in config.toml and brings its own
+              tools.
+            </p>
+          ) : (
+            // A count rather than a tick: a server you only know the name of is
+            // one you have to trust.
+            servers.map(([name, said]) => (
+              <Row key={name} icon={<I.Dot className="bg-white/40" />} label={name} value={said} />
+            ))
+          )}
+        </Section>
+      </Page>
+    );
+  }
 
-      <Section title="Answering">
-        {brain && (
-          <>
-            {/* Read, not edited. The config file is the feature; a panel that
-                half-edits it is a second place to look with fewer answers. */}
-            <Row
-              icon={<I.Spark />}
-              label={PROVIDER[brain.provider] ?? brain.provider}
-              sub={brain.model}
-            />
-            <Row icon={<I.Bulb />} label="Thinking" value={brain.think} />
-          </>
-        )}
-        <Row icon={<I.MicIcon />} label="Microphone" value={mic} />
-        {/* Cycles Off → System → Natural. */}
-        <Row
-          icon={<I.Wave />}
-          label="Speaks back"
-          value={VOICE_LABEL[voice]}
-          chevron
-          onClick={() => {
-            const next = NEXT[voice];
-            setVoice(next);
-            void invoke("set_voice_mode", { mode: next });
-          }}
-        />
-      </Section>
+  if (where === "screen") {
+    return (
+      <Page title="On screen" onBack={() => setWhere("root")}>
+        <Section title="Companion">
+          <Choice
+            options={[
+              { key: "loose", label: "Following your cursor", about: "Where it works. Point and ask." },
+              { key: "parked", label: "Parked in the panel", about: "Out of the way, still running." },
+            ]}
+            value={docked ? "parked" : "loose"}
+            onChange={(v) => onDock(v === "parked")}
+          />
+        </Section>
+      </Page>
+    );
+  }
 
-      <Section title="Tools">
-        <Row
-          icon={<I.Grid />}
-          label="Integrations"
-          sub="Services Nudge can reach"
-          chevron
-          onClick={onIntegrations}
-        />
+  return (
+    <div className="flex-1 overflow-y-auto px-3 pb-3">
+      {/* Each row says what is inside it, so checking a setting -- which is most
+          of why anybody opens this -- needs no clicks at all. */}
+      <Section title="Settings">
         <Row
           icon={<I.Bolt />}
-          label="Skills"
-          sub="Folders of instructions it can follow"
+          label="Allowed to"
+          sub="What Nudge may do to your machine"
+          value={open === 0 ? "nothing extra" : `${open} of ${allowed.length}`}
           chevron
-          onClick={onSkills}
+          onClick={() => setWhere("allowed")}
         />
-        {/* Whatever the config named. A count rather than a tick: a server you
-            only know the name of is one you have to trust. */}
-        {servers.map(([name, said]) => (
-          <Row key={name} icon={<I.Dot className="bg-white/40" />} label={name} value={said} />
-        ))}
-      </Section>
-
-      <Section title="On screen">
+        <Row
+          icon={<I.Spark />}
+          label="Answering"
+          sub="Model, thinking, voice"
+          value={brain?.provider ?? "…"}
+          chevron
+          onClick={() => setWhere("answering")}
+        />
+        <Row
+          icon={<I.Grid />}
+          label="Tools"
+          sub="Integrations, skills and servers"
+          value={servers.length ? `${servers.length} server${servers.length > 1 ? "s" : ""}` : undefined}
+          chevron
+          onClick={() => setWhere("tools")}
+        />
         <Row
           icon={<I.Arrow />}
-          label="Companion"
-          sub={docked ? "Parked in the panel." : "Following your cursor."}
+          label="On screen"
+          sub="Where the companion sits"
           value={docked ? "parked" : "loose"}
           chevron
-          onClick={() => onDock(!docked)}
+          onClick={() => setWhere("screen")}
         />
       </Section>
 
-      {/* A full row each rather than a pair of tiles: these are the only way
-          anything above ever finds out it is wrong. */}
       <Section title="Tell us">
         <Row
           icon={<I.Bug />}

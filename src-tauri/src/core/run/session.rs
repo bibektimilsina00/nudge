@@ -65,9 +65,28 @@ pub enum ServerState {
     Failed(String),
 }
 
+/// The model choices somebody can change while it runs.
+///
+/// Separate from `cfg` because the config file is the *starting* point, not the
+/// current state -- the same split the menu bar's flags already use, so that
+/// trying a cheaper model does not mean editing TOML and restarting.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Tuning {
+    pub provider: String,
+    pub think: Option<String>,
+}
+
 pub struct Nudge {
     pub cfg: Config,
-    provider: Box<dyn Provider>,
+    /// Swappable, because choosing a different model is a setting and not a
+    /// restart.
+    ///
+    /// `Arc` rather than `Box` so it can be cloned out of the lock before use:
+    /// every call through it is followed by an `.await`, and a guard held across
+    /// one is a guard held for a whole network round trip -- which is exactly when
+    /// somebody is most likely to be in settings changing it.
+    provider: std::sync::RwLock<std::sync::Arc<dyn Provider>>,
+    tuning: Mutex<Tuning>,
     session: Mutex<Option<Session>>,
     /// Where work happens, when it has been changed by voice.
     ///
@@ -111,14 +130,20 @@ pub struct Nudge {
 
 impl Nudge {
     pub fn new(cfg: Config) -> Result<Self> {
-        let provider = provider::build(&cfg)?;
+        let provider: std::sync::Arc<dyn Provider> =
+            std::sync::Arc::from(provider::build(&cfg)?);
         let reach = crate::core::reach::Reach::from_config(&cfg.reach);
+        let tuning = Tuning {
+            provider: cfg.provider.clone(),
+            think: cfg.think.clone(),
+        };
         Ok(Self {
             reach,
             memory: crate::core::memory::Memory::load(),
             last: Mutex::new(None),
             cfg,
-            provider,
+            provider: std::sync::RwLock::new(provider),
+            tuning: Mutex::new(tuning),
             session: Mutex::new(None),
             moved: Mutex::new(None),
             laps: Mutex::default(),
@@ -248,8 +273,32 @@ impl Nudge {
         Ok(expanded)
     }
 
+    /// The provider in force right now.
+    fn answering(&self) -> std::sync::Arc<dyn Provider> {
+        self.provider.read().unwrap().clone()
+    }
+
     pub fn provider_name(&self) -> &'static str {
-        self.provider.name()
+        self.answering().name()
+    }
+
+    pub fn tuning(&self) -> Tuning {
+        self.tuning.lock().unwrap().clone()
+    }
+
+    /// Change which model answers, and how hard it thinks.
+    ///
+    /// Built before it is swapped in, so a provider that cannot start -- a missing
+    /// key is the usual one -- leaves the working one in place and reports why,
+    /// rather than breaking the app from its own settings screen.
+    pub fn retune(&self, want: Tuning) -> Result<()> {
+        let mut cfg = self.cfg.clone();
+        cfg.provider = want.provider.clone();
+        cfg.think = want.think.clone();
+        let built: std::sync::Arc<dyn Provider> = std::sync::Arc::from(provider::build(&cfg)?);
+        *self.provider.write().unwrap() = built;
+        *self.tuning.lock().unwrap() = want;
+        Ok(())
     }
 
     pub fn begin(&self, goal: String) {
@@ -326,7 +375,7 @@ impl Nudge {
     /// Ask the provider to search. Here rather than in the app layer because the
     /// provider is owned here and nothing else should reach past it.
     pub async fn search(&self, query: &str) -> Result<String> {
-        self.provider.search(query).await
+        self.answering().search(query).await
     }
 
     /// Run a scoped task on a second agent and return what it found.
@@ -339,8 +388,9 @@ impl Nudge {
         F: FnMut(Step) -> Fut,
         Fut: std::future::Future<Output = Result<String>>,
     {
+        let answering = self.answering();
         crate::core::run::subagent::run(
-            self.provider.as_ref(),
+            answering.as_ref(),
             &self.workspace(),
             task,
             &self.tools(),
@@ -645,7 +695,7 @@ impl Nudge {
                     act: crate::core::provider::Act::Click,
                 }
             }
-            None => self.provider.next_step(&shot, &ask).await?,
+            None => self.answering().next_step(&shot, &ask).await?,
         };
         self.mark("brain");
 

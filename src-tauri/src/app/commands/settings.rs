@@ -345,6 +345,26 @@ pub fn set_reach(app: AppHandle, key: String, on: bool) {
     crate::app::ui::tray::refresh(&app, &hotkey);
 }
 
+/// One option in a picker, and what choosing it means.
+///
+/// The cost or the catch travels with the option rather than sitting in a
+/// paragraph above the group. "Gemini" and "Gemini — a round trip and a charge per
+/// step" are different choices, and only one of them can be made honestly.
+#[derive(serde::Serialize)]
+pub struct Pick {
+    pub key: String,
+    pub label: String,
+    pub about: String,
+}
+
+fn pick(key: &str, label: &str, about: &str) -> Pick {
+    Pick {
+        key: key.into(),
+        label: label.into(),
+        about: about.into(),
+    }
+}
+
 /// Which model is answering, and how hard it is thinking.
 #[derive(serde::Serialize)]
 pub struct Brain {
@@ -352,6 +372,8 @@ pub struct Brain {
     pub model: String,
     pub think: String,
     pub workspace: String,
+    pub providers: Vec<Pick>,
+    pub thinks: Vec<Pick>,
 }
 
 /// The "bring your own model" settings, read-only.
@@ -362,19 +384,62 @@ pub struct Brain {
 /// "why is this slow" and "why did that cost money" both start here.
 #[tauri::command]
 pub fn brain(app: AppHandle) -> Brain {
-    let cfg = &app.state::<crate::core::run::session::Nudge>().cfg;
+    let nudge = app.state::<crate::core::run::session::Nudge>();
+    let now = nudge.tuning();
     Brain {
-        provider: cfg.provider.clone(),
-        model: cfg
+        provider: now.provider.clone(),
+        model: nudge
+            .cfg
             .model
             .clone()
-            .unwrap_or_else(|| "its default".to_string()),
-        think: cfg.think.clone().unwrap_or_else(|| "default".into()),
-        workspace: cfg
+            .unwrap_or_else(|| "its default model".to_string()),
+        think: now.think.clone().unwrap_or_else(|| "default".into()),
+        workspace: nudge
+            .cfg
             .workspace
             .clone()
-            .unwrap_or_else(|| "~ (everything — set workspace)".into()),
+            .unwrap_or_else(|| "everywhere — set a workspace".into()),
+        // Written as the trade being made, because that is the only thing that
+        // distinguishes them to somebody who has not read the code.
+        providers: vec![
+            pick("ollama", "Ollama", "On your machine. Free, private, slower."),
+            pick("gemini", "Gemini", "Fast and cheap. A round trip per step."),
+            pick("anthropic", "Anthropic", "Strongest at reading a screen. Dearest."),
+        ],
+        // The single most expensive line in the config, so it says so. Thinking
+        // bills at the output rate -- five times input -- which outweighs the
+        // choice of model.
+        thinks: vec![
+            pick("low", "Brief", "No thinking tokens at all. Cheapest by far."),
+            pick("medium", "Considered", "Hundreds to thousands of extra tokens a step."),
+            pick("default", "The model's own", "Whatever it does when not told."),
+        ],
     }
+}
+
+/// Change which model answers, or how hard it thinks.
+///
+/// Either argument alone: the picker that was touched sends its value and the
+/// other keeps whatever it had, so two controls do not have to agree about what
+/// the other is showing.
+#[tauri::command]
+pub fn retune(
+    app: AppHandle,
+    provider: Option<String>,
+    think: Option<String>,
+) -> std::result::Result<(), String> {
+    let nudge = app.state::<crate::core::run::session::Nudge>();
+    let mut want = nudge.tuning();
+    if let Some(p) = provider {
+        want.provider = p;
+    }
+    if let Some(t) = think {
+        // "default" is the absence of the setting, not a value for it.
+        want.think = (t != "default").then_some(t);
+    }
+    nudge.retune(want).map_err(|e| {
+        crate::core::tools::secret::redact(&crate::error::plainly("change the model", &e))
+    })
 }
 
 /// The tool servers, and whether they arrived.
