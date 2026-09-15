@@ -116,6 +116,28 @@ pub struct Config {
     pub blocked_apps: Vec<String>,
     /// Extra window-title fragments to refuse, beyond the built-in list.
     pub blocked_titles: Vec<String>,
+    /// Where "Report a bug" and "Request a feature" send what people write.
+    ///
+    /// One URL for both -- they arrive with a `kind` of `"bug"` or `"idea"` and
+    /// differ by a word, so whoever reads them wants them in one place anyway.
+    /// The body is JSON:
+    ///
+    /// ```text
+    /// report_url = "https://example.com/report"
+    ///
+    /// { "kind": "bug", "text": "...", "image": "data:image/jpeg;base64,...",
+    ///   "version": "0.1.0", "os": "macOS 27.0" }
+    /// ```
+    ///
+    /// `image` is absent unless somebody attached one. Nothing else is collected:
+    /// no identifier, no screen, nothing about what they were doing.
+    ///
+    /// **The default is a placeholder and accepts everything.** `httpbin.org/post`
+    /// answers 200 and throws the body away, so Send works end to end today and
+    /// nobody has to see a half-built feature -- but nothing sent to it is kept by
+    /// anyone. Point this at something real before shipping, or reports are going
+    /// into a bin on purpose.
+    pub report_url: Option<String>,
 }
 
 impl Default for Config {
@@ -140,6 +162,7 @@ impl Default for Config {
             privacy_guard: true,
             blocked_apps: Vec::new(),
             blocked_titles: Vec::new(),
+            report_url: Some("https://httpbin.org/post".into()),
         }
     }
 }

@@ -10,6 +10,13 @@ use tauri_plugin_global_shortcut::ShortcutState;
 ///
 /// ponytail: 60Hz poll, emitting only on movement. If this ever shows up in a battery
 /// profile, drop to 30Hz or only run the loop while a session is active.
+/// How long the panel stays open after the pointer leaves, in poll ticks.
+///
+/// Sixteen milliseconds each, so about a fifth of a second -- long enough to
+/// cover the overshoot of reaching for something in a corner, short enough that
+/// deliberately moving away still feels like it closed when you left.
+const LINGER: u32 = 12;
+
 pub fn follow(app: &AppHandle) {
     let app = app.clone();
     std::thread::spawn(move || {
@@ -18,6 +25,9 @@ pub fn follow(app: &AppHandle) {
         let mut shown = true;
         let notch = crate::app::ui::notch::measure();
         let mut at_notch = false;
+        // Ticks the pointer has been off the panel while it is open. Leaving is
+        // not an event, it is a sustained absence -- see `LINGER`.
+        let mut away: u32 = 0;
         let bare = crate::app::input::hotkey::is_bare_modifier(&app.state::<Nudge>().cfg.hotkey);
         let mut ctrl_was = false;
         let mut click_was = false;
@@ -133,7 +143,27 @@ pub fn follow(app: &AppHandle) {
             // Pointing at the notch opens the dock. Polling rather than a tracking
             // area, because the window is click-through when closed and therefore
             // never sees a mouse event of its own.
-            let hovering = notch.is_hovered(x, y, at_notch);
+            // Arriving is instant; leaving waits a moment.
+            //
+            // A pointer on its way to the gear in the corner clips the edge of the
+            // panel, and with the close on the very next tick that shut the sheet
+            // out from under the button being aimed at -- reported as "sometimes I
+            // can't click those things", which is exactly what an intermittent
+            // one-frame excursion feels like.
+            //
+            // A wider region alone does not fix it: wherever the boundary is, the
+            // pointer can cross it, and the cost of crossing must not be losing
+            // the window. So closing needs the pointer to be away and *stay* away.
+            // Opening keeps no such delay -- a dock that hesitates before opening
+            // feels broken, while one that hesitates before closing feels patient.
+            let over = notch.is_hovered(x, y, at_notch);
+            if over {
+                away = 0;
+            } else if at_notch {
+                away += 1;
+            }
+            let hovering = over || (at_notch && away < LINGER);
+
             if hovering != at_notch {
                 at_notch = hovering;
                 crate::app::ui::panel::set_interactive(&app, hovering);

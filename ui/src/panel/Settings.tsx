@@ -14,22 +14,28 @@ const NEXT: Record<VoiceMode, VoiceMode> = { off: "system", system: "gemini", ge
  * nothing to sell. A fictional quota in front of the user every time they open
  * settings would be a placeholder that actively misinforms.
  *
- * Most of it is inert. Community, Support, Connections and the account rows
- * are placeholders for features that do not exist -- Nudge has no accounts, no
- * plans and nothing to upgrade to -- and sit here so the shape is settled before
- * the behaviour arrives. Rows that actually do something are marked, and only
- * those are rendered as buttons, so nothing offers a hover state it cannot honour.
+ * No Community section either. Two rows linking to a Discord and a GitHub that
+ * nobody is in yet is an empty room with a sign on the door; it can come back
+ * when there is something behind it.
+ *
+ * Some of it is still inert -- the account rows and a few of the customization
+ * ones are placeholders for behaviour that does not exist yet, and sit here so the
+ * shape is settled before it arrives. Rows that actually do something are marked,
+ * and only those are rendered as buttons, so nothing offers a hover state it
+ * cannot honour.
  */
 export function Settings({
   docked,
   onDock,
   onIntegrations,
   onSkills,
+  onReport,
 }: {
   docked: boolean;
   onDock: (v: boolean) => void;
   onIntegrations: () => void;
   onSkills: () => void;
+  onReport: (kind: "bug" | "idea") => void;
 }) {
   const [voice, setVoice] = useState<VoiceMode>("system");
   const [mic, setMic] = useState("…");
@@ -45,17 +51,12 @@ export function Settings({
 
   return (
     <div className="flex-1 overflow-y-auto px-3 pb-3">
-      <Section title="Community">
-        <div className="grid grid-cols-2 gap-2">
-          <Row compact icon={<I.Dot className="bg-[#5865f2]" />} label="Discord" />
-          <Row compact icon={<I.Dot className="bg-white/70" />} label="GitHub" />
-        </div>
-      </Section>
-
+      {/* First, and wired. These two are the only way anything here finds out it
+          is wrong, so they go above the settings rather than under them. */}
       <Section title="Support & updates">
         <div className="grid grid-cols-2 gap-2">
-          <Row compact icon={<I.Bulb />} label="Request a feature" />
-          <Row compact icon={<I.Bug />} label="Report a bug" />
+          <Row compact icon={<I.Bug />} label="Report a bug" onClick={() => onReport("bug")} />
+          <Row compact icon={<I.Bulb />} label="Request a feature" onClick={() => onReport("idea")} />
           <Row compact icon={<I.Refresh />} label="Check for updates" />
           <Row compact icon={<I.Spark />} label="What's new" />
         </div>

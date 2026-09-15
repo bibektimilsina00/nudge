@@ -215,6 +215,8 @@ pub fn run() {
             commands::microphone,
             commands::version,
             commands::quit,
+            commands::shot_for_report,
+            commands::send_report,
             commands::agents,
             commands::answer_agent,
             commands::stop_agent,

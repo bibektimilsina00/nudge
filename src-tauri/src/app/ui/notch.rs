@@ -20,6 +20,18 @@ pub struct Notch {
 /// aiming at a gap between two menu bars; a little slack costs nothing.
 const SLACK: f64 = 90.0;
 
+/// How far past the open panel the pointer may stray before it counts as leaving.
+///
+/// The controls people reach for last are in the corners -- the gear, the back
+/// arrow, the close -- and a corner is the one place where a hit region exactly
+/// the size of the panel is not big enough. Aiming at something 21 points across
+/// at the edge of a window means routinely crossing that edge by a few points on
+/// the way, and with the region flush to the panel that shut the sheet being
+/// aimed at. Wider than tall, because the horizontal edges are where the corner
+/// controls live and the bottom edge has nothing on it.
+const OPEN_SLACK_X: f64 = 44.0;
+const OPEN_SLACK_Y: f64 = 20.0;
+
 /// The open panel's live size, in points.
 ///
 /// Reported by the panel itself whenever it changes shape, rather than fixed at
@@ -82,7 +94,8 @@ impl Notch {
     /// pointer moved down onto the very thing it just revealed.
     pub fn is_hovered(&self, x: f64, y: f64, open: bool) -> bool {
         let (w, h) = if open {
-            *OPEN.lock().unwrap()
+            let (w, h) = *OPEN.lock().unwrap();
+            (w + OPEN_SLACK_X * 2.0, h + OPEN_SLACK_Y)
         } else {
             (self.width + SLACK * 2.0, self.height + 8.0)
         };
@@ -133,6 +146,27 @@ mod tests {
             "below even the settings sheet"
         );
         assert!(!N.is_hovered(1200.0, 100.0, true), "beside the panel");
+    }
+
+    /// Reaching for the gear in the top-right corner must not shut the sheet.
+    ///
+    /// The bug: the open region was the panel rectangle exactly, so a pointer that
+    /// clipped the edge on its way to a corner control left the region, and the
+    /// panel closed under the thing being aimed at.
+    #[test]
+    fn the_corner_controls_are_reachable() {
+        let (w, h) = (540.0, 640.0);
+        super::set_open_size(w, h);
+        let edge = N.center_x + w / 2.0;
+        assert!(N.is_hovered(edge - 12.0, 14.0, true), "on the gear");
+        assert!(
+            N.is_hovered(edge + 20.0, 14.0, true),
+            "overshot the edge reaching for it"
+        );
+        assert!(
+            !N.is_hovered(edge + 90.0, 14.0, true),
+            "properly away from the panel"
+        );
     }
 
     #[test]

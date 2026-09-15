@@ -185,3 +185,115 @@ pub fn answer_offer(app: AppHandle, service: String, said: String) {
     app.state::<crate::app::state::Offering>().clear();
     crate::app::ui::connect::hide(&app);
 }
+
+/// A screenshot to attach, with Nudge itself out of the way.
+///
+/// The panel is over the very thing they are trying to show, so it steps out
+/// before the shutter and comes back after. The pause is for the compositor
+/// rather than for show -- ordering a window out and grabbing in the same breath
+/// catches it still on screen.
+///
+/// Smaller than the model's capture on purpose. This is going into a JSON body
+/// over somebody's connection, and a bug is legible at 1600px.
+#[tauri::command]
+pub async fn shot_for_report(app: AppHandle) -> std::result::Result<String, String> {
+    let panel = crate::app::ui::panel::window(&app);
+    if let Some(win) = panel.clone() {
+        let _ = win.hide();
+    }
+    tokio::time::sleep(std::time::Duration::from_millis(220)).await;
+
+    let shot = tokio::task::spawn_blocking(|| crate::core::screen::capture::grab(1600))
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if let Some(win) = panel {
+        let _ = win.show();
+        #[cfg(target_os = "macos")]
+        crate::app::ui::native::float_everywhere(&win);
+    }
+
+    let shot = shot.map_err(|e| e.to_string())?;
+    Ok(as_data_url(&shot.bytes))
+}
+
+/// Bytes to something an `<img src>` and a JSON body can both carry.
+fn as_data_url(bytes: &[u8]) -> String {
+    use base64::Engine;
+    format!(
+        "data:image/jpeg;base64,{}",
+        base64::engine::general_purpose::STANDARD.encode(bytes)
+    )
+}
+
+/// Send a bug report or a feature request.
+///
+/// Errors come back as a sentence rather than a code, because the only reader is
+/// somebody who just tried to tell you something is broken and deserves to know
+/// whether it arrived.
+#[tauri::command]
+pub async fn send_report(
+    app: AppHandle,
+    kind: String,
+    text: String,
+    image: Option<String>,
+) -> std::result::Result<(), String> {
+    use crate::core::report::{worth_sending, Kind, Report, MOST_IMAGE};
+
+    let Some(kind) = Kind::parse(&kind) else {
+        return Err("Unknown report type.".into());
+    };
+    if !worth_sending(&text) {
+        return Err("Write a line about it first.".into());
+    }
+    if let Some(img) = &image {
+        if img.len() > MOST_IMAGE {
+            return Err("That image is too big to send. Try a smaller one.".into());
+        }
+    }
+
+    let url = {
+        let nudge = app.state::<crate::core::run::session::Nudge>();
+        let url = nudge.cfg.report_url.clone().unwrap_or_default();
+        if url.trim().is_empty() {
+            return Err(
+                "Reporting is not set up yet: add report_url to ~/.config/nudge/config.toml".into(),
+            );
+        }
+        url
+    };
+
+    let report = Report {
+        kind,
+        text: text.trim().to_string(),
+        image,
+        version: app.package_info().version.to_string(),
+        os: os_line(),
+    };
+
+    report.post(&url).await.map_err(|e| {
+        // The URL can carry a token, and an error from the HTTP layer prints
+        // whatever it was given. Same reason the provider errors are redacted.
+        crate::core::tools::secret::redact(&format!("Could not send it: {e}"))
+    })
+}
+
+/// Something a maintainer can act on, in one line.
+fn os_line() -> String {
+    #[cfg(target_os = "macos")]
+    {
+        let out = std::process::Command::new("/usr/bin/sw_vers")
+            .arg("-productVersion")
+            .output()
+            .ok()
+            .and_then(|o| String::from_utf8(o.stdout).ok());
+        match out {
+            Some(v) if !v.trim().is_empty() => format!("macOS {}", v.trim()),
+            _ => "macOS".into(),
+        }
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        std::env::consts::OS.to_string()
+    }
+}

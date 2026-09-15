@@ -6,6 +6,7 @@ import { Agents } from "./panel/Agents";
 import { StatusPill, type Status } from "./panel/Status";
 import { Integrations } from "./panel/Integrations";
 import { Skills } from "./panel/Skills";
+import { Report, type Kind } from "./panel/Report";
 import { Settings } from "./panel/Settings";
 
 /**
@@ -46,13 +47,17 @@ const HEIGHT = {
   // The same as the other browsers. A list that grows as folders are added needs
   // the room whether or not it is using it today.
   skills: "h-[640px]",
+  report: "h-[400px]",
 } as const;
 
 export default function Panel() {
   const [open, setOpen] = useState(false);
   // Three places to be, so a name rather than a pile of booleans that can all be
   // true at once.
-  const [view, setView] = useState<"home" | "agents" | "settings" | "integrations" | "skills">("home");
+  const [view, setView] = useState<
+    "home" | "agents" | "settings" | "integrations" | "skills" | "report"
+  >("home");
+  const [reporting, setReporting] = useState<Kind>("bug");
   // Integrations opens from two places, so "back" has to mean the one you left
   // rather than a fixed destination -- entering from Home and landing in Settings
   // is the kind of small wrongness that makes a panel feel untrustworthy.
@@ -95,11 +100,14 @@ export default function Panel() {
 
   // Keep the hover region the same shape as what is on screen. Held at the
   // tallest view's size, the panel stayed open far below anything visible.
+  //
+  // The true size, with no padding added here -- how much room to leave around it
+  // is one decision and it lives in notch.rs, next to the reasoning for it.
   useEffect(() => {
     const [w, h] = open
       ? [540, view === "home" ? 266 : view === "agents" ? 320 : 640]
       : [248, 33];
-    void invoke("set_open_size", { w: w + 30, h: h + 12 });
+    void invoke("set_open_size", { w, h });
   }, [open, view]);
 
   // The docked pill is the notch, so it is sized by the hardware rather than by a
@@ -194,12 +202,18 @@ export default function Panel() {
             <Integrations onBack={() => setView(cameFrom)} />
           ) : view === "skills" ? (
             <Skills onBack={() => setView(cameFrom)} />
+          ) : view === "report" ? (
+            <Report kind={reporting} onBack={() => setView("settings")} />
           ) : view === "settings" ? (
             <Settings
               docked={docked}
               onDock={dock}
               onIntegrations={() => openIntegrations("settings")}
               onSkills={() => openSkills("settings")}
+              onReport={(k) => {
+                setReporting(k);
+                setView("report");
+              }}
             />
           ) : (
           <>

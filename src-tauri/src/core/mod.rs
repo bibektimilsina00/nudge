@@ -16,6 +16,7 @@ pub mod memory;
 pub mod offers;
 pub mod provider;
 pub mod reach;
+pub mod report;
 pub mod run;
 pub mod screen;
 pub mod skills;
