@@ -1,11 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Apple, Check, Copy, Download, Loader2 } from "lucide-react";
-import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 import { downloadUrl, latest, megabytes, type Release } from "@/lib/releases";
 import { BUILT, LABEL, usePlatform, type Platform } from "@/lib/platform";
 
@@ -18,7 +18,7 @@ import { BUILT, LABEL, usePlatform, type Platform } from "@/lib/platform";
  * them to work out which of six files is theirs, before they know what the thing
  * does.
  */
-export function DownloadButton() {
+export function DownloadButton({ compact = false }: { compact?: boolean }) {
   const { platform, chosen, choose, detect } = usePlatform();
   useEffect(detect, [detect]);
 
@@ -39,7 +39,7 @@ export function DownloadButton() {
         <NotYet platform={target} />
       )}
 
-      <PlatformPicker current={target} chosen={chosen} onChoose={choose} />
+      {!compact && <PlatformPicker current={target} chosen={chosen} onChoose={choose} />}
     </div>
   );
 }
@@ -76,15 +76,22 @@ function Primary({
         )}
       </Button>
 
-      <p className="h-5 text-xs text-muted-foreground">
+      {/* Reserved height, so the line arriving does not shove the page down. */}
+      <p className="h-5 text-xs tabular-nums text-muted-foreground">
         {loading || !release
-          ? " "
+          ? " "
           : `Version ${release.version} · ${megabytes(release.size_bytes)} · macOS 12 or later`}
       </p>
     </div>
   );
 }
 
+/**
+ * A platform with no build, said plainly and with somewhere to go.
+ *
+ * A disabled button on its own reads as broken. One that says why, and offers
+ * the thing that does exist, reads as honest.
+ */
 function NotYet({ platform }: { platform: Platform }) {
   return (
     <div className="flex flex-col items-center gap-2">
@@ -92,10 +99,9 @@ function NotYet({ platform }: { platform: Platform }) {
         <Download className="size-5" />
         {LABEL[platform]}
       </Button>
-      {/* Said plainly rather than hidden. A disabled button with no explanation
-          reads as broken; one that says "not yet" reads as honest. */}
-      <p className="text-xs text-muted-foreground">
-        Not built yet — macOS on Apple silicon is the only one so far.
+      <p className="max-w-xs text-center text-xs text-pretty text-muted-foreground">
+        Not built yet. macOS on Apple silicon is the only one so far — pick it
+        below if that is what you are on.
       </p>
     </div>
   );
@@ -116,11 +122,12 @@ function PlatformPicker({
         <button
           key={p}
           onClick={() => onChoose(p)}
-          className={`rounded-full px-2.5 py-1 transition-colors ${
+          className={cn(
+            "rounded-full px-2.5 py-1 transition-colors",
             p === current
               ? "bg-foreground/10 text-foreground"
-              : "text-muted-foreground hover:text-foreground"
-          }`}
+              : "text-muted-foreground hover:text-foreground",
+          )}
         >
           {LABEL[p]}
           {!BUILT.includes(p) && <span className="ml-1 opacity-50">soon</span>}
@@ -153,12 +160,13 @@ export function Checksum({ platform = "macos-arm64" }: { platform?: string }) {
         setCopied(true);
         window.setTimeout(() => setCopied(false), 1600);
       }}
+      aria-label="Copy the SHA-256 checksum"
       className="group inline-flex max-w-full items-center gap-2 rounded-md border px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
     >
-      <span className="shrink-0 not-italic">SHA-256</span>
-      <span className="truncate">{data.sha256}</span>
+      <span className="shrink-0">SHA-256</span>
+      <span className="truncate tabular-nums">{data.sha256}</span>
       {copied ? (
-        <Check className="size-3.5 shrink-0 text-green-500" />
+        <Check className="size-3.5 shrink-0 text-green-600 dark:text-green-500" />
       ) : (
         <Copy className="size-3.5 shrink-0 opacity-50 group-hover:opacity-100" />
       )}
