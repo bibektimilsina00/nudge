@@ -105,8 +105,26 @@ pub fn keep_everywhere(app: &AppHandle) {
     // No early-out on isOnActiveSpace() either: with CanJoinAllSpaces set, AppKit
     // answers `true` unconditionally, even while the window server has the window
     // out of the current Space.
+    // Nothing at all while Mission Control is up.
+    //
+    // This is a repair, and there is nothing to repair while the overview is on
+    // screen -- but every call below re-sorts the window, including the two that
+    // look like plain setters: `setLevel` re-orders within its level even when the
+    // level is unchanged. Mission Control claims the top of the screen and keeps
+    // claiming it, so each of those exchanges was a flash, ten times a second.
+    // Recorded at 120fps the notch pill changed state a hundred times in ten
+    // seconds, which is the poll interval almost exactly.
+    //
+    // Holding still costs nothing: the overview is transient, the Space cannot
+    // change underneath it, and the tick after it closes puts anything right that
+    // moved.
+    if crate::app::ui::native::mission_control() {
+        return;
+    }
+
     ns.setCollectionBehavior(behavior());
     ns.setLevel(objc2_app_kit::NSScreenSaverWindowLevel);
+
     // Rejoining the Space is not enough on its own; it also has to be put back in
     // front of it.
     ns.orderFrontRegardless();

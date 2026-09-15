@@ -98,6 +98,85 @@ fn overlay() -> Option<&'static NSWindow> {
     Some(unsafe { &*(raw as *const NSWindow) })
 }
 
+/// Is Mission Control on screen?
+///
+/// A four-finger swipe up takes the whole screen for a system overview, and an
+/// overlay pinned above it is both wrong and unwinnable: Mission Control keeps
+/// claiming the top, the poll in `keep_everywhere` kept claiming it back, and the
+/// compositor showed every exchange. Recorded at 120fps the notch pill changed
+/// state a hundred times in ten seconds -- the poll interval, almost exactly.
+///
+/// So this is the signal to get out of the way rather than push harder.
+///
+/// Measured rather than guessed, in and out of the overview: the Dock owns exactly
+/// one extra on-screen window while it is up, full-screen and at layer 20, and
+/// nothing of the sort while it is not. The size is half the test on purpose --
+/// the Dock's own strip is also its window and also layer 20, and it is a strip.
+#[cfg(target_os = "macos")]
+pub fn mission_control() -> bool {
+    use core_foundation::base::{CFType, TCFType};
+    use core_foundation::dictionary::CFDictionary;
+    use core_foundation::number::CFNumber;
+    use core_foundation::string::CFString;
+    use core_graphics::window::{
+        copy_window_info, kCGWindowBounds, kCGWindowListOptionOnScreenOnly, kCGWindowOwnerName,
+    };
+
+    let Some(list) = copy_window_info(kCGWindowListOptionOnScreenOnly, 0) else {
+        return false;
+    };
+    let Some(mtm) = MainThreadMarker::new() else {
+        return false;
+    };
+    // The full screen it would have to cover, in the same points the window list
+    // reports. Compared loosely: the overview's window has matched the display
+    // exactly in every reading, but a few points of slack costs nothing and a
+    // strict equality that drifts one point costs the whole feature.
+    let screen = objc2_app_kit::NSScreen::mainScreen(mtm).map(|s| s.frame().size);
+    let Some(screen) = screen else { return false };
+
+    let owner_key = unsafe { CFString::wrap_under_get_rule(kCGWindowOwnerName) };
+    let bounds_key = unsafe { CFString::wrap_under_get_rule(kCGWindowBounds) };
+    let w_key = CFString::from_static_string("Width");
+    let h_key = CFString::from_static_string("Height");
+
+    for i in 0..list.len() {
+        let win = unsafe {
+            CFDictionary::<CFString, CFType>::wrap_under_get_rule(
+                *list.get(i).unwrap() as core_foundation::dictionary::CFDictionaryRef
+            )
+        };
+        let Some(owner) = win.find(&owner_key).and_then(|v| v.downcast::<CFString>()) else {
+            continue;
+        };
+        if owner.to_string() != "Dock" {
+            continue;
+        }
+        let Some(bounds) = win.find(&bounds_key) else {
+            continue;
+        };
+        // Untyped on the way out: `CFDictionary<CFString, CFType>` is not a
+        // concrete CF type as far as the crate is concerned, so the bounds come
+        // back through the raw form and are read key by key.
+        let bounds = unsafe {
+            CFDictionary::<CFString, CFType>::wrap_under_get_rule(
+                bounds.as_CFTypeRef() as core_foundation::dictionary::CFDictionaryRef
+            )
+        };
+        let num = |k: &CFString| {
+            bounds
+                .find(k)
+                .and_then(|v| v.downcast::<CFNumber>())
+                .and_then(|n| n.to_f64())
+                .unwrap_or(0.0)
+        };
+        if (num(&w_key) - screen.width).abs() < 4.0 && (num(&h_key) - screen.height).abs() < 4.0 {
+            return true;
+        }
+    }
+    false
+}
+
 /// Put it back in front, for whatever reason it fell behind.
 pub fn keep_front() {
     if let Some(win) = overlay() {
