@@ -109,7 +109,11 @@ pub fn place(app: &AppHandle) {
     // on a large display, where a bar the width of a desk reads as a system alert
     // rather than as something this program is asking.
     let w = (screen.w * 0.62).clamp(620.0, 900.0);
-    let h = 170.0;
+    // Taller than the content needs. The bar animates in from behind its own top
+    // edge, so the window has to be big enough to hold it while it is still
+    // partly above where it will settle -- a window cropped to the resting size
+    // clips the entrance.
+    let h = 210.0;
     let _ = win.set_size(tauri::LogicalSize::new(w, h));
     // Hard against the top. It hangs off the edge rather than floating below it,
     // which is what lets the top corners be square and the bottom ones round.

@@ -81,15 +81,23 @@ export default function Connect() {
     // Square at the top, rounded at the bottom: it hangs off the edge of the
     // screen rather than floating in the middle of it, and a thing attached to an
     // edge does not have corners on that edge.
-    <div className="w-full rounded-b-[22px] bg-[#0d0d0f]/95 px-5 py-3.5 text-white backdrop-blur-2xl inset-ring-1 inset-ring-white/[0.08]">
-      <div className="flex items-center gap-3.5">
+    //
+    // Keyed on the service so a second offer arriving into a window that is
+    // already open remounts and drops in again. Without it the first one animates
+    // and every one after simply changes its text, which reads as the same bar
+    // rewording itself rather than as a new thing being asked.
+    <div
+      key={offer.name}
+      className="w-full rounded-b-[26px] bg-[#0d0d0f]/95 px-6 py-5 text-white backdrop-blur-2xl inset-ring-1 inset-ring-white/[0.08] motion-safe:animate-drop"
+    >
+      <div className="flex items-center gap-4">
         <Marks offer={offer} />
 
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[15px] font-semibold tracking-tight">
+          <h1 className="truncate text-[16px] font-semibold tracking-tight">
             Connect {offer.name} to Nudge
           </h1>
-          <p className="mt-[1px] text-[12px] text-white/40">Use Nudge to:</p>
+          <p className="mt-[3px] text-[12.5px] text-white/40">Use Nudge to:</p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -122,11 +130,11 @@ export default function Connect() {
 function Marks({ offer }: { offer: Offer }) {
   return (
     <div className="flex shrink-0 items-center">
-      <span className="grid size-[38px] place-items-center rounded-[10px] bg-gradient-to-br from-[#6b5bff] to-[#3f8cff] text-[15px] font-bold">
+      <span className="grid size-[44px] place-items-center rounded-xl bg-gradient-to-br from-[#6b5bff] to-[#3f8cff] text-[17px] font-bold">
         N
       </span>
       <span
-        className="-ml-2 grid size-[38px] place-items-center rounded-[10px] text-[14px] font-bold ring-2 ring-[#0d0d0f]"
+        className="-ml-2.5 grid size-[44px] place-items-center rounded-xl text-[15px] font-bold ring-[3px] ring-[#0d0d0f]"
         style={{ backgroundColor: offer.tint, color: offer.dark ? "#111" : "#fff" }}
       >
         {offer.mark}
@@ -169,7 +177,7 @@ function Examples({ examples }: { examples: string[] }) {
   if (examples.length === 0) return null;
 
   return (
-    <div className="relative mt-3">
+    <div className="relative mt-4">
       <div
         ref={rail}
         // The scrollbar is hidden rather than styled: this is a row of five
@@ -180,7 +188,7 @@ function Examples({ examples }: { examples: string[] }) {
         {examples.map((e) => (
           <span
             key={e}
-            className="shrink-0 rounded-full bg-white/[0.07] px-3.5 py-[7px] text-[12.5px] whitespace-nowrap text-white/75 inset-ring-1 inset-ring-white/[0.06]"
+            className="shrink-0 rounded-full bg-white/[0.07] px-4 py-[9px] text-[13px] whitespace-nowrap text-white/75 inset-ring-1 inset-ring-white/[0.06]"
           >
             {e}
           </span>
