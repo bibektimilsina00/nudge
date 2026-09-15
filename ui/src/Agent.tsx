@@ -30,11 +30,11 @@ export type Agent = {
 } & AgentState;
 
 const TONE = {
-  running: { label: "RUNNING", pill: "bg-[#0a84ff] text-white" },
-  waiting: { label: "NEEDS YOU", pill: "bg-[#e8b027] text-black" },
-  done: { label: "DONE", pill: "bg-white/15 text-white/70" },
-  failed: { label: "FAILED", pill: "bg-[#ff5f57]/85 text-white" },
-  stopped: { label: "STOPPED", pill: "bg-white/15 text-white/60" },
+  running: { label: "Running", dot: "bg-[#0a84ff]" },
+  waiting: { label: "Needs you", dot: "bg-[#e8b027]" },
+  done: { label: "Done", dot: "bg-[#30d158]" },
+  failed: { label: "Failed", dot: "bg-[#ff5f57]" },
+  stopped: { label: "Stopped", dot: "bg-white/30" },
 } as const;
 
 /**
@@ -404,46 +404,44 @@ function Dot({
  * a case that cannot occur. */
 
 function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
+  const tone = TONE[agent.state];
   return (
-    <div className="w-[320px]">
-      <div
-        // One shadow, and it is a shadow rather than a light. A tinted glow that
-        // changed with state read as the card itself emitting -- and the state is
-        // already said twice, by the pill and by the face.
-        className="rounded-2xl bg-[#141824] p-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.55)] backdrop-blur-xl inset-ring-1 inset-ring-white/[0.12]"
-      >
-        <header className="flex items-center gap-2">
-          <Face state={agent.state} step={agent.step} />
-          <h1 className="min-w-0 flex-1 truncate text-[13px] font-semibold">{agent.title}</h1>
-          <span
-            className={`rounded-full px-2 py-[2px] text-[9px] font-bold tracking-wide ${TONE[agent.state].pill}`}
-          >
-            {TONE[agent.state].label}
-          </span>
-          <button
-            onClick={onCollapse}
-            aria-label="Collapse"
-            className="grid size-[20px] place-items-center rounded-full text-white/40 transition-colors duration-150 hover:bg-white/10 hover:text-white"
-          >
-            <svg viewBox="0 0 12 12" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-              <path d="M2.5 6h7" />
-            </svg>
-          </button>
-          <button
-            onClick={() => void invoke("dismiss_agent", { id: agent.id })}
-            aria-label="Dismiss"
-            className="grid size-[20px] place-items-center rounded-full text-white/40 transition-colors duration-150 hover:bg-white/10 hover:text-white"
-          >
-            <svg viewBox="0 0 12 12" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-              <path d="M3 3l6 6M9 3l-6 6" />
-            </svg>
-          </button>
-        </header>
+    // No shadow. It floats over whatever happens to be behind it, and a drop
+    // shadow on a dark card over a dark screen is a smudge -- the ring is what
+    // separates it from the desktop, and the ring is enough.
+    //
+    // The surface is the panel's, not one of its own: `#1e1e1e` with a hairline
+    // inset ring is the language everything else in Nudge is already written in.
+    <div className="w-[326px] rounded-2xl bg-[#1e1e1e] text-white inset-ring-1 inset-ring-white/[0.09]">
+      <header className="flex items-center gap-2.5 px-3 pt-2.5 pb-2">
+        <Face state={agent.state} step={agent.step} size={26} />
+        <div className="min-w-0 flex-1">
+          <h1 className="truncate text-[12.5px] font-semibold tracking-tight">{agent.title}</h1>
+          {/* State and step on one quiet line rather than a loud pill beside the
+              title. The pill was the largest thing on the card and said the least
+              -- the face already says running, continuously. */}
+          <p className="mt-[1px] flex items-center gap-1.5 text-[10px] text-white/35">
+            <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} />
+            {tone.label}
+            {agent.state === "running" && <> · step {agent.step}</>}
+          </p>
+        </div>
+        <Ghost label="Collapse" onClick={onCollapse}>
+          <path d="M2.5 6h7" />
+        </Ghost>
+        <Ghost
+          label="Dismiss"
+          onClick={() => void invoke("dismiss_agent", { id: agent.id }).catch(() => {})}
+        >
+          <path d="M3 3l6 6M9 3l-6 6" />
+        </Ghost>
+      </header>
 
+      <div className="px-3 pb-2.5">
         {agent.state === "waiting" ? (
           <Question id={agent.id} question={agent.question} />
         ) : (
-          <p className="mt-2 line-clamp-3 text-[11.5px] leading-snug text-white/70">
+          <p className="text-[11.5px] leading-snug text-white/70">
             {agent.state === "failed" ? agent.why : agent.status}
           </p>
         )}
@@ -452,29 +450,55 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
         <Artifacts made={agent.made} />
         <Steps history={agent.history} />
         <Commands ran={agent.ran} />
-
-        <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-white/10">
-          <div
-            className="h-full rounded-full bg-[#0a84ff] transition-[width] duration-500 ease-out"
-            style={{ width: `${progress(agent) * 100}%` }}
-          />
-        </div>
-
-        {agent.state === "running" && (
-          <div className="mt-2.5 flex items-center justify-between">
-            <span className="text-[10px] text-white/30">
-              step {agent.step} · your cursor is in use
-            </span>
-            <button
-              onClick={() => void invoke("stop_agent", { id: agent.id })}
-              className="rounded-lg bg-white/10 px-2.5 py-1 text-[11px] font-medium transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
-            >
-              Stop
-            </button>
-          </div>
-        )}
       </div>
+
+      {/* The footer is separated by a line rather than by space. Stopping is the
+          one thing that must never be hunted for, and a rule says "this is not
+          part of the report" more cheaply than a gap does. */}
+      {agent.state === "running" && (
+        <div className="flex items-center gap-2.5 border-t border-white/[0.07] px-3 py-2">
+          <div className="h-[3px] min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+            <div
+              className="h-full rounded-full bg-[#0a84ff] transition-[width] duration-500 ease-out"
+              // A floor, so the bar reads as a bar on the first step instead of as
+              // an empty groove somebody forgot to fill.
+              style={{ width: `${Math.max(4, progress(agent) * 100)}%` }}
+            />
+          </div>
+          <span className="shrink-0 text-[9.5px] text-white/30">cursor in use</span>
+          <button
+            onClick={() => void invoke("stop_agent", { id: agent.id }).catch(() => {})}
+            className="shrink-0 rounded-lg bg-white/[0.08] px-2.5 py-[3px] text-[11px] font-medium transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
+          >
+            Stop
+          </button>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** A header button: no chrome until it is pointed at. */
+function Ghost({
+  label,
+  onClick,
+  children,
+}: {
+  label: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-label={label}
+      title={label}
+      className="grid size-[20px] shrink-0 place-items-center rounded-md text-white/35 transition-colors duration-150 hover:bg-white/[0.09] hover:text-white"
+    >
+      <svg viewBox="0 0 12 12" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+        {children}
+      </svg>
+    </button>
   );
 }
 

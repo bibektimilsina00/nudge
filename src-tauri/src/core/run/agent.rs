@@ -205,10 +205,29 @@ impl Agents {
         // sent a voice note to a real person once. These are seeded past that
         // check on purpose: the layout should be right before the limit is ever
         // lifted, and finding out then would mean finding out in front of somebody.
+        //
+        // Every one of them is filled in. The first version filled only the last,
+        // so opening any of the others showed a card with a sentence and nothing
+        // else -- which is not what the card looks like, and is the wrong thing to
+        // design against.
+        let mut last = 0;
         for (title, status, waiting) in [
-            ("Renaming photos", "Reading the dates off 240 files.", false),
-            ("Drafting the email", "Which address should this go to?", true),
+            (
+                "Renaming photos",
+                "Reading the dates off 240 files.",
+                false,
+            ),
+            (
+                "Drafting the email",
+                "Which address should this go to?",
+                true,
+            ),
             ("Running the tests", "Waiting on the build.", false),
+            (
+                "Tidying downloads",
+                "Moving the last few files into place.",
+                false,
+            ),
         ] {
             let id = self.start_now(
                 format!("demonstration: {title}"),
@@ -216,49 +235,43 @@ impl Agents {
                 status.into(),
                 true,
             );
-            if waiting {
-                self.edit(id, |a| {
+            self.edit(id, |a| {
+                a.step = 4;
+                if waiting {
                     a.state = State::Waiting {
                         question: "Which address should this go to?".into(),
                     };
-                });
-            }
+                }
+                a.plan = vec![
+                    Todo { text: "Look at what is there".into(), status: Doing::Done },
+                    Todo { text: "Work out what goes where".into(), status: Doing::Done },
+                    Todo { text: "Move them into place".into(), status: Doing::Active },
+                    Todo { text: "Report what changed".into(), status: Doing::Pending },
+                ];
+                a.made = vec![
+                    Made { path: "/Users/you/Downloads/Invoices/march.pdf".into() },
+                    Made { path: "/Users/you/Downloads/report.html".into() },
+                ];
+                a.ran = vec![
+                    Ran {
+                        command: "ls -la ~/Downloads".into(),
+                        output: "total 248\ndrwxr-xr-x  14 you  staff  448 Sep 15 12:04 .\n-rw-r--r--   1 you  staff  81kB march.pdf".into(),
+                    },
+                    Ran {
+                        command: "file ~/Downloads/*".into(),
+                        output: "march.pdf: PDF document, version 1.7\nnotes.png: PNG image data, 1284 x 812".into(),
+                    },
+                ];
+                a.history = vec![
+                    "Looked at the Downloads folder".into(),
+                    "Sorted 12 files by kind".into(),
+                    "Made a folder called Invoices".into(),
+                    "Moved march.pdf into Invoices".into(),
+                ];
+            });
+            last = id;
         }
-
-        let id = self.start_now(
-            "tidy up my downloads folder".into(),
-            "Tidying downloads".into(),
-            "Moving the last few files into place.".into(),
-            true,
-        );
-        self.edit(id, |a| {
-            a.step = 4;
-            a.plan = vec![
-                Todo { text: "Look at what is in there".into(), status: Doing::Done },
-                Todo { text: "Group by what each file is".into(), status: Doing::Done },
-                Todo { text: "Move them into folders".into(), status: Doing::Active },
-                Todo { text: "Report what moved".into(), status: Doing::Pending },
-            ];
-            a.made = vec![
-                Made { path: "/Users/you/Downloads/Invoices/march.pdf".into() },
-                Made { path: "/Users/you/Downloads/Screenshots/notes.png".into() },
-            ];
-            a.ran = vec![
-                Ran {
-                    command: "ls -la ~/Downloads".into(),
-                    output: "total 248\ndrwxr-xr-x  14 you  staff   448 Sep 15 12:04 .\n-rw-r--r--   1 you  staff  81kB march.pdf".into(),
-                },
-                Ran {
-                    command: "file ~/Downloads/*".into(),
-                    output: "march.pdf: PDF document, version 1.7\nnotes.png: PNG image data, 1284 x 812".into(),
-                },
-            ];
-            a.history = vec![
-                "Looked at the Downloads folder".into(),
-                "Sorted 12 files by kind".into(),
-            ];
-        });
-        id
+        last
     }
 
     fn start_now(&self, goal: String, title: String, status: String, background: bool) -> u64 {
