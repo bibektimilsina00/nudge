@@ -18,7 +18,14 @@ import { BUILT, LABEL, usePlatform, type Platform } from "@/lib/platform";
  * them to work out which of six files is theirs, before they know what the thing
  * does.
  */
-export function DownloadButton({ compact = false }: { compact?: boolean }) {
+export function DownloadButton({
+  compact = false,
+  align = "center",
+}: {
+  compact?: boolean;
+  /** The hero is a left-aligned column; the closing call to action is centred. */
+  align?: "center" | "start";
+}) {
   const { platform, chosen, choose, detect } = usePlatform();
   useEffect(detect, [detect]);
 
@@ -32,7 +39,7 @@ export function DownloadButton({ compact = false }: { compact?: boolean }) {
   });
 
   return (
-    <div className="flex flex-col items-center gap-3">
+    <div className={cn("flex flex-col gap-3", align === "start" ? "items-start" : "items-center")}>
       {available ? (
         <Primary release={data} loading={isPending} failed={isError} />
       ) : (
@@ -61,7 +68,7 @@ function Primary({
     );
 
   return (
-    <div className="flex flex-col items-center gap-2">
+    <div className="flex flex-col items-start gap-2.5">
       <Button
         size="lg"
         asChild={!!release}
@@ -126,7 +133,7 @@ function PlatformPicker({
   onChoose: (p: Platform) => void;
 }) {
   return (
-    <div className="flex flex-wrap items-center justify-center gap-1 text-xs">
+    <div className="flex flex-wrap items-center gap-1 text-xs">
       {(Object.keys(LABEL) as Platform[]).map((p) => (
         <button
           key={p}
