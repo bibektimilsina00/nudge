@@ -40,8 +40,26 @@ Gatekeeper dialog somebody sees on first open. **Nuddg Inc** is the team this
 belongs to; whether it needs paying for is the one thing to go and check.
 
 Create it at developer.apple.com → Certificates, Identifiers & Profiles →
-Certificates → **+** → **Developer ID Application**. For an organisation account
-this is restricted to the Account Holder unless they have delegated it.
+Certificates → **+** → **Developer ID Application**.
+
+On an organisation account that row is greyed out with *"This operation can only
+be performed by the Account Holder"* for everybody else, including Admins. Worth
+reading carefully though: the row being **there at all** means the membership is
+paid, because a free account does not show Developer ID options. A greyed-out
+row is a role problem, not a billing one.
+
+Three ways past it, cheapest first:
+
+1. **Switch team.** An *individual* account has no separate Account Holder --
+   you are it -- so if a personal membership is paid, the button is already live
+   there.
+2. **Have the Account Holder create it and send the `.p12`.** The role is not
+   needed permanently; one file is. Keychain Access → right-click the
+   certificate → Export → `.p12` with a password. This is what the CI workflow
+   consumes anyway, so it is the ordinary setup rather than a workaround.
+3. **Become the Account Holder**, which is a transfer the current one performs
+   and which moves the legal agreements with it. Only worth it if Nudge is going
+   to live under that team for good.
 
 **2. An app-specific password.** appleid.apple.com → Sign-In and Security →
 App-Specific Passwords. Not your account password — notarisation will refuse it,
