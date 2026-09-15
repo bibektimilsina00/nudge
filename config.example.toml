@@ -96,6 +96,7 @@ verify = false
 #
 #   "shell"  run any command, including ones that change things
 #   "files"  write outside the workspace, using absolute paths
+#   "http"   send requests with any method, not only ones that read
 #
 # The menu bar shows what is granted with a tick beside it, and can grant or take
 # back either one while Nudge runs. Nothing is written back here, so a restart
@@ -104,6 +105,11 @@ verify = false
 # Two things stay refused however wide the grant: anything that looks like a
 # secret (`.ssh`, `.env`, keychains), and an empty command. Granting a shell is a
 # decision about capability, not a decision to hand over your keys.
+#
+# "http" gates the methods that act. An authenticated GET against an API is
+# reading and never needed granting. What never changes is where a request may
+# go: nothing on this machine or this network, whatever is granted, and every
+# redirect is checked by the same rule as the first hop.
 reach = []
 
 # Servers speaking the Model Context Protocol. None by default.

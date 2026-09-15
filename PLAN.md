@@ -487,13 +487,41 @@ rules reach inside somebody else's process. Configuring a server is already an
 explicit grant; what is missing is seeing what it can do and switching it off, and
 that wants the menu built *after* the servers connect rather than before.
 
-**2.3 Real HTTP.**
+**2.3 Real HTTP.** *Built.*
 
-`fetch` is a GET with no authentication. Anything that talks to an API needs more,
-and most of the interesting things a person wants automated are behind one.
+`fetch::request`, and a `request` step beside the existing `fetch`. The two are
+kept apart because they want opposite things from a reply: `fetch` reads a page as
+prose and treats anything that is not a success as a failure, while an API
+answering **422 with a JSON explanation has answered**, and turning that into an
+error throws away the only useful part. So `request` leads with the status and
+hands back the body -- a model that can see `401 Unauthorized` knows to look for a
+token, where one handed a bare error guesses.
 
-*Done when:* a request with a method, headers and a body can be made, and refused
-as clearly as the shell refuses.
+Verified against a real server: a POST carrying a header and a JSON body arrived
+with all three intact, and the same call without the grant never left the machine.
+
+**The `http` grant is now real**, which is why it was left out of 2.2. It gates
+*methods that act*, not headers -- an authenticated GET against somebody's API is
+still reading, and gating that would mean granting permission to do the ordinary
+thing.
+
+What does not move whatever is granted:
+
+- **Where a request may go.** The same host rules as `fetch`: nothing on this
+  machine or this network. A granted POST to a router on the home network is the
+  single request this most needs to refuse.
+- **Redirects are checked per hop.** Following is on by default and a redirect can
+  point anywhere, including back at this machine -- which would walk straight
+  around the check on the first URL. Every hop goes through the same rule, and the
+  chain stops at five.
+- **Headers that would redirect or split the request.** `Host` would send a
+  request aimed at an allowed name somewhere else entirely; a line break in either
+  half of a header turns one request into two.
+
+*Refused as clearly as the shell refuses*, which was the bar. The refusal names
+the method, says it could change something, says where to grant it, and says what
+it can still do -- and there is a test asserting all of that, because a refusal
+the model cannot act on is the same as a silent one.
 
 ### Phase 3 — Invisibility
 

@@ -36,27 +36,28 @@ pub enum Grant {
     Shell,
     /// Write outside the workspace.
     Files,
+    /// Make requests that could change something on the other end.
+    ///
+    /// Not "make requests with headers" -- an authenticated GET against somebody's
+    /// API is still reading, and gating it would mean granting this to do the
+    /// ordinary thing. What is gated is the methods that act.
+    Http,
 }
 
-// There is no `Http` grant yet, deliberately. The GET-only fetch is the third
-// boundary named in the plan, but the thing it would permit -- a request with a
-// method, headers and a body -- does not exist until 2.3. A menu item that can
-// be ticked and changes nothing is worse than a missing one: it teaches people
-// that the ticks do not mean anything.
-//
-// Nor is there one for MCP tools. Configuring a server is already an explicit,
+// There is no grant for MCP tools. Configuring a server is already an explicit,
 // deliberate grant; what is missing is being able to *see* what it can do and
 // switch it off, and that wants the menu to be built after the servers connect
 // rather than before. Recorded in the plan rather than half-done here.
 
 impl Grant {
-    pub const ALL: [Grant; 2] = [Grant::Shell, Grant::Files];
+    pub const ALL: [Grant; 3] = [Grant::Shell, Grant::Files, Grant::Http];
 
     /// The id the menu bar and the config use.
     pub fn key(self) -> &'static str {
         match self {
             Grant::Shell => "shell",
             Grant::Files => "files",
+            Grant::Http => "http",
         }
     }
 
@@ -67,6 +68,7 @@ impl Grant {
         match self {
             Grant::Shell => "Run any command",
             Grant::Files => "Write files anywhere",
+            Grant::Http => "Send requests, not just read",
         }
     }
 
@@ -75,6 +77,7 @@ impl Grant {
         match self {
             Grant::Shell => "run any command, including ones that change things",
             Grant::Files => "write files outside the workspace, using absolute paths",
+            Grant::Http => "send requests with any method, not only ones that read",
         }
     }
 }
@@ -87,6 +90,7 @@ impl Grant {
 pub struct Reach {
     shell: AtomicBool,
     files: AtomicBool,
+    http: AtomicBool,
 }
 
 impl Reach {
@@ -111,6 +115,7 @@ impl Reach {
         match grant {
             Grant::Shell => &self.shell,
             Grant::Files => &self.files,
+            Grant::Http => &self.http,
         }
     }
 
@@ -198,8 +203,8 @@ mod tests {
 
     #[test]
     fn the_config_names_what_it_grants() {
-        let r = Reach::from_config(&["shell".into()]);
-        assert!(r.has(Grant::Shell) && !r.has(Grant::Files));
+        let r = Reach::from_config(&["shell".into(), "http".into()]);
+        assert!(r.has(Grant::Shell) && r.has(Grant::Http) && !r.has(Grant::Files));
     }
 
     /// A typo must not read as a grant, and must not read as nothing either.

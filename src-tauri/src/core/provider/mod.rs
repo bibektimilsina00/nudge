@@ -173,6 +173,19 @@ pub enum Step {
     /// Just talking. Not every hotkey press is a task -- sometimes it is a
     /// question, a greeting, or someone bored at 2am.
     Reply { say: String },
+    /// A request with a method, headers and a body.
+    ///
+    /// Separate from `Fetch`, which reads a page as prose and is the right
+    /// answer for a question with an answer on a web page. This is for talking
+    /// to an API, which is where most of what people want automated actually
+    /// lives.
+    Request {
+        method: String,
+        url: String,
+        headers: Vec<(String, String)>,
+        body: Option<String>,
+        say: String,
+    },
     /// Run a tool on a Model Context Protocol server.
     ///
     /// One shape for every server and every tool there will ever be, which is
@@ -262,7 +275,8 @@ impl Step {
             // nothing. But every one of them comes back with what the server
             // said, and that is a source in the room, which is what this
             // question is actually asking.
-            | Step::Mcp { .. } => true,
+            | Step::Mcp { .. }
+            | Step::Request { .. } => true,
             // Changes the world or says something about it, and learns nothing.
             Step::Point { .. }
             | Step::Done { .. }
@@ -309,6 +323,7 @@ impl Step {
             | Step::Agent { say, .. }
             | Step::Question { question: say }
             | Step::Mcp { say, .. }
+            | Step::Request { say, .. }
             | Step::Reply { say } => say,
         }
     }
@@ -399,6 +414,7 @@ impl Step {
             Step::Fetch { url, .. } => format!("Read {url}"),
             Step::Search { query, .. } => format!("Searched for {query:?}"),
             Step::Mcp { tool, args, .. } => format!("Ran {tool} with {}", short(&args.to_string())),
+            Step::Request { method, url, .. } => format!("{method} {url}"),
             Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
             Step::Show { path, .. } => format!("Showed {path}"),
             Step::Workspace { path, .. } => format!("Working in {path} now"),
@@ -627,6 +643,14 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          anything you just saw happen, and for ordinary conversation -- there is \
          nothing to recall in a greeting.\n\
          Better still, look it up and then you need not set it at all.\n\n\
+         ## Reading a page, and talking to an API\n\n\
+         `fetch` reads a page as prose and is the right answer when the answer is \
+         written on a web page. `request` is for an API: it carries a method, \
+         headers and a body, and hands back the status with whatever came back, \
+         so a 401 or a 422 is an answer to read rather than a failure.\n\
+         Anything other than GET or HEAD needs to have been allowed, and if it \
+         has not been you will be told so plainly -- say what you would have done \
+         and that it needs allowing, rather than trying it another way.\n\n\
          ## Choosing where to act\n\n\
          Use the cheapest thing that can ACTUALLY answer, in this order: what the \
          system reports above; a command; a fetch; and last the screen. Each step \
@@ -1021,6 +1045,36 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
         }),
         "unsure" => Some(Step::Unsure { say }),
         "reply" => Some(Step::Reply { say }),
+        "request" => Some(Step::Request {
+            method: v["method"].as_str().unwrap_or("GET").to_string(),
+            url: v["url"].as_str().unwrap_or_default().to_string(),
+            // An object, because that is how anyone writes headers. Values are
+            // taken as text whatever they arrived as -- a number in a header is
+            // still a header.
+            headers: v["headers"]
+                .as_object()
+                .map(|h| {
+                    h.iter()
+                        .map(|(k, v)| {
+                            let value = match v.as_str() {
+                                Some(s) => s.to_string(),
+                                None => v.to_string(),
+                            };
+                            (k.clone(), value)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            body: match &v["body"] {
+                serde_json::Value::Null => None,
+                serde_json::Value::String(s) => Some(s.clone()),
+                // An object handed straight through as JSON, which is what was
+                // meant -- writing it out as a string first is a step the model
+                // gets wrong more often than not.
+                other => Some(other.to_string()),
+            },
+            say,
+        }),
         "mcp" => Some(Step::Mcp {
             tool: v["tool"].as_str().unwrap_or_default().to_string(),
             // Missing means no arguments, which plenty of tools take.

@@ -125,6 +125,135 @@ pub async fn read(url: &str) -> Result<String> {
     Ok(trim(&text))
 }
 
+/// Methods that only ask. Allowed without anybody granting anything, because
+/// they are what `read` already does under another name.
+const READING: &[&str] = &["GET", "HEAD"];
+
+/// Headers a caller may not set.
+///
+/// `Host` would let a request aimed at an allowed name arrive somewhere else
+/// entirely, which walks straight around the check in `refuse`. The rest are
+/// hop-by-hop headers that belong to the connection rather than to the request,
+/// and setting them by hand breaks the client rather than achieving anything.
+const NOT_YOURS: &[&str] = &[
+    "host",
+    "content-length",
+    "connection",
+    "transfer-encoding",
+    "upgrade",
+    "proxy-authorization",
+];
+
+/// Make a request with a method, headers and a body.
+///
+/// Separate from [`read`] rather than folded into it, because they want opposite
+/// things from a reply. `read` wants a page as prose and treats anything that is
+/// not a success as a failure. This wants the reply itself: an API answering 422
+/// with a JSON explanation has *answered*, and turning that into an error throws
+/// away the only useful part.
+///
+/// `granted` is [`crate::core::reach::Grant::Http`]. Without it this is still
+/// useful -- an authenticated GET against a real API is most of what people want
+/// -- and anything that could change something on the other end is refused.
+pub async fn request(
+    method: &str,
+    url: &str,
+    headers: &[(String, String)],
+    body: Option<&str>,
+    granted: bool,
+) -> Result<String> {
+    let verb = method.trim().to_ascii_uppercase();
+    if let Some(why) = refuse_request(&verb, url, headers, granted) {
+        return Err(Error::Click(format!("won\u{27}t {verb} {url}: {why}")));
+    }
+
+    let client = reqwest::Client::builder()
+        .timeout(TIMEOUT)
+        .user_agent("Nudge/0.1 (+https://github.com/nudge)")
+        // Followed by default, and a redirect can point anywhere -- including
+        // back at this machine, which is the whole thing `refuse` is for. Each
+        // hop is checked by the same rules as the first.
+        .redirect(reqwest::redirect::Policy::custom(|attempt| {
+            match refuse(attempt.url().as_str()) {
+                Some(_) => attempt.stop(),
+                None if attempt.previous().len() > 5 => attempt.stop(),
+                None => attempt.follow(),
+            }
+        }))
+        .build()
+        .map_err(|e| Error::Click(e.to_string()))?;
+
+    let m = reqwest::Method::from_bytes(verb.as_bytes())
+        .map_err(|_| Error::Click(format!("{verb} is not an HTTP method")))?;
+    let mut req = client.request(m, url);
+    for (k, v) in headers {
+        req = req.header(k, v);
+    }
+    if let Some(body) = body {
+        req = req.body(body.to_string());
+    }
+
+    let resp = req
+        .send()
+        .await
+        .map_err(|e| Error::Click(format!("couldn\u{27}t reach {url}: {e}")))?;
+
+    let status = resp.status();
+    if resp.content_length().is_some_and(|n| n > MAX_BYTES) {
+        return Err(Error::Click(format!("{url} answered with too much to read")));
+    }
+    let text = resp
+        .text()
+        .await
+        .map_err(|e| Error::Click(format!("couldn\u{27}t read what {url} said: {e}")))?;
+
+    // The status is part of the answer, not a reason to hide it. A model that
+    // can see `401 Unauthorized` knows to look for a token; one handed a bare
+    // error message guesses.
+    Ok(format!("{} {}\n\n{}", status.as_u16(), status.canonical_reason().unwrap_or(""), trim(&text)))
+}
+
+/// Why this request is not allowed, in words the model can act on.
+fn refuse_request(
+    verb: &str,
+    url: &str,
+    headers: &[(String, String)],
+    granted: bool,
+) -> Option<String> {
+    if let Some(why) = refuse(url) {
+        return Some(why);
+    }
+    if verb.is_empty() {
+        return Some("no method given".into());
+    }
+    if !verb.chars().all(|c| c.is_ascii_uppercase()) {
+        return Some(format!("{verb} is not an HTTP method"));
+    }
+    if !granted && !READING.contains(&verb) {
+        return Some(format!(
+            "{verb} could change something on the other end, and I have only been \
+             allowed to read. Someone can grant that under \u{201c}Allowed to\u{201d} in the menu \
+             bar -- until they do, I can {}",
+            READING.join(" and ")
+        ));
+    }
+    for (name, value) in headers {
+        let lower = name.trim().to_ascii_lowercase();
+        if lower.is_empty() {
+            return Some("a header with no name".into());
+        }
+        if NOT_YOURS.contains(&lower.as_str()) {
+            return Some(format!("{name} is not a header I will set for you"));
+        }
+        // A newline in either half splits one header into two, which is how a
+        // request becomes two requests.
+        if name.contains(['\r', '\n']) || value.contains(['\r', '\n']) {
+            return Some(format!("{name} has a line break in it"));
+        }
+    }
+    None
+}
+
 /// Strip a page down to what a person would actually read.
 ///
 /// Falls back to the raw body rather than failing: a page that resists
@@ -189,6 +318,90 @@ fn trim(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    use super::{refuse_request as no};
+
+    /// The line the grant draws: reading is always allowed, acting is not.
+    #[test]
+    fn acting_needs_a_grant_and_reading_does_not() {
+        let url = "https://api.example.com/things";
+        assert!(no("GET", url, &[], false).is_none());
+        assert!(no("HEAD", url, &[], false).is_none());
+        for verb in ["POST", "PUT", "PATCH", "DELETE"] {
+            assert!(no(verb, url, &[], false).is_some(), "{verb} needed no grant");
+            assert!(no(verb, url, &[], true).is_none(), "{verb} refused when granted");
+        }
+    }
+
+    /// "Refused as clearly as the shell refuses" -- the plan's words. A refusal
+    /// the model cannot act on is the same as a silent one.
+    #[test]
+    fn a_refusal_says_what_would_lift_it() {
+        let why = no("POST", "https://api.example.com", &[], false).unwrap();
+        assert!(why.contains("Allowed to"), "got: {why}");
+        assert!(why.contains("GET"), "it should say what it still can do: {why}");
+    }
+
+    /// The URL rules are not weakened by having a method. A granted POST to a
+    /// router on the home network is the request this most needs to refuse.
+    #[test]
+    fn the_network_rules_hold_however_wide_the_grant() {
+        for url in [
+            "http://localhost:5432/",
+            "http://192.168.1.1/admin",
+            "http://169.254.169.254/latest/meta-data/",
+            "file:///etc/passwd",
+        ] {
+            assert!(no("POST", url, &[], true).is_some(), "{url} was allowed");
+        }
+    }
+
+    #[test]
+    fn headers_that_would_redirect_or_split_the_request_are_refused() {
+        let url = "https://api.example.com";
+        let host = [("Host".to_string(), "evil.example".to_string())];
+        assert!(no("GET", url, &host, true).is_some(), "Host was accepted");
+
+        let split = [("X-Thing".to_string(), "a\r\nX-Other: b".to_string())];
+        assert!(no("GET", url, &split, true).is_some(), "a line break got through");
+
+        let fine = [("Authorization".to_string(), "Bearer abc".to_string())];
+        assert!(no("GET", url, &fine, false).is_none(), "an ordinary header was refused");
+    }
+
+    /// Against a real server, because the refusals above prove only what we
+    /// refuse. Ignored by default: it needs a network.
+    ///
+    ///     cargo test --lib fetch -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore = "needs the network"]
+    async fn a_real_request_carries_its_method_headers_and_body() {
+        let said = super::request(
+            "post",
+            "https://httpbin.org/post",
+            &[("X-Nudge".into(), "hello".into())],
+            Some(r#"{"a":1}"#),
+            true,
+        )
+        .await
+        .expect("the request failed");
+        println!("{said}");
+        assert!(said.starts_with("200 OK"), "status should lead: {said}");
+        // httpbin echoes what it received, so this proves all three arrived.
+        assert!(said.contains("\"a\": 1"), "the body did not arrive");
+        assert!(said.contains("hello"), "the header did not arrive");
+
+        // And the same call without the grant never leaves the machine.
+        let refused = super::request("post", "https://httpbin.org/post", &[], None, false).await;
+        println!("ungranted -> {refused:?}");
+        assert!(refused.is_err());
+    }
+
+    #[test]
+    fn a_method_has_to_look_like_one() {
+        assert!(no("", "https://x.example", &[], true).is_some());
+        assert!(no("get; rm -rf /", "https://x.example", &[], true).is_some());
+    }
+
     use super::*;
 
     #[test]

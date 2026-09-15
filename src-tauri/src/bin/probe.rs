@@ -108,6 +108,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         provider::Step::Press { keys, .. } => println!("  press:  {keys}"),
         provider::Step::Run { command, .. } => println!("  run:    {command}"),
         provider::Step::Mcp { tool, args, .. } => println!("  tool:   {tool} {args}"),
+        provider::Step::Request { method, url, .. } => println!("  http:   {method} {url}"),
         provider::Step::Start { command, .. } => println!("  start:  {command}"),
         provider::Step::Output { id, .. } => println!("  output: {id}"),
         provider::Step::Kill { id, .. } => println!("  kill:   {id}"),

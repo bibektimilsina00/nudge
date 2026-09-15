@@ -276,6 +276,29 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
             .record_run(format!("search {query:?}"), found);
         crate::app::agent::publish(app);
     }
+    if let Step::Request {
+        method,
+        url,
+        headers,
+        body,
+        ..
+    } = step
+    {
+        let said = fetch::request(
+            method,
+            url,
+            headers,
+            body.as_deref(),
+            may(&app, Grant::Http),
+        )
+        .await?;
+        eprintln!("{method} {url} -> {} chars", said.len());
+        app.state::<Nudge>()
+            .note(format!("{method} {url} answered:\n{said}"));
+        app.state::<Agents>()
+            .record_run(format!("{method} {url}"), said);
+        crate::app::agent::publish(app);
+    }
     if let Step::Mcp { tool, args, .. } = step {
         let said = app.state::<Nudge>().run_tool(tool, args).await?;
         eprintln!("mcp {tool} -> {} chars", said.len());

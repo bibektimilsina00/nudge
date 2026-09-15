@@ -65,6 +65,7 @@ impl Provider for Ollama {
              {{\"kind\":\"fetch\",\"url\":\"https://...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"search\",\"query\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"mcp\",\"tool\":\"server/name\",\"args\":{{}},\"say\":\"...\"}}\n\
+             {{\"kind\":\"request\",\"method\":\"POST\",\"url\":\"https://...\",\"headers\":{{}},\"body\":{{}},\"say\":\"...\"}}\n\
              {{\"kind\":\"task\",\"task\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"show\",\"path\":\"index.html\",\"say\":\"...\"}}\n\
              {{\"kind\":\"workspace\",\"path\":\"~/projects/thing\",\"say\":\"...\"}}\n\
