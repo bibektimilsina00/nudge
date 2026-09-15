@@ -44,6 +44,12 @@ export function Face({
   useEffect(() => {
     // Waiting is the state that wants a person, so it gets the one that looks
     // like listening. Running is work; everything else is over.
+    //
+    // `zoom` is what actually draws the face at tile size -- tried the other way
+    // round, driving `float` while working, and the tile rendered nothing at all:
+    // Floating composes the character into a larger scene, so at 46px there is
+    // nothing in frame. Whatever "working" should look like, this file does not
+    // have a second state that reads as it.
     const busy = state === "running";
     const asking = state === "waiting";
     if (recording) recording.value = asking;

@@ -230,14 +230,12 @@ export default function AgentCard() {
  * the colour, or the two meanings would fight.
  */
 function Tile({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
-  const c = colour(agent.id);
   return (
     <button
       onClick={onOpen}
       aria-label={`${agent.title} — expand`}
       title={agent.title}
-      style={{ backgroundColor: c.bg }}
-      className="relative grid size-[38px] shrink-0 place-items-center rounded-[11px] text-white transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-105 active:scale-[0.97]"
+      className="relative grid size-[46px] shrink-0 place-items-center text-white transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-105 active:scale-[0.97]"
     >
       {/* The tile is what is on screen almost all the time -- the card is
           collapsed unless someone opens it -- so this is where being visibly
@@ -246,7 +244,7 @@ function Tile({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
       {/* Sized here, not by the wrapper. `Face` draws at its own `size` and
           defaults to 22, so a larger box around it only moved the canvas off
           centre -- which is exactly what it looked like. */}
-      <Face state={agent.state} step={agent.step} size={32} />
+      <Face state={agent.state} step={agent.step} size={46} />
       {agent.state === "waiting" && (
         <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-[#e8b027] ring-2 ring-black/60" />
       )}
@@ -254,21 +252,12 @@ function Tile({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
   );
 }
 
-/**
- * Six, cycled by id. Enough that two agents are never the same colour in
- * practice, few enough that each one stays recognisable.
- */
-function colour(id: number) {
-  const palette = [
-    { bg: "#0a84ff", glow: "rgba(10,132,255,0.45)" },
-    { bg: "#a855f7", glow: "rgba(168,85,247,0.45)" },
-    { bg: "#2ec8c8", glow: "rgba(46,200,200,0.45)" },
-    { bg: "#ff9f0a", glow: "rgba(255,159,10,0.45)" },
-    { bg: "#ff2d55", glow: "rgba(255,45,85,0.45)" },
-    { bg: "#30d158", glow: "rgba(48,209,88,0.45)" },
-  ];
-  return palette[Math.abs(id) % palette.length];
-}
+/* The six-colour palette went with the tile's background.
+ *
+ * It existed so two agents running at once were distinguishable at a glance --
+ * which `Agents::start` has always made impossible: it refuses to start a second
+ * while one is live, because there is one cursor. The colour was distinguishing
+ * a case that cannot occur. */
 
 function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
   return (
