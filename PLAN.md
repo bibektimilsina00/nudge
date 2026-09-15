@@ -790,10 +790,19 @@ original to yourself, and **never report finishing something you did not finish*
 a wrong "done" costs more than a failure, because a failure is something a person
 can act on.
 
-*Honestly unverified:* the live stop. A synthetic Escape from System Events is not
-seen by `escape_down`, which polls the physical key, so the race could not be
-reproduced from here. The guard has a unit test; the ordering change is reasoned,
-not observed.
+*Unobserved, and recorded as such.* The race -- Escape landing while a model call
+is already in flight -- has never been reproduced. `escape_down` reads the combined
+session key state, and `osascript` presses and releases in the same instant, so a
+sixty-times-a-second poll misses it; posting a held key from outside was not
+pursued.
+
+What is tested is the half that cannot be reasoned around: `set_state` refuses to
+move an agent out of `Stopped`, so whatever arrives late cannot overwrite it. The
+ordering change above it -- checking before speaking rather than only before
+acting -- is four lines and evident, and evident is exactly what this session has
+repeatedly found bugs in. **Ten seconds with a real keyboard would settle it:**
+start something long, press Escape, and check the log says `stopped by Escape`,
+ends `Stopped`, and claims nothing.
 
 **3.5 Delegation stops being visible.** *Built.*
 
@@ -822,11 +831,24 @@ is narrowed to the delegation section: `Claude Code URL Handler` is a real
 application and the apps list is right to name it, which is what caught the first
 version of this.
 
-*Honestly unverified:* no live delegation. Given a one-line bug to fix and a haiku
-to write, the model correctly did both itself rather than handing them over -- so
-the path is unit-tested at both ends and never yet run end to end. Forcing it
-wants a job big enough to be worth an agent, which costs real time and somebody's
-quota.
+*Verified live*, once a job large enough to be worth an agent was put to it --
+"write a complete pytest test suite for hello.py, covering edge cases, plus a
+README explaining how to run it":
+
+    Delegate { task: "...", named: None, say: "Writing the pytest test suite
+                                               and README for hello.py." }
+    delegating: claude -p --permission-mode acceptEdits '...'
+    turn 0-1: Output { id: 1 }
+    turn 2: Done "The complete pytest test suite ... have both been written."
+
+`test_hello.py` and `README.md` appeared, written by something else. Every property
+held: `named: None`, so the choice was Nudge's; the invocation was composed in Rust
+with its quoting intact; and **nothing said out loud named the agent**, which is
+the whole of 3.5.
+
+Smaller jobs are still done directly -- a one-line bug fix and a haiku were both
+handled without handing anything over, which is the right call and is why this took
+a deliberately large job to observe.
 
 *Phase 3 is done when:* someone who has never heard of a coding agent can install
 one, forget it, and never be reminded it exists. **The prompt no longer contains
