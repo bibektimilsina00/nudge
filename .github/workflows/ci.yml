@@ -1,0 +1,91 @@
+# What has to be true before anything deploys.
+#
+# Path-filtered, because this repository holds three unrelated things: a macOS
+# app in Rust, a Python API, and a Next site. Running all three suites on a typo
+# in a heading trains people to ignore a red tick.
+name: CI
+
+on:
+  push:
+    branches: [main, alpha]
+  pull_request:
+
+# A second push while the first is still building makes the first irrelevant.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      app: ${{ steps.filter.outputs.app }}
+      server: ${{ steps.filter.outputs.server }}
+      web: ${{ steps.filter.outputs.web }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            app:
+              - 'src-tauri/**'
+              - 'ui/**'
+              - 'Makefile'
+            server:
+              - 'server/**'
+            web:
+              - 'web/**'
+
+  app:
+    needs: changed
+    if: needs.changed.outputs.app == 'true'
+    # The Rust tests are platform-agnostic, but this crate's macOS paths are
+    # compiled on macOS and a Linux runner would not build them at all.
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy, rustfmt }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - run: cd src-tauri && cargo fmt --check
+      - run: cd src-tauri && cargo clippy --all-targets -- -D warnings
+      - run: cd src-tauri && cargo test
+
+  server:
+    needs: changed
+    if: needs.changed.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with: { enable-cache: true }
+      - run: cd server && uv sync --frozen
+      - run: cd server && uv run pytest -q
+
+  web:
+    needs: changed
+    if: needs.changed.outputs.web == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: 9 }
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: web/pnpm-lock.yaml
+      - run: cd web && pnpm install --frozen-lockfile
+      - run: cd web && pnpm lint
+      - run: cd web && npx tsc --noEmit
+      # The build is the real test here: a broken favicon or a bad import only
+      # shows up at build time, and finding that on the deploy box means the box
+      # is serving a stale container while somebody works out why.
+      - run: cd web && pnpm build

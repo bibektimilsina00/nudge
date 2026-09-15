@@ -1,0 +1,33 @@
+# Setting up SSH, once, because three jobs need the same six lines and a copy in
+# each is three places to get a permission wrong.
+name: SSH to the deploy box
+description: Load the deploy key and the host's fingerprint into the agent.
+
+inputs:
+  key:
+    description: Private key
+    required: true
+  known_hosts:
+    description: The host's public key, so this never prompts and never trusts blindly
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        mkdir -p ~/.ssh
+        chmod 700 ~/.ssh
+        printf '%s\n' "${{ inputs.key }}" > ~/.ssh/deploy
+        chmod 600 ~/.ssh/deploy
+        printf '%s\n' "${{ inputs.known_hosts }}" > ~/.ssh/known_hosts
+        chmod 644 ~/.ssh/known_hosts
+        # Pinned rather than StrictHostKeyChecking=no. Accepting whatever answers
+        # is how a deploy ends up trusting somebody else's box.
+        cat >> ~/.ssh/config <<CONF
+        Host *
+          IdentityFile ~/.ssh/deploy
+          IdentitiesOnly yes
+          StrictHostKeyChecking yes
+          ServerAliveInterval 30
+        CONF

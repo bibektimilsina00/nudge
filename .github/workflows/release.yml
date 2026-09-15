@@ -91,8 +91,61 @@ jobs:
           name: Nudge-macos-arm64
           path: src-tauri/target/release/bundle/dmg/*.dmg
 
-      # Only for a tag. A dispatch run is for proving the pipeline, and a draft
-      # release appearing every time somebody does that is noise.
+      # Straight onto the download page, which is the only place anybody gets
+      # this. A release that exists on GitHub and not on the site is a release
+      # nobody can download.
+      - name: Publish to the download API
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: ./.github/actions/ssh
+        with:
+          key: ${{ secrets.DEPLOY_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Ship it
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          # Through the environment, never interpolated into the script.
+          # `${{ ... }}` is substituted before bash sees the line, so a commit
+          # message carrying a quote and a semicolon would run on the deploy box
+          # as us. This is the standard Actions injection and this is the
+          # standard fix: untrusted text only ever arrives as a variable.
+          NOTES: ${{ github.event.head_commit.message }}
+          HOST: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          dmg=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -1)
+
+          # First line only: a release note is a sentence, and a commit body
+          # would arrive as a wall of text under a download button.
+          notes=$(printf '%s' "$NOTES" | head -1)
+
+          scp "$dmg" "$HOST:/tmp/Nudge.dmg"
+
+          # `ssh host VAR=x 'script'` looks like it passes an environment and
+          # does not: the remote shell expands $VAR in the very command that
+          # assigns it, so it arrives empty. Checked, and it published a blank
+          # version. `env` on the remote side is the form that works, and the
+          # values are shell-quoted on the way so a note with an apostrophe in it
+          # cannot end the string.
+          ssh "$HOST" "env \
+            NUDGE_VERSION=$(printf %q "$version") \
+            NUDGE_NOTES=$(printf %q "$notes") \
+            bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/nudge
+          docker cp /tmp/Nudge.dmg nudge-api-1:/tmp/Nudge.dmg
+          docker compose exec -T api uv run publish.py /tmp/Nudge.dmg \
+            --version "$NUDGE_VERSION" --platform macos-arm64 --notes "$NUDGE_NOTES"
+          rm -f /tmp/Nudge.dmg
+          REMOTE
+
+          # The page has to agree it happened, or this did not ship.
+          curl -fsS https://nudge.runmycrew.com/api/releases/macos-arm64 \
+            | grep -q "\"version\":\"$version\"" \
+            || { echo "published, but the API reports a different version" >&2; exit 1; }
+          echo "live: $version"
+
       - name: Draft a release
         if: startsWith(github.ref, 'refs/tags/')
         uses: softprops/action-gh-release@v2

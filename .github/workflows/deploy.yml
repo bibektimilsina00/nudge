@@ -1,0 +1,146 @@
+# Deploy only what changed.
+#
+# The site and the API are separate containers on one box behind a shared Caddy.
+# Editing a heading should restart the web container and nothing else -- the API
+# holds the database and the published builds, and there is no reason for it to
+# blink because somebody reworded a paragraph.
+#
+# So: the same path filter as CI decides which jobs run, each job syncs only its
+# own directory, and `docker compose up -d --build <service>` rebuilds one image.
+name: Deploy
+
+on:
+  push:
+    branches: [main, alpha]
+  # For redeploying without a commit -- a container that died, or a box that
+  # came back up empty.
+  workflow_dispatch:
+    inputs:
+      what:
+        description: Which service to redeploy
+        type: choice
+        options: [both, web, server]
+        default: both
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  changed:
+    runs-on: ubuntu-latest
+    outputs:
+      server: ${{ steps.filter.outputs.server }}
+      web: ${{ steps.filter.outputs.web }}
+      compose: ${{ steps.filter.outputs.compose }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            server:
+              - 'server/**'
+            web:
+              - 'web/**'
+            compose:
+              - 'docker-compose.yml'
+
+  server:
+    needs: changed
+    if: >-
+      needs.changed.outputs.server == 'true' ||
+      needs.changed.outputs.compose == 'true' ||
+      inputs.what == 'both' || inputs.what == 'server'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/ssh
+        with:
+          key: ${{ secrets.DEPLOY_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Sync
+        run: |
+          rsync -az --delete \
+            --exclude .venv --exclude __pycache__ --exclude .pytest_cache \
+            --exclude nudge.db --exclude releases --exclude .env \
+            server docker-compose.yml \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/nudge/
+
+      - name: Rebuild the API and nothing else
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'cd /opt/nudge && docker compose up -d --build api'
+
+      # A deploy that finishes is not a deploy that works.
+      - name: Check it answers
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'for i in $(seq 1 20); do
+               if docker exec proxy-caddy wget -qO- --timeout=3 http://nudge-api-1:8080/health | grep -q ok; then
+                 echo "api healthy"; exit 0
+               fi
+               sleep 2
+             done
+             echo "api did not come back" >&2
+             docker compose -f /opt/nudge/docker-compose.yml logs --tail 40 api >&2
+             exit 1'
+
+  web:
+    needs: changed
+    if: >-
+      needs.changed.outputs.web == 'true' ||
+      needs.changed.outputs.compose == 'true' ||
+      inputs.what == 'both' || inputs.what == 'web'
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/ssh
+        with:
+          key: ${{ secrets.DEPLOY_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Sync
+        run: |
+          rsync -az --delete \
+            --exclude node_modules --exclude .next --exclude .env \
+            web docker-compose.yml \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/nudge/
+
+      - name: Rebuild the site and nothing else
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'cd /opt/nudge && docker compose up -d --build web'
+
+      - name: Check it answers
+        run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'for i in $(seq 1 20); do
+               if docker exec proxy-caddy wget -qO- --timeout=3 http://nudge-web-1:3000 >/dev/null 2>&1; then
+                 echo "web healthy"; exit 0
+               fi
+               sleep 2
+             done
+             echo "web did not come back" >&2
+             docker compose -f /opt/nudge/docker-compose.yml logs --tail 40 web >&2
+             exit 1'
+
+  # Old images pile up on a box with 179GB free until they do not. Runs after
+  # whichever jobs ran, and never fails the deploy.
+  tidy:
+    needs: [server, web]
+    if: always() && (needs.server.result == 'success' || needs.web.result == 'success')
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/ssh
+        with:
+          key: ${{ secrets.DEPLOY_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+      - run: |
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'docker image prune -f --filter "until=168h"' || true
