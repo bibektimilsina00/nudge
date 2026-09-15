@@ -101,6 +101,22 @@ impl Flag {
     }
 }
 
+/// The key that summons Nudge, as it stands.
+///
+/// Changeable, so it cannot live in `cfg` -- and read by the pointer loop sixty
+/// times a second as well as by the menu bar, which is why it is a lock around a
+/// string rather than anything cleverer.
+pub struct Hotkey(pub std::sync::Mutex<String>);
+
+impl Hotkey {
+    pub fn get(&self) -> String {
+        self.0.lock().unwrap().clone()
+    }
+    pub fn set(&self, keys: &str) {
+        *self.0.lock().unwrap() = keys.to_string();
+    }
+}
+
 /// Which character the companion wears.
 ///
 /// Here rather than in the interface because two windows draw it -- the overlay

@@ -8,6 +8,13 @@ import { Companion } from "../components/Companion";
 type VoiceMode = "off" | "system" | "gemini";
 type Allowed = { key: string; label: string; about: string; on: boolean };
 type Pick = { key: string; label: string; about: string };
+type Shortcut = {
+  id: string;
+  name: string;
+  about: string;
+  keys: string[];
+  fixed: string | null;
+};
 type PermitState = "granted" | "denied" | "unasked";
 type Permit = {
   key: string;
@@ -26,7 +33,7 @@ type Brain = {
 };
 
 /** Which page of settings is open. */
-type Where = "root" | "allowed" | "model" | "voice" | "screen" | "permissions";
+type Where = "root" | "allowed" | "model" | "voice" | "screen" | "permissions" | "keys";
 
 /**
  * The settings sheet.
@@ -72,6 +79,7 @@ export function Settings({
   const [problem, setProblem] = useState<string | null>(null);
   const [look, setLook] = useState(DEFAULT_LOOK);
   const [permits, setPermits] = useState<Permit[]>([]);
+  const [keys, setKeys] = useState<Shortcut[]>([]);
 
   useEffect(() => {
     void invoke<VoiceMode>("voice_mode").then(setVoice);
@@ -84,6 +92,7 @@ export function Settings({
     // somebody leaves for System Settings and comes back, and an answer cached
     // before they left would still say "not granted" over a grant already
     // working. A second is faster than anybody can tick a box and switch back.
+    void invoke<Shortcut[]>("shortcuts").then(setKeys);
     const grants = () => void invoke<Permit[]>("permits").then(setPermits);
     grants();
     const watching = window.setInterval(grants, 1000);
@@ -275,6 +284,34 @@ export function Settings({
     );
   }
 
+  if (where === "keys") {
+    return (
+      <Page title="Shortcuts" onBack={() => setWhere("root")}>
+        <p className="px-0.5 pt-1 pb-2.5 text-[10.5px] leading-snug text-ink-3">
+          The keys that summon Nudge.
+        </p>
+        <div className="space-y-2">
+          {keys.map((s) => (
+            <Key
+              key={s.id}
+              shortcut={s}
+              onChange={(combo) =>
+                invoke("set_shortcut", { keys: combo })
+                  .then(() => invoke<Shortcut[]>("shortcuts").then(setKeys))
+                  .catch((e) => setProblem(String(e)))
+              }
+            />
+          ))}
+        </div>
+        {problem && (
+          <p className="mt-2 rounded-xl bg-[#ff453a]/12 p-2 text-[10.5px] leading-snug text-[#ff8a80]">
+            {problem}
+          </p>
+        )}
+      </Page>
+    );
+  }
+
   if (where === "permissions") {
     return (
       <Page title="Permissions" onBack={() => setWhere("root")}>
@@ -376,6 +413,17 @@ export function Settings({
       </Section>
 
       <Section title="System">
+        <Row
+          icon={<I.Keyboard />}
+          label="Shortcuts"
+          sub="The keys that summon Nudge"
+          value={keys[0]?.keys.join(" ")}
+          chevron
+          onClick={() => {
+            setProblem(null);
+            setWhere("keys");
+          }}
+        />
         <Row
           icon={<I.Shield />}
           label="Permissions"
@@ -493,6 +541,144 @@ function Grant({ permit }: { permit: Permit }) {
           className="h-[24px] shrink-0 rounded-control bg-blue px-2.5 text-[11.5px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi active:scale-[0.98]"
         >
           {pane ? "Open Settings" : "Allow"}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** The caps a shortcut is drawn as. */
+function Caps({ keys }: { keys: string[] }) {
+  return (
+    <span className="flex shrink-0 items-center gap-1">
+      {keys.map((k, i) => (
+        <kbd
+          key={`${k}-${i}`}
+          className="rounded-[5px] bg-raise-on px-1.5 py-[2px] font-mono text-[10px] whitespace-nowrap text-ink"
+        >
+          {k}
+        </kbd>
+      ))}
+    </span>
+  );
+}
+
+/**
+ * One shortcut, and a way to change it by pressing it.
+ *
+ * Recorded, not typed. The stored form is `Ctrl+Shift+Space`, which is what the OS
+ * wants and not something anybody should have to know -- a text field here would
+ * be asking people to spell an accelerator correctly and giving them an error when
+ * they guess wrong.
+ *
+ * A bare modifier is a real answer, and the awkward one. Nudge's default is
+ * Control on its own, which the OS has no notion of as a shortcut and which never
+ * completes the usual "modifiers plus a key" shape -- so holding a modifier and
+ * letting go is taken as meaning it, and anything pressed while it is held wins
+ * instead.
+ */
+function Key({
+  shortcut,
+  onChange,
+}: {
+  shortcut: Shortcut;
+  onChange: (combo: string) => void;
+}) {
+  const [listening, setListening] = useState(false);
+  const [held, setHeld] = useState<string[]>([]);
+
+  useEffect(() => {
+    if (!listening) return;
+
+    const mods = (e: KeyboardEvent) => {
+      const out: string[] = [];
+      if (e.ctrlKey) out.push("Ctrl");
+      if (e.shiftKey) out.push("Shift");
+      if (e.altKey) out.push("Alt");
+      if (e.metaKey) out.push("Cmd");
+      return out;
+    };
+
+    const down = (e: KeyboardEvent) => {
+      e.preventDefault();
+      if (e.key === "Escape") {
+        setListening(false);
+        setHeld([]);
+        return;
+      }
+      const m = mods(e);
+      // A modifier on its own is not finished yet -- it is either the whole
+      // answer or the start of one, and only letting go says which.
+      if (["Control", "Shift", "Alt", "Meta"].includes(e.key)) {
+        setHeld(m);
+        return;
+      }
+      const named = e.key === " " ? "Space" : e.key.length === 1 ? e.key.toUpperCase() : e.key;
+      setListening(false);
+      setHeld([]);
+      onChange([...m, named].join("+"));
+    };
+
+    const up = (e: KeyboardEvent) => {
+      if (!["Control", "Shift", "Alt", "Meta"].includes(e.key)) return;
+      // Released with nothing else pressed: they meant the modifier itself. Only
+      // Control is watchable that way, so anything else is not offered.
+      if (e.key === "Control" && held.length === 1 && held[0] === "Ctrl") {
+        setListening(false);
+        setHeld([]);
+        onChange("ctrl");
+        return;
+      }
+      setHeld([]);
+    };
+
+    window.addEventListener("keydown", down, true);
+    window.addEventListener("keyup", up, true);
+    return () => {
+      window.removeEventListener("keydown", down, true);
+      window.removeEventListener("keyup", up, true);
+    };
+  }, [listening, held, onChange]);
+
+  return (
+    <div className="flex items-start gap-2.5 rounded-xl bg-raise p-2.5 hairline">
+      <div className="min-w-0 flex-1">
+        <h3 className="text-[12px] font-medium">{shortcut.name}</h3>
+        <p className="mt-px text-[10.5px] leading-snug text-ink-3">
+          {listening ? "Press the keys you want. Escape to cancel." : shortcut.about}
+        </p>
+      </div>
+
+      {listening ? (
+        <span className="flex shrink-0 items-center gap-1.5">
+          {held.length > 0 ? (
+            <Caps keys={held} />
+          ) : (
+            <span className="text-[11px] text-blue">Listening…</span>
+          )}
+        </span>
+      ) : (
+        <Caps keys={shortcut.keys} />
+      )}
+
+      {shortcut.fixed ? (
+        <span
+          title={shortcut.fixed}
+          className="grid size-[24px] shrink-0 place-items-center text-ink-3"
+        >
+          <svg viewBox="0 0 16 16" className="size-[13px]" fill="none" stroke="currentColor" strokeWidth={1.6}>
+            <rect x="3.5" y="7" width="9" height="6" rx="1.5" />
+            <path d="M5.8 7V5.2a2.2 2.2 0 0 1 4.4 0V7" strokeLinecap="round" />
+          </svg>
+        </span>
+      ) : (
+        <button
+          onClick={() => setListening((l) => !l)}
+          className={`h-[24px] shrink-0 rounded-control px-2.5 text-[11.5px] font-medium transition-colors duration-150 active:scale-[0.98] ${
+            listening ? "bg-raise-on text-ink" : "bg-blue text-white hover:bg-blue-hi"
+          }`}
+        >
+          {listening ? "Cancel" : "Change"}
         </button>
       )}
     </div>

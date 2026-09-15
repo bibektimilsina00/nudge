@@ -28,7 +28,15 @@ pub fn follow(app: &AppHandle) {
         // Ticks the pointer has been off the panel while it is open. Leaving is
         // not an event, it is a sustained absence -- see `LINGER`.
         let mut away: u32 = 0;
-        let bare = crate::app::input::hotkey::is_bare_modifier(&app.state::<Nudge>().cfg.hotkey);
+        // Re-read rather than captured. Asked once at thread start, the answer
+        // outlived every change to it: switching away from bare Control left this
+        // loop still watching for Control, and switching to it left nothing
+        // watching at all.
+        let is_bare = |app: &AppHandle| {
+            crate::app::input::hotkey::is_bare_modifier(
+                &app.state::<crate::app::state::Hotkey>().get(),
+            )
+        };
         let mut ctrl_was = false;
         let mut click_was = false;
         let mut tick: u32 = 0;
@@ -107,7 +115,7 @@ pub fn follow(app: &AppHandle) {
             // Push-to-talk on a bare modifier. Edge-triggered, so the handler
             // sees one press and one release exactly as the plugin would deliver
             // them -- hold-to-talk and tap-to-advance both fall out unchanged.
-            if bare {
+            if is_bare(&app) {
                 let ctrl = click::control_alone();
                 if ctrl != ctrl_was {
                     ctrl_was = ctrl;

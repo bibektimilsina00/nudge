@@ -509,3 +509,132 @@ pub fn ask_permit(key: String) -> bool {
 pub fn open_permit(key: String) {
     crate::core::permits::open_settings(&key);
 }
+
+/// One shortcut, as the settings page shows it.
+#[derive(serde::Serialize)]
+pub struct Shortcut {
+    pub id: String,
+    pub name: String,
+    pub about: String,
+    /// The keys, already split for drawing as separate caps.
+    pub keys: Vec<String>,
+    /// Whether it can be rebound, and why not when it cannot.
+    pub fixed: Option<String>,
+}
+
+/// Turn a stored accelerator into caps somebody can read.
+///
+/// `Ctrl+Shift+Space` is how the OS wants it and not how anybody reads it. Split
+/// and spelled out, because a row of one-character symbols is a puzzle on a
+/// keyboard where half of them are not printed.
+fn as_caps(hotkey: &str) -> Vec<String> {
+    if crate::app::input::hotkey::is_bare_modifier(hotkey) {
+        return vec!["⌃ control".into()];
+    }
+    hotkey
+        .split('+')
+        .map(|part| match part.trim().to_ascii_lowercase().as_str() {
+            "ctrl" | "control" => "⌃ control".to_string(),
+            "shift" => "⇧ shift".into(),
+            "alt" | "option" => "⌥ option".into(),
+            "cmd" | "command" | "super" | "meta" => "⌘ command".into(),
+            "space" => "space".into(),
+            other => other.to_string(),
+        })
+        .collect()
+}
+
+/// Nudge's shortcuts, as they stand.
+///
+/// Two, and saying so is the point. The temptation with a page like this is to
+/// pad it out to look substantial -- a row for every key the app happens to read
+/// -- but a list of shortcuts is a thing people scan for the one they want, and
+/// every invented entry makes that slower.
+#[tauri::command]
+pub fn shortcuts(app: AppHandle) -> Vec<Shortcut> {
+    let now = app.state::<crate::app::state::Hotkey>().get();
+    let bare = crate::app::input::hotkey::is_bare_modifier(&now);
+    vec![
+        Shortcut {
+            id: "talk".into(),
+            name: "Talk to Nudge".into(),
+            about: if bare {
+                "Hold it and speak. Release to send.".into()
+            } else {
+                "Hold it and speak. Release to send.".to_string()
+            },
+            keys: as_caps(&now),
+            fixed: None,
+        },
+        Shortcut {
+            id: "next".into(),
+            name: "Next step".into(),
+            about: "Tap the same key instead of holding it.".into(),
+            keys: as_caps(&now),
+            // Deliberately the same key, not an unset one. One key doing both jobs
+            // is the design -- nothing new to learn, and the tap is there when you
+            // are mid-sequence and just want the next nudge.
+            fixed: Some("Same key as Talk — tap instead of hold.".into()),
+        },
+        Shortcut {
+            id: "stop".into(),
+            name: "Stop".into(),
+            about: "Stops whatever Nudge is doing to your machine.".into(),
+            keys: vec!["esc".into()],
+            fixed: Some("Escape is the key people already hit. It stays.".into()),
+        },
+    ]
+}
+
+/// Rebind the summon key.
+///
+/// Bound before it is stored, so a shortcut the OS refuses -- already taken by
+/// something else is the usual reason -- leaves the working one in place and says
+/// why, rather than leaving Nudge with no way in.
+#[tauri::command]
+pub fn set_shortcut(app: AppHandle, keys: String) -> std::result::Result<(), String> {
+    let keys = keys.trim().to_string();
+    if keys.is_empty() {
+        return Err("That is not a shortcut.".into());
+    }
+    let previous = app.state::<crate::app::state::Hotkey>().get();
+    crate::app::input::hotkey::bind(&app, &keys).map_err(|e| {
+        // Put back what was working before saying anything.
+        let _ = crate::app::input::hotkey::bind(&app, &previous);
+        format!("macOS would not take that one: {e}")
+    })?;
+    app.state::<crate::app::state::Hotkey>().set(&keys);
+    // The menu bar prints the shortcut in its first line.
+    crate::app::ui::tray::refresh(&app, &keys);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::as_caps;
+
+    #[test]
+    fn a_bare_modifier_reads_as_the_key_itself() {
+        // The default, and the one that is not an accelerator at all: the OS has
+        // no notion of "Control on its own", so it never reaches the plugin and
+        // must still be drawable.
+        assert_eq!(as_caps("ctrl"), vec!["⌃ control"]);
+        assert_eq!(as_caps("control"), vec!["⌃ control"]);
+    }
+
+    #[test]
+    fn an_accelerator_is_split_into_caps_people_can_read() {
+        assert_eq!(
+            as_caps("Ctrl+Shift+Space"),
+            vec!["⌃ control", "⇧ shift", "space"]
+        );
+        assert_eq!(as_caps("Cmd+Alt+K"), vec!["⌘ command", "⌥ option", "k"]);
+    }
+
+    #[test]
+    fn an_unknown_key_is_shown_rather_than_dropped() {
+        // Silently losing a key would draw a shortcut that is not the shortcut,
+        // which is worse than showing something unpolished.
+        assert_eq!(as_caps("Ctrl+F13"), vec!["⌃ control", "f13"]);
+    }
+}

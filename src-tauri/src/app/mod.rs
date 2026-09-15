@@ -9,7 +9,9 @@ mod ui;
 
 use crate::config::Config;
 use crate::core::run::session::Nudge;
-use state::{Background, Docked, Flag, Grants, Look, Mic, Screen, Settle, Voice, VoiceMode};
+use state::{
+    Background, Docked, Flag, Grants, Hotkey, Look, Mic, Screen, Settle, Voice, VoiceMode,
+};
 use tauri::Manager;
 
 pub fn run() {
@@ -117,6 +119,7 @@ pub fn run() {
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));
+            app.manage(Hotkey(std::sync::Mutex::new(hotkey.clone())));
             app.manage(Look(std::sync::Mutex::new(
                 nudge_look.unwrap_or_else(|| "cat".into()),
             )));
@@ -196,7 +199,8 @@ pub fn run() {
                 });
             }
             input::cursor::follow(handle);
-            input::hotkey::register(handle, &hotkey)?;
+            input::hotkey::install(handle)?;
+            input::hotkey::bind(handle, &hotkey)?;
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -225,6 +229,8 @@ pub fn run() {
             commands::set_reach,
             commands::brain,
             commands::retune,
+            commands::shortcuts,
+            commands::set_shortcut,
             commands::permits,
             commands::ask_permit,
             commands::open_permit,

@@ -26,21 +26,38 @@ pub fn is_bare_modifier(hotkey: &str) -> bool {
     )
 }
 
-pub fn register(
-    app: &AppHandle,
-    hotkey: &str,
-) -> std::result::Result<(), Box<dyn std::error::Error>> {
+/// Install the plugin, binding nothing.
+///
+/// Always, even when the chosen key is a bare modifier that the plugin cannot
+/// register. It used to return early in that case and never install it, which
+/// made the choice permanent: start on bare Control and there was no plugin to
+/// register anything else with, so changing the shortcut could only work in one
+/// direction. Installing it empty costs nothing and makes both directions the
+/// same code.
+pub fn install(app: &AppHandle) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let handle = app.clone();
+    app.plugin(
+        Builder::new()
+            .with_handler(move |_, _, event| on_key(&handle, event.state))
+            .build(),
+    )?;
+    Ok(())
+}
+
+/// Bind a shortcut, replacing whatever was bound before.
+///
+/// Bare modifiers are not registered at all -- the OS has no notion of "Control
+/// on its own" as a shortcut, so the pointer loop watches for it instead. Both
+/// kinds still go through here, so the caller never has to know which it has.
+pub fn bind(app: &AppHandle, hotkey: &str) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    use tauri_plugin_global_shortcut::GlobalShortcutExt;
+    let shortcuts = app.global_shortcut();
+    let _ = shortcuts.unregister_all();
     if is_bare_modifier(hotkey) {
         // Watched by the pointer loop; nothing to register.
         return Ok(());
     }
-    let handle = app.clone();
-    app.plugin(
-        Builder::new()
-            .with_shortcuts([hotkey])?
-            .with_handler(move |_, _, event| on_key(&handle, event.state))
-            .build(),
-    )?;
+    shortcuts.register(hotkey)?;
     Ok(())
 }
 
