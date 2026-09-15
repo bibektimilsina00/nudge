@@ -195,19 +195,47 @@ plausible and wrong, and arithmetic on dates.
 *Also not covered:* this drives the blind path. The original failure came from an
 agent that also had a screenshot.
 
-**1.2 Verify before asserting.**
+**1.2 Verify before asserting.** *Built.*
 
-A subagent already exists that can search and fetch and cannot touch the cursor --
-which is exactly a fact-checker. Before a step that states a fact, ask an
-independent one to try to refute it. Report what survives; say so when nothing
-does.
+`scrutinise`, in `core/run/subagent.rs`. A subagent that looked something up does
+not return the answer directly: a second, independent pass is told the answer
+already exists and asked to find what is wrong with it. One extra round trip, and
+only on answers that came from looking something up -- a subagent reporting what a
+file contains has nothing to refute.
 
-This is the useful half of multi-agent orchestration without building an
-orchestration engine. Parallel delegation already exists and is bounded by the
-cursor rather than by the design.
+Building it turned up the thing worth writing down. **A checker told to find a
+fault will find one**, and the first two versions each made an answer worse:
 
-*Done when:* the 2036 case, recorded in 1.1, comes back either right or admitting
-uncertainty.
+- Asked to check *"future stock prices do not exist yet"*, it produced a share
+  price for next Friday. An honest refusal survived the first pass and was
+  destroyed by the pass meant to protect it.
+- Asked to check *"macOS 27, September 2026"*, it answered from its training
+  cutoff -- macOS 15, 2024 -- without searching at all. The checker committed the
+  exact failure it was summoned to catch.
+
+So the rule is not "trust the checker". It is **verification may only lower
+confidence, never raise it**, enforced in three places rather than asked for in
+the prompt:
+
+1. An answer that already admits uncertainty is not checked. There is nothing to
+   refute and everything to lose.
+2. A correction from a checker that consulted nothing is discarded. Memory does
+   not overrule a source.
+3. When both passes looked and disagreed, **neither wins.** The disagreement is
+   handed back whole.
+
+Three is the one that matters, and it was not the plan. The plan said "report what
+survives", which assumes a winner. Asked when macOS 27 shipped, one pass searched
+once and said September 2026; the other searched three times and said it had not
+shipped. More searching is not more right, and there was no basis for picking.
+Swapping one confident claim for another behind the user's back is the failure
+this mechanism exists to prevent, and it does not stop being that failure when we
+are the one doing it.
+
+*Status:* three cases, 0 wrong. Both paths seen live -- the checker agreed on one
+run of the macOS case and disagreed on the next, which is itself the finding from
+1.1 restated: this is intermittent, so three cases cannot prove anything. What
+remains is 1.1's case set, not more mechanism.
 
 **1.3 Say what is uncertain.**
 

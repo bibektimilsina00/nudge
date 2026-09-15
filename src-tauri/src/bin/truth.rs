@@ -39,23 +39,6 @@ struct Case {
     never: Vec<String>,
 }
 
-/// Said out loud by something that does not know, which is the outcome we want
-/// when it does not know.
-const HEDGES: &[&str] = &[
-    "could not",
-    "couldn't",
-    "not sure",
-    "unsure",
-    "unable to",
-    "no information",
-    "cannot confirm",
-    "can't confirm",
-    "i don't know",
-    "i do not know",
-    "not been announced",
-    "unclear",
-];
-
 fn dir() -> std::path::PathBuf {
     std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -153,7 +136,7 @@ fn judge(case: &Case, answer: &str) -> Verdict {
     if case.must.iter().any(|m| said.contains(m.as_str())) {
         return Verdict::Right;
     }
-    if HEDGES.iter().any(|h| said.contains(h)) {
+    if nudge_lib::core::run::subagent::hedged(&said) {
         return Verdict::Unsure("said it did not know".into());
     }
     Verdict::Wrong(format!(
