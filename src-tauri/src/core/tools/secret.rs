@@ -1,0 +1,197 @@
+//! Tokens, and the two things that go wrong with them.
+//!
+//! **They live in the wrong place.** A tool server needs a GitHub token, so the
+//! token goes in `config.toml`, so somebody's credential is sitting in plain text
+//! in a file that gets copied between machines, opened in an editor and
+//! screenshotted for a bug report. This project has already leaked an API key
+//! once by printing that file.
+//!
+//! **And when one is missing, nothing says so.** A coding agent that has never
+//! been signed into fails with its own words -- *"Invalid API key"*, *"run
+//! `claude login`"* -- somewhere in the output of a subprocess nobody is reading.
+//! From the outside it looks exactly like the agent declining to work. The vision
+//! is "install it and forget it", and that is not true of anything you have to
+//! authenticate without being told to.
+//!
+//! ## Where they live instead
+//!
+//! The Keychain, which macOS already has, which is already encrypted, already
+//! locked with the login password, and already the place every other program on
+//! the machine keeps this. A config value of `keychain:some-name` is looked up
+//! rather than used.
+//!
+//! ```text
+//! security add-generic-password -s nudge-github -a nudge -w ghp_xxx
+//! ```
+//! ```toml
+//! env = { GITHUB_PERSONAL_ACCESS_TOKEN = "keychain:nudge-github" }
+//! ```
+//!
+//! **Reading only.** Nudge never writes a secret and never offers to: storing one
+//! is a person deciding to trust this program with a credential, and that
+//! decision should be made at a shell prompt they typed, not inside a turn they
+//! spoke.
+use crate::error::{Error, Result};
+
+/// What a config value says when it names a secret rather than being one.
+const PREFIX: &str = "keychain:";
+
+/// Look one up. `None` covers both "no such item" and "the Keychain said no".
+pub fn from_keychain(name: &str) -> Option<String> {
+    let out = std::process::Command::new("/usr/bin/security")
+        .args(["find-generic-password", "-s", name, "-w"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let found = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!found.is_empty()).then_some(found)
+}
+
+/// Turn a configured value into the value to actually use.
+///
+/// Anything without the prefix is returned unchanged, so a plain token still
+/// works -- this is an invitation, not an enforcement. A missing Keychain item is
+/// an error rather than an empty string, because a server started with a blank
+/// token fails later, further away, and in the server's own words.
+pub fn resolve(value: &str) -> Result<String> {
+    let Some(name) = value.strip_prefix(PREFIX) else {
+        return Ok(value.to_string());
+    };
+    from_keychain(name).ok_or_else(|| {
+        Error::Config(format!(
+            "no Keychain item called {name:?}. Store it with:\n    \
+             security add-generic-password -s {name} -a nudge -w <the-token>"
+        ))
+    })
+}
+
+/// Does this output mean "nobody signed in", rather than "that did not work"?
+///
+/// Deliberately a guess at somebody else's wording, and the cost of guessing
+/// wrong is small in both directions: a false positive suggests signing in to
+/// something already signed into, and a false negative leaves the output exactly
+/// as it was. Against that, the failure it catches is invisible without it.
+pub fn unauthenticated(output: &str) -> bool {
+    const SAYS: &[&str] = &[
+        "not logged in",
+        "not authenticated",
+        "unauthenticated",
+        "authentication failed",
+        "invalid api key",
+        "missing api key",
+        "no api key",
+        "api key not found",
+        "unauthorized",
+        "401",
+        "please log in",
+        "please login",
+        "run `login`",
+        "auth login",
+        "credentials not found",
+        "no credentials",
+        "session expired",
+        "token expired",
+        "invalid token",
+    ];
+    let lower = output.to_lowercase();
+    SAYS.iter().any(|s| lower.contains(s))
+}
+
+/// The sentence to say when something is installed but nobody has signed in.
+///
+/// The 3.2 shape, one layer along: name the thing, give the command, and do not
+/// pretend it is a failure of the task. Somebody who is told *"the build failed"*
+/// goes and looks at their build.
+pub fn sign_in(program: &str) -> String {
+    let how = match program {
+        "claude" => Some("claude"),
+        "codex" => Some("codex login"),
+        "gh" => Some("gh auth login"),
+        "glab" => Some("glab auth login"),
+        "docker" => Some("docker login"),
+        "opencode" => Some("opencode auth login"),
+        _ => None,
+    };
+    match how {
+        Some(cmd) => format!(
+            "{program} is installed but nobody has signed in to it. \
+             Run `{cmd}` in a terminal once and it will stay signed in."
+        ),
+        None => format!(
+            "{program} is installed but nobody has signed in to it, and it needs \
+             that before it can do anything."
+        ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_plain_value_is_left_alone() {
+        assert_eq!(resolve("ghp_literal").unwrap(), "ghp_literal");
+    }
+
+    /// A blank token is worse than a refusal: the server starts, fails later, and
+    /// says so in its own words somewhere nobody is reading.
+    #[test]
+    fn a_missing_item_is_an_error_that_says_how_to_fix_it() {
+        let e = resolve("keychain:nudge-definitely-not-here").unwrap_err().to_string();
+        assert!(e.contains("no Keychain item"));
+        assert!(e.contains("add-generic-password"), "it should say how: {e}");
+    }
+
+    /// Round trip through the real Keychain, since that is the only thing that
+    /// proves the arguments are right.
+    #[test]
+    #[ignore = "writes to the login keychain"]
+    fn a_stored_secret_comes_back() {
+        let name = "nudge-secret-roundtrip";
+        std::process::Command::new("/usr/bin/security")
+            .args(["add-generic-password", "-s", name, "-a", "nudge", "-w", "hunter2", "-U"])
+            .status()
+            .unwrap();
+        assert_eq!(resolve(&format!("keychain:{name}")).unwrap(), "hunter2");
+        std::process::Command::new("/usr/bin/security")
+            .args(["delete-generic-password", "-s", name])
+            .status()
+            .unwrap();
+    }
+
+    #[test]
+    fn it_recognises_the_usual_ways_of_saying_nobody_signed_in() {
+        for said in [
+            "Error: not logged in to github.com",
+            "Invalid API key · Please run /login",
+            "HTTP 401 Unauthorized",
+            "credentials not found",
+        ] {
+            assert!(unauthenticated(said), "missed: {said}");
+        }
+    }
+
+    /// The cost of a false positive is a pointless suggestion; the cost of
+    /// catching everything is that every failure becomes a login prompt.
+    #[test]
+    fn an_ordinary_failure_is_not_a_login_problem() {
+        for said in [
+            "error[E0061]: this function takes 3 arguments",
+            "fatal: not a git repository",
+            "No such file or directory",
+        ] {
+            assert!(!unauthenticated(said), "wrongly blamed auth: {said}");
+        }
+    }
+
+    #[test]
+    fn the_sentence_names_the_command_when_we_know_it() {
+        assert!(sign_in("gh").contains("gh auth login"));
+        // And says the useful half when we do not, rather than inventing one.
+        let unknown = sign_in("some-private-cli");
+        assert!(unknown.contains("nobody has signed in"));
+        assert!(!unknown.contains("Run `"));
+    }
+}

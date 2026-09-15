@@ -121,6 +121,10 @@ pub struct Spec {
     pub args: Vec<String>,
     /// Extra environment for the child -- which is where tokens go, so that a
     /// server's credentials sit beside the server rather than in Nudge.
+    ///
+    /// A value of `keychain:name` is looked up in the Keychain rather than used,
+    /// so the config file can be copied, opened and screenshotted without
+    /// carrying somebody's token with it. See [`super::secret`].
     #[serde(default)]
     pub env: std::collections::HashMap<String, String>,
 }
@@ -141,10 +145,19 @@ struct Server {
 
 impl Server {
     async fn start(spec: Spec) -> Result<(Self, Vec<Tool>)> {
+        // Resolved before the child exists, so a missing Keychain item stops the
+        // server here with a sentence about the Keychain -- rather than starting
+        // it with a blank token and failing later, further away, in the server's
+        // own words.
+        let mut env = std::collections::HashMap::new();
+        for (key, value) in &spec.env {
+            env.insert(key.clone(), super::secret::resolve(value)?);
+        }
+
         let mut command = tokio::process::Command::new(&spec.command);
         command
             .args(&spec.args)
-            .envs(&spec.env)
+            .envs(&env)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             // Inherited rather than piped: servers narrate on stderr, and a pipe
@@ -282,6 +295,13 @@ fn no_pipe(name: &str) -> Error {
 pub struct Servers {
     running: Vec<Server>,
     tools: Vec<Tool>,
+    /// Which ones did not start, and why.
+    ///
+    /// Kept rather than only logged. A server that fails silently is missing from
+    /// the menu and missing from the prompt, which reads as *not configured* --
+    /// and the most likely reason it failed is a credential, which is exactly the
+    /// thing somebody needs telling about.
+    failed: Vec<(String, String)>,
 }
 
 impl Servers {
@@ -300,7 +320,10 @@ impl Servers {
                     servers.tools.extend(tools);
                     servers.running.push(server);
                 }
-                Err(e) => eprintln!("mcp: {e}"),
+                Err(e) => {
+                    eprintln!("mcp: {e}");
+                    servers.failed.push((spec.name.clone(), e.to_string()));
+                }
             }
         }
         servers
@@ -308,6 +331,14 @@ impl Servers {
 
     pub fn tools(&self) -> &[Tool] {
         &self.tools
+    }
+
+    /// Why a server is not here, for anything that shows what is.
+    pub fn failed(&self, name: &str) -> Option<&str> {
+        self.failed
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, why)| why.as_str())
     }
 
     /// Run one, and give back whatever text it produced.

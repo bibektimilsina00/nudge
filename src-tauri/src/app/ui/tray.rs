@@ -19,7 +19,7 @@
 //! simply says more than it did a minute ago.
 use crate::app::state::{Voice, VoiceMode};
 use crate::core::reach::Grant;
-use crate::core::run::session::Nudge;
+use crate::core::run::session::{Nudge, ServerState};
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem, Submenu};
 use tauri::tray::TrayIconBuilder;
 use tauri::{AppHandle, Manager, Wry};
@@ -79,10 +79,14 @@ fn build(app: &AppHandle, hotkey: &str) -> tauri::Result<Menu<Wry>> {
         .iter()
         .map(|(name, count)| {
             let label = match count {
-                Some(0) => format!("{name} — nothing offered"),
-                Some(1) => format!("{name} — 1 tool"),
-                Some(n) => format!("{name} — {n} tools"),
-                None => format!("{name} — starting…"),
+                ServerState::Ready(0) => format!("{name} — nothing offered"),
+                ServerState::Ready(1) => format!("{name} — 1 tool"),
+                ServerState::Ready(n) => format!("{name} — {n} tools"),
+                ServerState::Starting => format!("{name} — starting…"),
+                // Short, because a menu item is not a log line -- but present,
+                // because a server that is simply absent reads as one nobody
+                // configured.
+                ServerState::Failed(_) => format!("{name} — did not start"),
             };
             CheckMenuItem::with_id(
                 app,

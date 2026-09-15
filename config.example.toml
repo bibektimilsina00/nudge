@@ -140,4 +140,14 @@ reach = []
 # name = "github"
 # command = "npx"
 # args = ["-y", "@modelcontextprotocol/server-github"]
-# env = { GITHUB_PERSONAL_ACCESS_TOKEN = "ghp_..." }
+# env = { GITHUB_PERSONAL_ACCESS_TOKEN = "keychain:nudge-github" }
+#
+# A value of `keychain:name` is looked up in the macOS Keychain rather than used,
+# so this file can be copied between machines, opened in an editor and pasted into
+# a bug report without carrying your token with it. Store one with:
+#
+#   security add-generic-password -s nudge-github -a nudge -w ghp_xxx
+#
+# A plain token still works. Nudge only ever reads the Keychain -- storing a
+# credential is a decision to make at a shell prompt you typed, not inside a turn
+# you spoke.

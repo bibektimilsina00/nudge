@@ -704,12 +704,52 @@ its opposite.
 
 *Done when:* a person is told what is missing, in words they can act on. **Done.**
 
-**3.3 Credentials.**
+**3.3 Credentials.** *Built.*
 
-The unglamorous blocker in the whole vision. A coding agent that is never opened
-still has to be authenticated. Whatever the answer is -- inheriting a session,
-driving a login once through the screen, an explicit hand-off -- it has to exist
-or "install and forget" is not true.
+Two things go wrong with tokens, and they are different problems.
+
+**They live in the wrong place.** A tool server needs a GitHub token, so the token
+goes in `config.toml` -- a file that gets copied between machines, opened in an
+editor and pasted into bug reports. This project has already leaked an API key
+once by printing that file. A value of `keychain:some-name` is now looked up in
+the Keychain instead:
+
+    security add-generic-password -s nudge-github -a nudge -w ghp_xxx
+    env = { GITHUB_PERSONAL_ACCESS_TOKEN = "keychain:nudge-github" }
+
+**Reading only.** Nudge never writes a secret and never offers to -- storing one is
+a person deciding to trust this program with a credential, and that belongs at a
+shell prompt they typed, not inside a turn they spoke.
+
+Resolved *before* the child is spawned, so a missing item stops the server with a
+sentence about the Keychain rather than starting it with a blank token to fail
+later, further away, in the server's own words. Proven live:
+
+    mcp: config: no Keychain item called "nudge-github". Store it with:
+        security add-generic-password -s nudge-github -a nudge -w <the-token>
+
+**And when one is missing, nothing says so.** A coding agent that has never been
+signed into fails with its own words -- *"Invalid API key"*, *"run `claude
+login`"* -- inside the output of a subprocess nobody reads, and from the outside
+that is indistinguishable from the agent declining to work. Output that says
+nobody is signed in is now named as that, with the command that fixes it, keeping
+the original words underneath. Somebody told *"the build failed"* goes and looks at
+their build.
+
+Guessing at somebody else's wording is what this is, and the cost is small both
+ways: a false positive suggests signing in to something already signed into, and a
+false negative leaves the output exactly as it was.
+
+**A server that fails to start is now visible.** It used to be logged and then
+absent -- missing from the menu and missing from the prompt, which reads as *not
+configured*. The Tools menu says `github — did not start`, because the most likely
+reason is a credential and that is precisely the thing somebody needs telling
+about.
+
+*Not done, and the plan named it:* driving a login through the screen. Nothing
+here logs anybody in; it tells them, precisely, what to run. That is the honest
+half, and the other half wants a person at the keyboard anyway -- every one of
+these logins ends in a browser.
 
 **3.4 Failures that are about the task.**
 

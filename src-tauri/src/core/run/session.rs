@@ -47,6 +47,16 @@ pub struct Session {
     pub agent: bool,
 }
 
+/// How a configured tool server is getting on.
+pub enum ServerState {
+    /// Not connected yet. They start in the background and `npx` can be slow.
+    Starting,
+    /// Connected, offering this many tools.
+    Ready(usize),
+    /// Did not start. Most often a credential, which is why the reason is kept.
+    Failed(String),
+}
+
 pub struct Nudge {
     pub cfg: Config,
     provider: Box<dyn Provider>,
@@ -129,19 +139,26 @@ impl Nudge {
     /// For the menu bar, which has to say what a server can do before anybody can
     /// decide whether to let it. `None` means it has not connected yet, or did
     /// not start at all.
-    pub fn tool_servers(&self) -> Vec<(String, Option<usize>)> {
+    pub fn tool_servers(&self) -> Vec<(String, ServerState)> {
         let connected = self.mcp.get();
         self.cfg
             .mcp
             .iter()
             .map(|spec| {
-                let count = connected.map(|s| {
-                    s.tools()
-                        .iter()
-                        .filter(|t| t.server == spec.name)
-                        .count()
-                });
-                (spec.name.clone(), count)
+                let state = match connected {
+                    None => ServerState::Starting,
+                    Some(servers) => match servers.failed(&spec.name) {
+                        Some(why) => ServerState::Failed(why.to_string()),
+                        None => ServerState::Ready(
+                            servers
+                                .tools()
+                                .iter()
+                                .filter(|t| t.server == spec.name)
+                                .count(),
+                        ),
+                    },
+                };
+                (spec.name.clone(), state)
             })
             .collect()
     }

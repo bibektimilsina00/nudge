@@ -276,6 +276,25 @@ pub fn run(workspace: &std::path::Path, command: &str, anything: bool) -> Result
     if text.trim().is_empty() {
         text = String::from_utf8_lossy(&out.stderr).to_string();
     }
+
+    // Installed, allowed, ran -- and said nobody is signed in. Worth naming,
+    // because it is the one failure that looks like the tool refusing to work.
+    // Somebody told "the build failed" goes and looks at their build.
+    if !out.status.success() && super::secret::unauthenticated(&text) {
+        let program = command
+            .trim()
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .rsplit('/')
+            .next()
+            .unwrap_or("");
+        return Err(Error::Click(format!(
+            "{}\n\nIt said: {}",
+            super::secret::sign_in(program),
+            text.trim().chars().take(200).collect::<String>()
+        )));
+    }
     if text.trim().is_empty() {
         text = "(no output)".into();
     }
@@ -398,6 +417,29 @@ mod tests {
                 "{command} was allowed with a full grant"
             );
         }
+    }
+
+    /// 3.3: a program that ran and said nobody is signed in is not a task that
+    /// failed, and saying so sends a person to look in the wrong place.
+    #[test]
+    fn a_command_that_says_nobody_signed_in_is_named_as_that() {
+        let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        // Exactly what an unauthenticated CLI looks like from out here: a
+        // non-zero exit and an auth-shaped sentence. Built rather than borrowed
+        // from a real program, so the test says the same thing on every machine
+        // -- the first version ran `gh` and asserted whatever that happened to do.
+        let err = run(here, "sh -c 'echo not logged in >&2; exit 1'", true)
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("nobody has signed in"), "got: {err}");
+        assert!(err.contains("It said:"), "the original words are worth keeping: {err}");
+
+        // And an ordinary failure is still an ordinary failure.
+        let plain = run(here, "sh -c 'echo no such file >&2; exit 1'", true);
+        assert!(
+            plain.is_ok() || !plain.unwrap_err().to_string().contains("signed in"),
+            "an unrelated failure was blamed on a login"
+        );
     }
 
     /// 3.2: the sentence a person can act on, at the moment it would have helped.
