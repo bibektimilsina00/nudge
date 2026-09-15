@@ -554,6 +554,33 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
     let reach = &ask.reach;
+
+    // Where tools sit in the order, and it is second -- above a command and far
+    // above the screen. A server told to read a file reads it; the screen route
+    // to the same file is an application, a window, a wait and a photograph.
+    //
+    // Left out entirely when nothing is connected, so a model with no tools is
+    // not told to prefer them.
+    //
+    // This was missing when the tool servers first ran, and the omission had
+    // teeth: asked to read a shopping list, it used the file tools; asked to add
+    // to it, it opened Reminders and typed into a template. The tools were
+    // listed in the prompt and absent from the ordering, and the ordering is what
+    // the model follows.
+    let (ordering, theirs) = match ask.tools.is_empty() {
+        true => (
+            "",
+            " An application or the screen is the only honest route. Go straight \
+             there rather than fetching first.",
+        ),
+        false => (
+            "a tool on a connected server; ",
+            " A connected server is the honest route when one of its tools fits -- \
+             it is their files, reached directly, and it is the same tool whether \
+             you are reading or changing. Only when nothing fits is an application \
+             or the screen the answer, and never fetch instead.",
+        ),
+    };
     // Named by what they do rather than by the protocol behind them. "You can
     // speak MCP" is a fact about us; "you can read this person's calendar" is a
     // fact about what is possible, and only one of those helps.
@@ -653,14 +680,13 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          and that it needs allowing, rather than trying it another way.\n\n\
          ## Choosing where to act\n\n\
          Use the cheapest thing that can ACTUALLY answer, in this order: what the \
-         system reports above; a command; a fetch; and last the screen. Each step \
-         down costs more and fails in more ways, and the last one puts a window \
-         in front of someone who was doing something else.\n\n\
+         system reports above; {ordering}a command; a fetch; and last the screen. \
+         Each step down costs more and fails in more ways, and the last one puts a \
+         window in front of someone who was doing something else.\n\n\
          The question is whose information it is. Anything public -- weather, a \
          price, a definition, a score -- is on the web: fetch it. Anything that is \
          theirs -- their mail, their calendar, their files, their machine's own \
-         state -- is not on the web at all, and an application or the screen is \
-         the only honest route. Go straight there rather than fetching first.\n\n\
+         state -- is not on the web at all.{theirs}\n\n\
          When they NAME something -- a service, an application, a website -- that \
          is the one they mean, and there is no second choice. NEVER use a \
          different one because it happens to be installed: a message sent \
@@ -1538,6 +1564,36 @@ mod tests {
     fn the_prompt_explains_when_to_mark_a_fact_as_recalled() {
         let p = prompt(&ask("when did macOS 27 ship?", &[], false));
         assert!(p.contains("recalled: true"));
+    }
+
+    /// Listing a tool is not the same as telling the model to prefer it.
+    ///
+    /// The live failure this is for: asked to read a shopping list it used the
+    /// file tools, and asked to *add* to it, it opened Reminders and typed into a
+    /// suggested template. The tools were in the prompt and missing from the
+    /// ordering, and the ordering is the part that decides.
+    #[test]
+    fn tools_are_in_the_ordering_not_only_in_the_list() {
+        let tool = crate::core::tools::mcp::Tool {
+            server: "files".into(),
+            name: "write_file".into(),
+            about: "Write a file.".into(),
+            schema: serde_json::json!({}),
+        };
+        let tools = [tool];
+        let mut a = ask("add bread to my shopping list", &[], false);
+        a.tools = &tools;
+        let p = prompt(&a);
+        assert!(p.contains("a tool on a connected server; a command"));
+        // And the line that used to send it to the screen for the user's own
+        // files must no longer call that the only route.
+        assert!(!p.contains("the only honest route"));
+        assert!(p.contains("reading or changing"));
+
+        // With nothing connected the old wording stands, unchanged.
+        let none = prompt(&ask("x", &[], false));
+        assert!(none.contains("the only honest route"));
+        assert!(!none.contains("a tool on a connected server"));
     }
 
     #[test]
