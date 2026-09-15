@@ -271,13 +271,47 @@ said. A clean full run needs the cap raised.
 errored -- and then again, because one green run of an intermittent failure means
 very little.
 
-**1.3 Say what is uncertain.**
+**1.3 Say what is uncertain.** *Built.*
 
-Related and cheaper. The model has one voice for *"I clicked Send"* and *"macOS 27
-ships in 2036"*. The first is observed, the second is recalled. A thing that
-distinguishes them out loud is trusted more, not less.
+The model had one voice for *"I clicked Send"* and *"macOS 27 ships in 2036"*. It
+now has two: a recalled fact is prefixed `From memory:` and an observed action is
+not.
 
-*Done when:* a recalled fact and an observed action do not sound the same.
+Set two ways, and the split is the honest part:
+
+- **The model says so.** `recalled: true` on `done` and `reply`, applied in
+  `simple_step` where both outcomes are built, so everything downstream -- spoken,
+  shown, written into the history -- carries it without knowing it exists.
+- **The subagent works it out.** It has no screen, so if it also consulted
+  nothing, there was no source in the room and whatever it said came from memory.
+  Marked whether or not the model marked it.
+
+The structural override only exists for the blind path, and that is a real limit
+rather than an oversight. The main agent always has a screenshot, so *consulted
+nothing* does not mean *not grounded* -- it may be reading the answer off the
+screen. Nothing available to us separates a claim about the screen from a claim
+about the world, so there the model's own report is all there is.
+
+Same invariant as 1.2: the marker can be added, never removed. `Step::consults()`
+is exhaustive rather than a list of the interesting cases, so the next tool added
+forces a decision instead of quietly defaulting to *grounded* -- the list-of-four
+in `commands::step` went stale the moment a tool was added to it, and this is the
+same trap one module over.
+
+The truth harness prints `(from memory)` beside any answer carrying the marker,
+including passes. An answer that was right without anything being consulted is
+right the way a guess is right.
+
+*Not the same as a hedge*, and tested to keep it that way. *"I did not check
+this"* is not *"I do not know"*, and a harness that conflated them would score an
+unchecked wrong answer as an honest one.
+
+*Left undone:* the Anthropic provider reads a computer-use tool response, which
+has no room for a key we invented, so its main-agent answers can never carry the
+model's own report. They still get the subagent's structural one.
+
+*Done when:* a recalled fact and an observed action do not sound the same. **They
+do not**, and there is a test by that name.
 
 **1.4 Grow the control cases.**
 

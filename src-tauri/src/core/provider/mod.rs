@@ -213,7 +213,59 @@ fn short(s: &str) -> String {
     }
 }
 
+/// What a sentence is prefixed with when it is being remembered rather than
+/// observed.
+///
+/// A colon rather than a comma so it reads correctly whatever follows it: "From
+/// memory, The capital is Paris" is a sentence with a stutter in it.
+pub const RECALLED: &str = "From memory: ";
+
+/// Mark a sentence as recalled. Idempotent -- it can be applied by the parser and
+/// again by the subagent, and the pair of them must not stack.
+pub fn recalled(say: String) -> String {
+    match say.starts_with(RECALLED) {
+        true => say,
+        false => format!("{RECALLED}{say}"),
+    }
+}
+
 impl Step {
+    /// Does this step consult something outside the model?
+    ///
+    /// Used to tell an answer grounded in something this turn actually did from
+    /// one recited from memory. Exhaustive rather than a list of the interesting
+    /// cases: the list-of-four in `commands::step` went stale the moment a tool
+    /// was added to it, and this is the same trap one module over.
+    pub fn consults(&self) -> bool {
+        match self {
+            // Brings something back from outside.
+            Step::Run { .. }
+            | Step::Read { .. }
+            | Step::Fetch { .. }
+            | Step::Search { .. }
+            | Step::Output { .. }
+            | Step::Task { .. } => true,
+            // Changes the world or says something about it, and learns nothing.
+            Step::Point { .. }
+            | Step::Done { .. }
+            | Step::Unsure { .. }
+            | Step::Launch { .. }
+            | Step::Open { .. }
+            | Step::Type { .. }
+            | Step::Press { .. }
+            | Step::Write { .. }
+            | Step::Edit { .. }
+            | Step::Plan { .. }
+            | Step::Show { .. }
+            | Step::Workspace { .. }
+            | Step::Start { .. }
+            | Step::Kill { .. }
+            | Step::Agent { .. }
+            | Step::Question { .. }
+            | Step::Reply { .. } => false,
+        }
+    }
+
     pub fn say(&self) -> &str {
         match self {
             Step::Point { say, .. }
@@ -515,6 +567,18 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          page that would not load. A setup prompt is not an answer of zero, an \
          empty window is not an answer of none, and a plausible number is worse \
          than no number because they will believe it.\n\n\
+         ## Say which kind of thing you are telling them\n\n\
+         There is a difference between *I clicked Send* and *macOS 27 shipped in \
+         2026*. The first you just did. The second you are remembering, and your \
+         memory has an end date you cannot feel from the inside -- it will sound \
+         exactly as certain either way, which is the whole problem.\n\
+         So on done and reply, set `recalled: true` when your sentence states a \
+         fact you are recalling rather than one you observed, ran, read or looked \
+         up this turn. It is not an apology and it does not mean you are probably \
+         wrong; it means they can tell which sentences to check. Leave it off for \
+         anything you just saw happen, and for ordinary conversation -- there is \
+         nothing to recall in a greeting.\n\
+         Better still, look it up and then you need not set it at all.\n\n\
          ## Choosing where to act\n\n\
          Use the cheapest thing that can ACTUALLY answer, in this order: what the \
          system reports above; a command; a fetch; and last the screen. Each step \
@@ -889,6 +953,14 @@ pub(crate) fn first_json(text: &str) -> Option<serde_json::Value> {
 /// click is recoverable where a wrong hover just stalls.
 /// Shared by the JSON providers: the outcomes that carry no coordinates.
 pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Option<Step> {
+    // Set by the model when the sentence states something it is remembering
+    // rather than something it just saw, ran or read. Applied here, at the one
+    // place both outcomes are built, so everything downstream -- spoken, shown,
+    // written into the history -- carries it without knowing about it.
+    let say = match v["recalled"].as_bool().unwrap_or(false) {
+        true => recalled(say),
+        false => say,
+    };
     match kind {
         "done" => Some(Step::Done {
             say,
@@ -1328,6 +1400,31 @@ mod tests {
             "   of which history     : {:>7} chars",
             with_history.len() - agent_mode.len()
         );
+    }
+
+    #[test]
+    fn a_recalled_answer_is_marked_where_it_is_parsed() {
+        let v = serde_json::json!({ "recalled": true });
+        let step = simple_step("done", &v, "macOS 27 shipped in 2026.".into()).unwrap();
+        assert!(step.say().starts_with(super::RECALLED));
+
+        // The common case is unmarked, including ordinary conversation.
+        let plain = simple_step("reply", &serde_json::json!({}), "Morning.".into()).unwrap();
+        assert_eq!(plain.say(), "Morning.");
+    }
+
+    /// Not the same claim. "I did not check this" is not "I do not know", and a
+    /// harness that treated the marker as a hedge would score an unchecked wrong
+    /// answer as an honest one.
+    #[test]
+    fn the_recalled_marker_is_not_a_hedge() {
+        assert!(!crate::core::run::subagent::hedged(super::RECALLED));
+    }
+
+    #[test]
+    fn the_prompt_explains_when_to_mark_a_fact_as_recalled() {
+        let p = prompt(&ask("when did macOS 27 ship?", &[], false));
+        assert!(p.contains("recalled: true"));
     }
 
     #[test]

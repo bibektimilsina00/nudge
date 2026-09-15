@@ -242,6 +242,11 @@ fn read_step(resp: &serde_json::Value) -> Option<Step> {
     Some(match point {
         Some(at) => Step::Point { at, say, act, control: None },
         None if reads_as_unsure(&say) => Step::Unsure { say },
+        // No `recalled` here, unlike the JSON providers: this reads a
+        // computer-use tool response, which has no room for a key we invented.
+        // A recalled fact from this provider is marked only when it comes back
+        // through a subagent, where it is worked out from what was consulted
+        // rather than asked for.
         None => Step::Done { say, next: None },
     })
 }

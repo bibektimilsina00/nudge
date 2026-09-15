@@ -12,7 +12,7 @@
 //! several can run at once without any of them fighting. That distinction lives
 //! in the type rather than in a convention: this one cannot point, press, type,
 //! launch or open, because it is never given those shapes to answer with.
-use crate::core::provider::{Ask, Provider, Step};
+use crate::core::provider::{recalled, Ask, Provider, Step};
 use crate::error::Result;
 
 /// Shorter than the main agent's budget on purpose. A subagent has one scoped
@@ -214,6 +214,11 @@ where
     // is reporting what it saw; one that searched the web is reporting what it
     // was told, and those fail differently.
     let mut looked_up = false;
+    // Whether anything at all was consulted -- a command, a file, a page, a
+    // search. Wider than `looked_up`, and asking a different question: that one
+    // decides whether an answer is worth checking, this one decides whether the
+    // answer came from anywhere but memory.
+    let mut grounded = false;
 
     for turn in 0..MAX_TURNS {
         let ask = Ask {
@@ -244,6 +249,16 @@ where
                     true => scrutinise(provider, task, &say, &mut act).await,
                     false => say,
                 };
+                // A subagent has no screen. If it also consulted nothing, there
+                // was no source in the room: whatever it just said, it said from
+                // memory, whether or not it marked it as such. Marked here
+                // rather than trusted from the model for the same reason the
+                // check in `scrutinise` is -- this can only ever add the
+                // qualifier, never remove one the model asked for.
+                let answer = match grounded || hedged(&answer) {
+                    true => answer,
+                    false => recalled(answer),
+                };
                 return Ok(Found { answer, steps });
             }
             // Not a failure: a subagent that cannot answer says so, and the
@@ -256,6 +271,7 @@ where
             }
             other => {
                 looked_up |= matches!(other, Step::Search { .. } | Step::Fetch { .. });
+                grounded |= other.consults();
                 steps.push(other.recap());
                 match act(other).await {
                     Ok(out) => done.push(out),
@@ -372,6 +388,24 @@ mod tests {
         assert_eq!(found.steps.len(), MAX_TURNS);
     }
 
+
+    #[test]
+    fn the_recalled_marker_does_not_stack() {
+        use crate::core::provider::recalled;
+        let once = recalled("Paris.".into());
+        assert_eq!(recalled(once.clone()), once);
+        assert!(once.starts_with("From memory"));
+    }
+
+    /// The whole point of 1.3: two sentences that used to sound identical.
+    #[test]
+    fn a_recalled_fact_and_an_observed_action_do_not_sound_the_same() {
+        use crate::core::provider::recalled;
+        let observed = "I clicked Send.".to_string();
+        let remembered = recalled("macOS 27 shipped in 2026.".into());
+        assert_ne!(observed, remembered);
+        assert!(!observed.starts_with("From memory"));
+    }
 
     #[test]
     fn an_admission_is_left_alone() {

@@ -314,7 +314,14 @@ async fn score() {
     // that cannot be read down the page is not a scoreboard.
     println!();
     for (name, mark, why, answer) in &lines {
-        println!("  {name:<34} {mark:<7} {why}");
+        // Worth seeing even on a pass. An answer that happened to be right
+        // without anything being consulted is right the way a guess is right,
+        // and a column of these means the agent is reciting, not looking.
+        let how = match answer.starts_with(provider::RECALLED) {
+            true => "  (from memory)",
+            false => "",
+        };
+        println!("  {name:<34} {mark:<7} {why}{how}");
         if *mark != "ok" {
             let one = answer.replace('\n', " ");
             println!("      {}", one.chars().take(160).collect::<String>());

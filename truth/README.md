@@ -99,6 +99,11 @@ never ran are counted separately and named as such.
 **WRONG** exits non-zero. So does **error**, because a case that did not run is
 not a case that passed.
 
+`(from memory)` beside a result means the answer carried the recall marker --
+nothing was consulted before it was given. It is not a verdict of its own, and it
+is worth reading on the passes too: an answer that was right without anything
+being consulted is right the way a guess is right.
+
 ## Cost
 
 Three at a time, with backoff. Six was faster and spent the run collecting rate
