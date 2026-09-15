@@ -123,6 +123,11 @@ reach = []
 # itself does not hold up the hotkey. One that fails to start is reported and
 # skipped -- its tools are simply absent, and nothing else stops working.
 #
+# Listing a server here is the grant. The menu bar has a "Tools" submenu showing
+# each one with how many tools it brought, and clicking switches it off -- which
+# removes its tools from the prompt entirely, rather than letting the model keep
+# reaching for something that will be refused.
+#
 # Tokens go in `env`, beside the server that needs them. Nudge has no business
 # holding somebody else's credentials.
 #

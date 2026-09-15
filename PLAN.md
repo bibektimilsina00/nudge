@@ -481,11 +481,40 @@ permit -- a request with a method, headers and a body -- does not exist until 2.
 A menu item that ticks and changes nothing teaches people that the ticks mean
 nothing.
 
-*Still open, and it is the gap 2.1 opened:* **MCP tools are not bounded by any of
-this.** A filesystem server pointed at `/` can write anywhere, and none of these
-rules reach inside somebody else's process. Configuring a server is already an
-explicit grant; what is missing is seeing what it can do and switching it off, and
-that wants the menu built *after* the servers connect rather than before.
+**2.2a Tool servers, under the same three rules.** *Closed.*
+
+2.1 bought reach without the means to see or limit it, which made this the only
+unbounded thing left once 2.2 landed.
+
+Servers get the opposite default to the grants, on purpose: **putting a server in
+the config is already the explicit decision**, so a configured server is on. What
+was missing was the other two rules. Both are now in a **Tools** submenu, one line
+per configured server:
+
+    files — 14 tools
+    github — starting…
+
+The count is the *see what it can do* half. A server described only by its name is
+something you have to trust; one that says it brought fourteen tools is something
+you can weigh. Clicking takes it back.
+
+Switched off means **gone from the prompt**, not merely refused later -- a tool the
+model is still told it has is one it will keep reaching for. It is also refused at
+the dispatcher, because a history from before the switch still names it and a model
+repeating its last step must not get through.
+
+*What made this awkward, and what fixed it:* the menu is built at startup and the
+servers connect a minute later, so their names and counts arrive after the menu
+exists. The menu is now **a projection of state, rebuilt on every change**, rather
+than a set of items ticked by hand -- which also removed the older arrangement
+where the menu and the truth were two things that had to be kept in step. `refresh`
+is called when the servers land and the menu simply says more than it did a minute
+ago.
+
+*Still true, and not fixable from here:* none of this bounds what a tool does once
+called. A filesystem server pointed at `/` can write anywhere, because these rules
+stop at the edge of our own process. What can be decided is whether to call it at
+all, and that is now decidable.
 
 **2.3 Real HTTP.** *Built.*
 

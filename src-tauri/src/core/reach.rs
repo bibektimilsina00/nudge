@@ -44,7 +44,9 @@ pub enum Grant {
     Http,
 }
 
-// There is no grant for MCP tools. Configuring a server is already an explicit,
+// MCP servers are not in `Grant`, because they are not a fixed list -- they come
+// from whatever is in the config file. They are governed below, by name, under
+// the same three rules. Configuring a server is already an explicit,
 // deliberate grant; what is missing is being able to *see* what it can do and
 // switch it off, and that wants the menu to be built after the servers connect
 // rather than before. Recorded in the plan rather than half-done here.
@@ -91,6 +93,15 @@ pub struct Reach {
     shell: AtomicBool,
     files: AtomicBool,
     http: AtomicBool,
+    /// Tool servers that have been switched off, by name.
+    ///
+    /// The opposite default to everything else here, and deliberately: putting a
+    /// server in the config *is* the explicit grant, so one that is configured is
+    /// on. What was missing was the other two rules -- being able to see what it
+    /// can do, and being able to take it back without editing a file and
+    /// restarting. Holding the ones that are off rather than the ones that are on
+    /// means a server added to the config is usable without being listed twice.
+    servers_off: std::sync::Mutex<std::collections::HashSet<String>>,
 }
 
 impl Reach {
@@ -138,6 +149,41 @@ impl Reach {
                 grant.told()
             );
         }
+    }
+
+    /// Whether a tool server may be used right now.
+    pub fn server(&self, name: &str) -> bool {
+        !self.servers_off.lock().unwrap().contains(name)
+    }
+
+    pub fn set_server(&self, name: &str, on: bool) {
+        let mut off = self.servers_off.lock().unwrap();
+        let changed = match on {
+            true => off.remove(name),
+            false => off.insert(name.to_string()),
+        };
+        if changed {
+            eprintln!(
+                "reach: tool server {name:?} {}",
+                match on {
+                    true => "back on",
+                    false => "switched off",
+                }
+            );
+        }
+    }
+
+    /// The tools the model should be told about: everything from servers that
+    /// have not been switched off.
+    ///
+    /// A function rather than a filter written at the call site, so that what is
+    /// tested is what runs.
+    pub fn usable(&self, tools: &[crate::core::tools::mcp::Tool]) -> Vec<crate::core::tools::mcp::Tool> {
+        tools
+            .iter()
+            .filter(|t| self.server(&t.server))
+            .cloned()
+            .collect()
     }
 
     /// Everything currently allowed, for the prompt and for anything that wants
@@ -212,6 +258,41 @@ mod tests {
     fn an_unknown_grant_is_ignored_rather_than_guessed() {
         let r = Reach::from_config(&["shel".into()]);
         assert!(r.granted().is_empty());
+    }
+
+    /// The opposite default to the grants, and the reason is in the doc comment:
+    /// configuring a server is already the explicit decision.
+    #[test]
+    fn a_configured_server_is_on_until_it_is_switched_off() {
+        let r = Reach::default();
+        assert!(r.server("github"), "a configured server should start usable");
+        r.set_server("github", false);
+        assert!(!r.server("github"));
+        assert!(r.server("files"), "switching one off must not touch another");
+        r.set_server("github", true);
+        assert!(r.server("github"));
+    }
+
+    /// Switched off has to mean gone from the prompt, not merely refused later.
+    /// A tool the model is still told it has is one it will keep reaching for.
+    #[test]
+    fn switching_a_server_off_hides_its_tools() {
+        let tool = |server: &str, name: &str| crate::core::tools::mcp::Tool {
+            server: server.into(),
+            name: name.into(),
+            about: String::new(),
+            schema: serde_json::json!({}),
+        };
+        let all = [tool("files", "read"), tool("github", "issue"), tool("files", "write")];
+
+        let r = Reach::default();
+        assert_eq!(r.usable(&all).len(), 3);
+        r.set_server("files", false);
+        let left = r.usable(&all);
+        assert_eq!(left.len(), 1);
+        assert_eq!(left[0].server, "github");
+        r.set_server("files", true);
+        assert_eq!(r.usable(&all).len(), 3);
     }
 
     #[test]

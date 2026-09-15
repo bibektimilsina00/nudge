@@ -121,12 +121,16 @@ pub fn run() {
             // minute -- so the window appears, the assistant answers, and the
             // tools arrive when they arrive.
             let starting = handle.clone();
+            let shown = hotkey.clone();
             tauri::async_runtime::spawn(async move {
                 starting.state::<Nudge>().connect_tools().await;
                 let n = starting.state::<Nudge>().tools().len();
                 if n > 0 {
                     println!("nudge: {n} tools from mcp servers");
                 }
+                // The menu was built before any of this existed, listing each
+                // server as "starting…". Now it can say what they brought.
+                ui::tray::refresh(&starting, &shown);
             });
 
             println!(

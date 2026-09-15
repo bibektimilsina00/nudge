@@ -111,9 +111,39 @@ impl Nudge {
         let _ = self.mcp.set(servers);
     }
 
-    /// What the connected servers can do. Empty until they have connected.
-    pub fn tools(&self) -> &[crate::core::tools::mcp::Tool] {
-        self.mcp.get().map(|s| s.tools()).unwrap_or(&[])
+    /// What the connected servers can do, minus any that have been switched off.
+    ///
+    /// Filtered here rather than at the call, so a server switched off disappears
+    /// from the prompt as well as from the dispatcher. Leaving it listed and
+    /// refusing it later would be a worse kind of off: the model would keep
+    /// reaching for a tool it is told it has.
+    pub fn tools(&self) -> Vec<crate::core::tools::mcp::Tool> {
+        self.mcp
+            .get()
+            .map(|s| self.reach.usable(s.tools()))
+            .unwrap_or_default()
+    }
+
+    /// Every server that was configured, and how many tools it offers.
+    ///
+    /// For the menu bar, which has to say what a server can do before anybody can
+    /// decide whether to let it. `None` means it has not connected yet, or did
+    /// not start at all.
+    pub fn tool_servers(&self) -> Vec<(String, Option<usize>)> {
+        let connected = self.mcp.get();
+        self.cfg
+            .mcp
+            .iter()
+            .map(|spec| {
+                let count = connected.map(|s| {
+                    s.tools()
+                        .iter()
+                        .filter(|t| t.server == spec.name)
+                        .count()
+                });
+                (spec.name.clone(), count)
+            })
+            .collect()
     }
 
     /// Run one, naming it the way the model does: `server/tool`.
@@ -128,6 +158,14 @@ impl Nudge {
                 "{tool:?} is not a tool name -- they look like server/tool"
             ))
         })?;
+        // Checked here as well as by hiding it from the prompt, because a
+        // history from before it was switched off still names it, and a model
+        // repeating its last step must not get through.
+        if !self.reach.server(server) {
+            return Err(crate::error::Error::Config(format!(
+                "the {server:?} tools have been switched off in the menu bar"
+            )));
+        }
         servers.call(server, name, args.clone()).await
     }
 
@@ -210,7 +248,7 @@ impl Nudge {
             self.provider.as_ref(),
             &self.workspace(),
             task,
-            self.tools(),
+            &self.tools(),
             &self.reach.prompt(),
             self.cfg.verify,
             act,
@@ -445,7 +483,7 @@ impl Nudge {
             agent,
             facts,
             controls: &controls,
-            tools: self.tools(),
+            tools: &self.tools(),
             reach: self.reach.prompt(),
             workspace: self.workspace().display().to_string(),
         };
