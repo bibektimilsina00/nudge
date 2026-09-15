@@ -156,3 +156,25 @@ const EXAMPLE: &str = "---\n\
     only reads this part when it decides this is the skill you meant.\n\n\
     A skill is just a folder with a SKILL.md in it, which is the same shape Claude\n\
     Code and other agents use -- so one you already have will work here.\n";
+
+/// The offer being made right now, if any.
+///
+/// Asked by the connect window when it loads, because a window that missed the
+/// event that opened it would come up empty -- and the event is emitted before
+/// anybody can be sure the webview is listening.
+#[tauri::command]
+pub fn pending_offer(app: AppHandle) -> Option<crate::app::ui::connect::Offer> {
+    app.state::<crate::app::state::Offering>().current()
+}
+
+/// What they said.
+///
+/// Nothing is remembered yet. *No* should mean never and *Not now* should mean
+/// this week, and both want somewhere to write it down -- which is the same
+/// question as when to ask in the first place, still open on purpose.
+#[tauri::command]
+pub fn answer_offer(app: AppHandle, service: String, said: String) {
+    println!("offer: {service} -> {said}");
+    app.state::<crate::app::state::Offering>().clear();
+    crate::app::ui::connect::hide(&app);
+}

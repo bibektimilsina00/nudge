@@ -110,6 +110,7 @@ pub fn run() {
             app.manage(voice);
             app.manage(Settle(std::sync::Mutex::new(None)));
             app.manage(Grants::default());
+            app.manage(crate::app::state::Offering::default());
             app.manage(Background::default());
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.
@@ -144,6 +145,32 @@ pub fn run() {
             agent::place_window(handle);
             ui::tray::install(handle, &hotkey)?;
             input::inject::start(handle);
+            ui::connect::place(handle);
+
+            // `NUDGE_OFFER=GitHub` puts a connect prompt on screen and leaves it
+            // there. *When* one of these should appear is not decided yet, and
+            // the shape is worth getting right first -- so this is how it is
+            // looked at, the same way the agent card is.
+            if let Some(want) = std::env::var_os("NUDGE_OFFER") {
+                let want = want.to_string_lossy().to_lowercase();
+                if let Some(offer) = ui::connect::catalogue()
+                    .into_iter()
+                    .find(|o| o.name.to_lowercase() == want)
+                {
+                    let showing = handle.clone();
+                    tauri::async_runtime::spawn(async move {
+                        // After the event loop exists, for the reason the agent
+                        // card needs it: `show` reaches the window through the
+                        // main thread, and during setup there is nothing to reach.
+                        tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+                        showing
+                            .state::<crate::app::state::Offering>()
+                            .set(offer.clone());
+                        ui::connect::ask(&showing, &offer);
+                        println!("nudge: offering {} (NUDGE_OFFER)", offer.name);
+                    });
+                }
+            }
 
             // `NUDGE_CARD=1` puts a worked example on the agent card and leaves it
             // there, so how it looks can be changed without racing a real task.
@@ -175,6 +202,8 @@ pub fn run() {
             commands::set_docked,
             commands::fit_panel,
             commands::fit_agents,
+            commands::pending_offer,
+            commands::answer_offer,
             commands::skills,
             commands::open_skills_folder,
             commands::set_open_size,

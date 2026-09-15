@@ -59,6 +59,21 @@
         "visible": false,
         "focus": false,
         "shadow": false
+      },
+      {
+        "label": "connect",
+        "url": "index.html",
+        "title": "Nudge agents",
+        "width": 760,
+        "height": 180,
+        "transparent": true,
+        "decorations": false,
+        "resizable": false,
+        "skipTaskbar": true,
+        "alwaysOnTop": true,
+        "visible": false,
+        "focus": false,
+        "shadow": false
       }
     ]
   },

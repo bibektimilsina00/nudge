@@ -5,6 +5,7 @@
 //! Spaces, never take focus, never appear in the Dock, and survive macOS
 //! quietly resetting their level -- see `native` for what was measured to get
 //! there.
+pub mod connect;
 pub mod native;
 pub mod notch;
 pub mod overlay;

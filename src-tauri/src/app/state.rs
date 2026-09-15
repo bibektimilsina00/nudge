@@ -58,6 +58,22 @@ pub struct Grants {
     pub asking: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
 }
 
+/// The offer on screen, so a window that loads late can ask for it.
+#[derive(Default)]
+pub struct Offering(std::sync::Mutex<Option<crate::app::ui::connect::Offer>>);
+
+impl Offering {
+    pub fn set(&self, offer: crate::app::ui::connect::Offer) {
+        *self.0.lock().unwrap() = Some(offer);
+    }
+    pub fn current(&self) -> Option<crate::app::ui::connect::Offer> {
+        self.0.lock().unwrap().clone()
+    }
+    pub fn clear(&self) {
+        *self.0.lock().unwrap() = None;
+    }
+}
+
 /// Whether a grant is currently given. Read at every gate.
 ///
 /// A free function rather than a method so the call site reads as the question
