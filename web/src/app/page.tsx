@@ -1,179 +1,181 @@
 import Image from "next/image";
-import { Keyboard, Lock, MousePointer2, Puzzle, ScanEye, TerminalSquare } from "lucide-react";
 
 import { Checksum, DownloadButton } from "@/components/download";
+import { Notch } from "@/components/notch";
 import {
   Accordion,
   AccordionContent,
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
-import { Badge } from "@/components/ui/badge";
 
 /**
  * The landing page.
  *
- * Written around one claim, because a page that makes four makes none: Nudge can
- * see the screen and act on it. That is the product and also the thing somebody
- * has to be persuaded to allow, so it is said at the top rather than eased into.
+ * One claim: Nudge sees your screen and works it. That is the product and also
+ * the thing somebody has to be talked into allowing, so it is said at the top
+ * and answered honestly further down rather than eased around.
  *
- * One primary action throughout -- download -- repeated at the top and the
- * bottom and nowhere in between. The only other link on the page is the source,
- * in the header, where a competing call to action does the least harm.
+ * One action: download. At the top and at the bottom, nowhere between. The only
+ * other link is the source, in the header, where a competing call to action does
+ * the least damage.
  *
- * What it deliberately does not have: testimonials, logo strips, user counts.
- * There are none, and a landing page that invents social proof is a landing page
- * for a product nobody should trust with their screen.
+ * Deliberately absent: testimonials, logo strips, user counts. There are none,
+ * and a page that invents social proof is a page for a product nobody should let
+ * near their screen.
  */
 export default function Home() {
   return (
-    <main className="mx-auto flex min-h-dvh max-w-5xl flex-col px-6">
-      <Header />
-      <Hero />
-      <Steps />
-      <Features />
-      <Permissions />
-      <Questions />
-      <LastCall />
-      <Footer />
-    </main>
-  );
-}
-
-function Header() {
-  return (
-    <header className="flex items-center justify-between py-6">
-      <div className="flex items-center gap-2.5">
-        <Image src="/icon.png" alt="" width={32} height={32} className="rounded-[7px]" priority />
-        <span className="text-[15px] font-semibold">Nudge</span>
-      </div>
+    <>
+      {/* Visible the moment it is focused, and the first thing a keyboard lands
+          on. The notch is sticky, so without this a tab through the page starts
+          behind it. */}
       <a
-        href="https://github.com/bibektimilsina00/nudge"
-        className="text-sm text-muted-foreground transition-colors hover:text-foreground"
+        href="#download"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-(--z-notch) focus-visible:rounded-full focus-visible:bg-gold focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-black"
       >
-        Source
+        Skip to download
       </a>
-    </header>
+      <Notch />
+      <main className="mx-auto w-full max-w-[64rem] px-6 pb-24">
+        <Hero />
+        <Sequence />
+        <Shown />
+        <Reach />
+        <Permissions />
+        <Questions />
+        <LastCall />
+        <Footer />
+      </main>
+    </>
   );
 }
 
 function Hero() {
   return (
-    <section className="flex flex-col items-center pt-16 pb-12 text-center sm:pt-24">
-      <Badge variant="secondary" className="mb-6 font-normal">
-        Early build · macOS
-      </Badge>
-
-      <h1 className="max-w-3xl text-4xl font-semibold text-balance sm:text-6xl">
-        Hold a key. Say what you want. Watch it happen.
+    <section className="pt-14 pb-20 text-center sm:pt-20">
+      <h1 className="mx-auto max-w-[19ch] font-display text-[2.6rem] leading-[1.02] font-bold text-balance sm:text-[4.4rem]">
+        Say it out loud. Watch your Mac do it.
       </h1>
 
-      {/* The second sentence does the work the headline cannot: what it actually
-          is. "AI assistant" says nothing; "sees your screen and uses it" is the
-          whole difference. */}
-      <p className="mt-6 max-w-2xl text-lg text-pretty text-muted-foreground">
-        Nudge lives in your Mac&apos;s notch. It sees what is on your screen and
-        works it the way you would — pointing, clicking, typing — so the thing you
-        cannot find a menu for gets done anyway.
+      <p className="mx-auto mt-7 max-w-[54ch] text-[1.0625rem] leading-relaxed text-pretty text-ink-2">
+        Nudge sits in the notch. Hold a key and talk, and it reads what is on your
+        screen and works it the way you would — finding the control, clicking it,
+        typing into it.
       </p>
 
-      <div className="mt-10">
+      <div id="download" className="mt-10 flex scroll-mt-20 justify-center">
         <DownloadButton />
       </div>
-
-      {/* The thing itself, because this is a product you look at.
-          A page selling something that reads your screen, with no picture of it,
-          asks people to imagine the one thing they are being asked to trust. */}
-      <div className="mt-14 w-full">
-        <div className="overflow-hidden rounded-xl border bg-neutral-950 shadow-2xl">
-          <Image
-            src="/panel.png"
-            alt="Nudge's panel open under the notch, showing skills, keyboard shortcuts and integrations."
-            width={1058}
-            height={456}
-            className="h-auto w-full"
-            priority
-          />
-        </div>
-        <p className="mt-3 text-xs text-muted-foreground">
-          It hangs from the notch. Point at it and it opens; move away and it goes.
-        </p>
-      </div>
     </section>
   );
 }
 
-function Steps() {
-  const steps = [
+/**
+ * A real sequence, so it is drawn as one.
+ *
+ * Three things that happen in order, along a line, rather than three cards with
+ * 01/02/03 on them. The rule is the information: it is what says these follow
+ * one another instead of being a menu of features.
+ */
+function Sequence() {
+  const beats = [
     {
-      icon: Keyboard,
-      title: "Hold Control",
-      body: "One key, held. Talk while you hold it, let go when you are done.",
+      key: "⌃",
+      title: "You hold Control",
+      body: "And talk. Let go when you are done — that is the whole interaction.",
     },
     {
-      icon: ScanEye,
-      title: "It looks",
-      body: "A screenshot, read for what you asked about. Whatever is in front of you, in whatever app.",
+      key: "◉",
+      title: "It looks at your screen",
+      body: "One screenshot, read for the thing you asked about, in whatever app happens to be in front of you.",
     },
     {
-      icon: MousePointer2,
-      title: "It acts",
-      body: "Points at the control, or clicks it and types for you. Escape stops it, from anywhere.",
+      key: "⏎",
+      title: "It does the thing",
+      body: "Points at the control, or clicks it and types for you. Escape stops it mid-action, from anywhere.",
     },
   ];
 
   return (
-    <section className="border-t py-16">
+    <section className="border-t border-line py-16">
       <h2 className="sr-only">How it works</h2>
-      <div className="grid gap-10 sm:grid-cols-3">
-        {steps.map(({ icon: Icon, title, body }, i) => (
-          <div key={title}>
-            <div className="flex items-center gap-2.5">
-              <Icon className="size-[18px] text-muted-foreground" aria-hidden />
-              <span className="font-mono text-xs tabular-nums text-muted-foreground">
-                0{i + 1}
-              </span>
-            </div>
-            <h3 className="mt-3 font-medium">{title}</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-pretty text-muted-foreground">
-              {body}
+      <ol className="relative grid gap-10 sm:grid-cols-3 sm:gap-8">
+        {beats.map((b) => (
+          <li key={b.title} className="relative sm:pt-8">
+            {/* The line is only on the wide layout, where the three genuinely
+                read left to right. Stacked on a phone, order is already clear. */}
+            <span
+              aria-hidden
+              className="absolute top-[13px] left-0 hidden h-px w-full bg-line sm:block"
+            />
+            {/* The glyph repeats what the heading already says, so it is
+                decoration as far as a screen reader is concerned. */}
+            <span
+              aria-hidden
+              className="relative flex size-7 items-center justify-center rounded-full bg-surface-2 font-mono text-[13px] text-gold ring-1 ring-line sm:absolute sm:top-0 sm:left-0"
+            >
+              {b.key}
+            </span>
+            <h3 className="mt-4 font-display text-[1.0625rem] font-semibold sm:mt-0">
+              {b.title}
+            </h3>
+            <p className="mt-2 max-w-[42ch] text-[0.9375rem] leading-relaxed text-pretty text-ink-2">
+              {b.body}
             </p>
-          </div>
+          </li>
         ))}
-      </div>
+      </ol>
     </section>
   );
 }
 
-function Features() {
-  const features = [
+/** The thing itself. A product you look at, shown rather than described. */
+function Shown() {
+  return (
+    <section className="border-t border-line py-16">
+      <div className="overflow-hidden rounded-xl bg-surface ring-1 ring-line">
+        <Image
+          src="/panel.png"
+          alt="Nudge's panel open beneath the notch, showing skills, keyboard shortcuts and integrations."
+          width={1058}
+          height={456}
+          className="h-auto w-full"
+        />
+      </div>
+      <p className="mt-4 max-w-[52ch] text-[0.9375rem] leading-relaxed text-pretty text-ink-3">
+        Point at the notch and this opens. Move away and it goes. Everything else
+        lives behind the one key.
+      </p>
+    </section>
+  );
+}
+
+function Reach() {
+  const things = [
     {
-      icon: TerminalSquare,
-      title: "Agents that finish the job",
-      body: "Ask for a whole task rather than a next click and Nudge takes it away — opening things, filling them in, reporting back as it goes. It gives up after forty steps rather than clicking forever.",
+      title: "It finishes whole tasks",
+      body: "Ask for an outcome rather than a next click and it goes away and does it — opening things, filling them in, telling you where it got to. After forty steps it gives up rather than clicking forever.",
     },
     {
-      icon: Puzzle,
-      title: "Your tools, not ours",
-      body: "Any Model Context Protocol server is three lines of config and brings its own tools. Skills are folders with instructions in them — the same shape the rest of the agent world already uses, so one you already have works here.",
+      title: "It uses your tools",
+      body: "Any Model Context Protocol server is three lines of config and arrives with its own tools. Skills are folders of instructions, the same shape the rest of the agent world uses, so one you already have works here.",
     },
     {
-      icon: Lock,
-      title: "Bring your own model",
-      body: "Ollama on your own machine, or Gemini, or Anthropic. Your key, your bill, your choice of how hard it thinks. Nothing is proxied through us.",
+      title: "It runs on your model",
+      body: "Ollama on your own machine, or Gemini, or Anthropic. Your key, your bill, and your call on how hard it thinks. Nothing passes through a server of ours.",
     },
   ];
 
   return (
-    <section className="border-t py-16">
-      <h2 className="sr-only">What it does</h2>
-      <div className="grid gap-8 sm:grid-cols-3">
-        {features.map(({ icon: Icon, title, body }) => (
-          <div key={title}>
-            <Icon className="size-5 text-muted-foreground" aria-hidden />
-            <h3 className="mt-3 font-medium">{title}</h3>
-            <p className="mt-1.5 text-sm leading-relaxed text-pretty text-muted-foreground">
-              {body}
+    <section className="border-t border-line py-16">
+      <h2 className="sr-only">What it can do</h2>
+      <div className="grid gap-x-8 gap-y-10 sm:grid-cols-3">
+        {things.map((t) => (
+          <div key={t.title}>
+            <h3 className="font-display text-[1.0625rem] font-semibold">{t.title}</h3>
+            <p className="mt-2 text-[0.9375rem] leading-relaxed text-pretty text-ink-2">
+              {t.body}
             </p>
           </div>
         ))}
@@ -183,39 +185,40 @@ function Features() {
 }
 
 /**
- * Said before it is asked for, not after.
+ * Raised before macOS raises it.
  *
- * Nudge needs Screen Recording and Accessibility, which is a description of
- * spyware, and somebody is going to notice that at the moment macOS asks. A
- * download page that skips it is a page that gets uninstalled thirty seconds
- * later; one that raises it first is the only way to be believed.
+ * Screen Recording plus Accessibility is a description of spyware, and the
+ * person will meet that framing at the moment the system asks. A page that skips
+ * it gets uninstalled thirty seconds later.
  */
 function Permissions() {
   return (
-    <section className="border-t py-16">
-      <h2 className="text-xl font-semibold text-balance">
-        It asks for two permissions, and it means them
+    <section className="border-t border-line py-16">
+      <h2 className="max-w-[24ch] font-display text-[1.75rem] leading-tight font-semibold text-balance">
+        It needs two permissions, and it means both of them
       </h2>
-      <div className="mt-6 grid gap-6 sm:grid-cols-2">
-        <div className="rounded-lg border p-5">
-          <h3 className="text-sm font-medium">Screen Recording</h3>
-          <p className="mt-1.5 text-sm leading-relaxed text-pretty text-muted-foreground">
-            So it can see what you are pointing at. Screenshots go to whichever
+
+      <dl className="mt-8 grid gap-px overflow-hidden rounded-xl bg-line sm:grid-cols-2">
+        <div className="bg-surface p-6">
+          <dt className="font-display text-[0.9375rem] font-semibold">Screen Recording</dt>
+          <dd className="mt-2 text-[0.9375rem] leading-relaxed text-pretty text-ink-2">
+            So it can see what you are pointing at. The screenshot goes to the
             model you configured and nowhere else. It refuses to look at password
-            managers, and at windows whose title names a secret.
-          </p>
+            managers, or at any window whose title names a secret.
+          </dd>
         </div>
-        <div className="rounded-lg border p-5">
-          <h3 className="text-sm font-medium">Accessibility</h3>
-          <p className="mt-1.5 text-sm leading-relaxed text-pretty text-muted-foreground">
-            So it can click and type. It drives the one real cursor, which means
-            you can see everything it does as it does it — and Escape stops it
-            mid-action, from anywhere.
-          </p>
+        <div className="bg-surface p-6">
+          <dt className="font-display text-[0.9375rem] font-semibold">Accessibility</dt>
+          <dd className="mt-2 text-[0.9375rem] leading-relaxed text-pretty text-ink-2">
+            So it can click and type. It drives the one real cursor, so you watch
+            everything it does while it does it — and Escape stops it mid-action,
+            from anywhere.
+          </dd>
         </div>
-      </div>
-      <p className="mt-6 text-sm text-pretty text-muted-foreground">
-        Anything beyond that is off until you turn it on: running commands that
+      </dl>
+
+      <p className="mt-6 max-w-[60ch] text-[0.9375rem] leading-relaxed text-pretty text-ink-3">
+        Everything past that stays off until you turn it on: running commands that
         change things, writing files outside its workspace, sending requests that
         are not just reads.
       </p>
@@ -227,42 +230,47 @@ function Questions() {
   const qa = [
     {
       q: "macOS says it cannot check this app for malicious software. Is it safe?",
-      a: "That message means the build has not been through Apple's notarisation service yet, which is being sorted out. It is not a scan result. Until then, drag Nudge to Applications and run: xattr -dr com.apple.quarantine /Applications/Nudge.app — that removes the downloaded-from-the-internet flag and nothing else. The checksum below is there so you can verify you got the file this page is offering.",
+      a: "That message means the build has not been through Apple's notarisation service yet, which is being sorted out. It is not the result of a scan. Until then: drag Nudge to Applications, then run xattr -dr com.apple.quarantine /Applications/Nudge.app in Terminal. That clears the downloaded-from-the-internet flag and nothing else. The checksum below is published so you can confirm you got the file this page is offering.",
     },
     {
       q: "Does my screen go anywhere?",
-      a: "To the model you configured, which is the one doing the looking. If that is Ollama it never leaves your machine. If it is Gemini or Anthropic it goes to them under your own API key. Nothing routes through a server of ours — there is not one in the path.",
+      a: "To the model you configured, which is the thing doing the looking. Point it at Ollama and your screen never leaves the machine. Point it at Gemini or Anthropic and it goes to them, under your own API key. Nothing routes through a server of ours — there is not one in the path.",
     },
     {
       q: "Can I use my Mac while it is working?",
-      a: "No, and that is what it means rather than a limitation. Nudge drives your actual cursor, so while an agent runs it has the mouse and keyboard, the same as a person sitting at your laptop would. The stop is always one key away.",
+      a: "No, and that is what it means rather than a shortcoming. Nudge drives your actual cursor, so while it works it has the mouse and the keyboard, exactly as a person sitting at your laptop would. Escape takes them back.",
     },
     {
-      q: "Which Macs?",
-      a: "Apple silicon, macOS 12 or later. An Intel build needs its own compile and is not done. Windows is next — the code is written and has never been compiled for it.",
+      q: "Which Macs does it run on?",
+      a: "Apple silicon, macOS 12 or later. An Intel build needs its own compile and has not been done. Windows is next — that code is written and has never been compiled for it.",
     },
     {
       q: "Do I need an account?",
-      a: "No. There is no sign-up, no licence key and nothing to activate. Download it and it runs.",
+      a: "No. There is no sign-up, no licence key, nothing to activate. Download it and it runs.",
     },
     {
       q: "What does it cost?",
-      a: "Nothing. You pay whoever makes the model you point it at, or nobody at all if you run Ollama locally.",
+      a: "Nothing. You pay whoever makes the model you point it at, or nobody at all if you run Ollama on your own machine.",
     },
     {
-      q: "How do I remove it?",
-      a: "Drag it to the Bin. Its settings live in ~/.config/nudge, and macOS forgets the permissions when the app is gone.",
+      q: "How do I get rid of it?",
+      a: "Drag it to the Bin. Its settings sit in ~/.config/nudge, and macOS drops the permissions once the app is gone.",
     },
   ];
 
   return (
-    <section className="border-t py-16">
-      <h2 className="text-xl font-semibold text-balance">Before you download it</h2>
-      <Accordion type="single" collapsible className="mt-4">
+    <section className="border-t border-line py-16">
+      <h2 className="font-display text-[1.75rem] leading-tight font-semibold text-balance">
+        Before you install it
+      </h2>
+
+      <Accordion type="single" collapsible className="mt-6">
         {qa.map(({ q, a }) => (
-          <AccordionItem key={q} value={q}>
-            <AccordionTrigger className="text-left text-sm">{q}</AccordionTrigger>
-            <AccordionContent className="text-sm leading-relaxed text-pretty text-muted-foreground">
+          <AccordionItem key={q} value={q} className="border-line">
+            <AccordionTrigger className="text-left font-display text-[0.9375rem] font-medium hover:no-underline">
+              {q}
+            </AccordionTrigger>
+            <AccordionContent className="max-w-[68ch] text-[0.9375rem] leading-relaxed text-pretty text-ink-2">
               {a}
             </AccordionContent>
           </AccordionItem>
@@ -277,23 +285,20 @@ function Questions() {
 }
 
 /**
- * The same action again, at the point somebody has finished reading.
- *
- * Not a second offer -- the identical one. Somebody who scrolled the whole page
- * has answered their own objections and should not have to scroll back up to
- * act on that.
+ * The same action again, where somebody has finished reading and has no reason
+ * to scroll back up to act on it. Not a second offer -- the identical one.
  */
 function LastCall() {
   return (
-    <section className="border-t py-16 text-center">
-      <h2 className="text-2xl font-semibold text-balance">
-        Free, no account, and it runs on your own key
+    <section className="border-t border-line py-20 text-center">
+      <h2 className="mx-auto max-w-[20ch] font-display text-[2rem] leading-tight font-bold text-balance">
+        Free, no account, your own key
       </h2>
-      <p className="mx-auto mt-3 max-w-md text-sm text-pretty text-muted-foreground">
-        Nothing to sign up for and nothing to cancel. If you do not like it, drag
-        it to the Bin.
+      <p className="mx-auto mt-3 max-w-[46ch] text-[0.9375rem] leading-relaxed text-pretty text-ink-2">
+        Nothing to sign up for and nothing to cancel. If you do not get on with
+        it, drag it to the Bin.
       </p>
-      <div className="mt-8 flex justify-center">
+      <div className="mt-9 flex justify-center">
         <DownloadButton compact />
       </div>
     </section>
@@ -302,11 +307,19 @@ function LastCall() {
 
 function Footer() {
   return (
-    <footer className="mt-auto flex flex-col items-center gap-2 border-t py-10 text-xs text-muted-foreground">
-      <p className="text-pretty">
-        Nudge is an early build. Things will break, and it will tell you when they do.
+    <footer className="flex flex-col gap-3 border-t border-line pt-10 text-[0.8125rem] text-ink-3 sm:flex-row sm:items-center sm:justify-between">
+      <p className="max-w-[46ch] text-pretty">
+        An early build. Things will break, and it will say so when they do.
       </p>
-      <p className="tabular-nums">© {new Date().getFullYear()} Nuddg Inc</p>
+      <div className="flex items-center gap-5">
+        <a
+          href="https://github.com/bibektimilsina00/nudge"
+          className="transition-colors hover:text-ink"
+        >
+          Source
+        </a>
+        <span className="tabular-nums">© {new Date().getFullYear()} Nuddg Inc</span>
+      </div>
     </footer>
   );
 }

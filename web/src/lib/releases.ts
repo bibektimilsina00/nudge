@@ -33,7 +33,12 @@ export function downloadUrl(release: Release) {
   return `${API}${release.download_url}`;
 }
 
-/** Megabytes, to one decimal. Nobody wants 19267889. */
+/**
+ * Megabytes, to one decimal. Nobody wants 19267889.
+ *
+ * Joined with a non-breaking space so the number and its unit cannot end up on
+ * different lines, which is the one place a download size looks broken.
+ */
 export function megabytes(bytes: number) {
-  return `${(bytes / 1_000_000).toFixed(1)} MB`;
+  return `${(bytes / 1_000_000).toFixed(1)}\u00a0MB`;
 }

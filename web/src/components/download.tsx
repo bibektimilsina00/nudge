@@ -55,29 +55,34 @@ function Primary({
 }) {
   if (failed)
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-[0.9375rem] text-ink-3">
         Nothing published yet. Check back shortly.
       </p>
     );
 
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button size="lg" className="h-12 px-7 text-base" asChild={!!release} disabled={!release}>
+      <Button
+        size="lg"
+        asChild={!!release}
+        disabled={!release}
+        className="h-12 rounded-full bg-gold px-7 font-display text-[0.9375rem] font-semibold text-black hover:bg-gold/90"
+      >
         {release ? (
           <a href={downloadUrl(release)}>
-            <Apple className="size-5" />
+            <Apple className="size-[18px]" aria-hidden />
             Download for Mac
           </a>
         ) : (
           <span>
-            <Loader2 className="size-5 animate-spin" />
-            Loading
+            <Loader2 className="size-[18px] animate-spin" />
+            Loading…
           </span>
         )}
       </Button>
 
       {/* Reserved height, so the line arriving does not shove the page down. */}
-      <p className="h-5 text-xs tabular-nums text-muted-foreground">
+      <p className="h-5 text-[0.8125rem] tabular-nums text-ink-3">
         {loading || !release
           ? " "
           : `Version ${release.version} · ${megabytes(release.size_bytes)} · macOS 12 or later`}
@@ -95,11 +100,15 @@ function Primary({
 function NotYet({ platform }: { platform: Platform }) {
   return (
     <div className="flex flex-col items-center gap-2">
-      <Button size="lg" className="h-12 px-7 text-base" disabled>
-        <Download className="size-5" />
+      <Button
+        size="lg"
+        disabled
+        className="h-12 rounded-full px-7 font-display text-[0.9375rem] font-semibold"
+      >
+        <Download className="size-[18px]" aria-hidden />
         {LABEL[platform]}
       </Button>
-      <p className="max-w-xs text-center text-xs text-pretty text-muted-foreground">
+      <p className="max-w-[34ch] text-center text-[0.8125rem] text-pretty text-ink-3">
         Not built yet. macOS on Apple silicon is the only one so far — pick it
         below if that is what you are on.
       </p>
@@ -125,17 +134,15 @@ function PlatformPicker({
           className={cn(
             "rounded-full px-2.5 py-1 transition-colors",
             p === current
-              ? "bg-foreground/10 text-foreground"
-              : "text-muted-foreground hover:text-foreground",
+              ? "bg-surface-2 text-ink ring-1 ring-line"
+              : "text-ink-3 hover:text-ink-2",
           )}
         >
           {LABEL[p]}
           {!BUILT.includes(p) && <span className="ml-1 opacity-50">soon</span>}
         </button>
       ))}
-      {!chosen && (
-        <span className="ml-1 text-muted-foreground/70">· guessed from your browser</span>
-      )}
+      {!chosen && <span className="ml-1 text-ink-3/70">guessed from your browser</span>}
     </div>
   );
 }
@@ -161,14 +168,17 @@ export function Checksum({ platform = "macos-arm64" }: { platform?: string }) {
         window.setTimeout(() => setCopied(false), 1600);
       }}
       aria-label="Copy the SHA-256 checksum"
-      className="group inline-flex max-w-full items-center gap-2 rounded-md border px-2.5 py-1.5 font-mono text-[11px] text-muted-foreground transition-colors hover:text-foreground"
+      className="group inline-flex max-w-full items-center gap-2 rounded-lg bg-surface px-3 py-2 font-mono text-[11px] text-ink-3 ring-1 ring-line transition-colors hover:text-ink-2"
     >
       <span className="shrink-0">SHA-256</span>
       <span className="truncate tabular-nums">{data.sha256}</span>
+      <span className="sr-only" aria-live="polite">
+        {copied ? "Checksum copied" : ""}
+      </span>
       {copied ? (
-        <Check className="size-3.5 shrink-0 text-green-600 dark:text-green-500" />
+        <Check className="size-3.5 shrink-0 text-gold" aria-hidden />
       ) : (
-        <Copy className="size-3.5 shrink-0 opacity-50 group-hover:opacity-100" />
+        <Copy className="size-3.5 shrink-0 opacity-50 group-hover:opacity-100" aria-hidden />
       )}
     </button>
   );
