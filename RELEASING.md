@@ -19,14 +19,29 @@ open it at all. Every feature in this repository is theoretical until this says
 
 Three things, none of which live in this repository:
 
-**1. A Developer ID Application certificate.** Requires an Apple Developer
-Program membership (£79/$99 a year) on an *individual* or *organisation* account
-you control. This machine currently has three Apple Development certificates and
-one Apple Distribution certificate for TaggedWeb Inc — **none of them work**.
-Apple Distribution is for the App Store, which is a different route with
-different rules; Developer ID is the one for handing somebody a download.
+**1. A Developer ID Application certificate.** None of the four certificates on
+this machine will do. Read out of the certificates themselves, the teams
+available are:
 
-Create it at developer.apple.com → Certificates → **Developer ID Application**.
+| Team | Team ID | What is there |
+|---|---|---|
+| Bibek Timilsina | `9VA7RHWT84` | Apple Development only |
+| Nuddg Inc | `7MATTTWP83` | Apple Development only |
+| TaggedWeb Inc. | `3AKM83DNCV` | Apple Development **and** Apple Distribution |
+
+Apple Development is for running your own builds on your own machines. Apple
+Distribution is for the App Store, which is a different route with different
+rules. Neither can be notarised for a download; only **Developer ID
+Application** can.
+
+An Apple Distribution certificate can only exist under a paid membership, so
+TaggedWeb Inc has one — but shipping under it puts *"TaggedWeb Inc."* in the
+Gatekeeper dialog somebody sees on first open. **Nuddg Inc** is the team this
+belongs to; whether it needs paying for is the one thing to go and check.
+
+Create it at developer.apple.com → Certificates, Identifiers & Profiles →
+Certificates → **+** → **Developer ID Application**. For an organisation account
+this is restricted to the Account Holder unless they have delegated it.
 
 **2. An app-specific password.** appleid.apple.com → Sign-In and Security →
 App-Specific Passwords. Not your account password — notarisation will refuse it,
