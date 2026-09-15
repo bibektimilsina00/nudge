@@ -26,9 +26,9 @@ jobs:
 
       # pnpm, because that is what the lockfile in ui/ is. Installed before
       # setup-node so the cache it sets up is the right one.
+      # Version comes from package.json's `packageManager`, so CI, Docker and a
+      # laptop cannot disagree about it.
       - uses: pnpm/action-setup@v4
-        with:
-          version: 9
 
       - uses: actions/setup-node@v4
         with:

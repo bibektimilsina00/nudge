@@ -77,6 +77,13 @@ jobs:
 
       - name: Rebuild the API and nothing else
         run: |
+          # Docker renames a container to <hash>_<name> while it recreates it,
+          # and an interrupted recreate leaves that behind -- the next deploy
+          # then fails on a name conflict with a container nobody can see under
+          # its own name. Cleared first, and only ever ours.
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'docker ps -aq --filter "name=_nudge-api-1$" | xargs -r docker rm -f' || true
+
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             'cd /opt/nudge && docker compose up -d --build api'
 
@@ -120,6 +127,13 @@ jobs:
 
       - name: Rebuild the site and nothing else
         run: |
+          # Docker renames a container to <hash>_<name> while it recreates it,
+          # and an interrupted recreate leaves that behind -- the next deploy
+          # then fails on a name conflict with a container nobody can see under
+          # its own name. Cleared first, and only ever ours.
+          ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
+            'docker ps -aq --filter "name=_nudge-web-1$" | xargs -r docker rm -f' || true
+
           ssh ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }} \
             'cd /opt/nudge && docker compose up -d --build web'
 
