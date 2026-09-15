@@ -48,7 +48,7 @@ export function Skills({ onBack }: { onBack: () => void }) {
         <button
           onClick={onBack}
           aria-label="Back"
-          className="grid size-[21px] shrink-0 place-items-center rounded-full bg-[#1e1e1e] text-white/70 transition-colors duration-150 hover:bg-[#262626] hover:text-white"
+          className="grid size-[21px] shrink-0 place-items-center rounded-full bg-raise text-ink-2 transition-colors duration-150 hover:bg-raise-hi hover:text-white"
         >
           <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M9.5 3.5 5 8l4.5 4.5" />
@@ -56,7 +56,7 @@ export function Skills({ onBack }: { onBack: () => void }) {
         </button>
         <h2 className="text-[13px] font-semibold tracking-tight">Skills</h2>
         {skills !== null && skills.length > 0 && (
-          <span className="ml-auto text-[10.5px] text-white/35">
+          <span className="ml-auto text-[10.5px] text-ink-3">
             {skills.length} installed
           </span>
         )}
@@ -66,8 +66,8 @@ export function Skills({ onBack }: { onBack: () => void }) {
           is furniture. */}
       {skills !== null && skills.length > 3 && (
         <div className="px-3.5 pb-2.5">
-          <div className="flex h-[30px] items-center gap-2 rounded-[10px] bg-[#1e1e1e] px-2.5 inset-ring-1 inset-ring-white/[0.09]">
-            <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-white/35" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
+          <div className="flex h-[30px] items-center gap-2 rounded-[10px] bg-raise px-2.5 hairline">
+            <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-ink-3" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
               <circle cx="7.2" cy="7.2" r="4.2" />
               <path d="m10.4 10.4 2.6 2.6" />
             </svg>
@@ -76,7 +76,7 @@ export function Skills({ onBack }: { onBack: () => void }) {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="Search skills"
               spellCheck={false}
-              className="w-full bg-transparent text-[11.5px] text-white outline-none placeholder:text-white/30"
+              className="w-full bg-transparent text-[11.5px] text-white outline-none placeholder:text-ink-3"
             />
           </div>
         </div>
@@ -91,13 +91,13 @@ export function Skills({ onBack }: { onBack: () => void }) {
               <Card key={s.folder} skill={s} />
             ))}
             {shown.length === 0 && (
-              <p className="pt-6 text-center text-[12px] text-white/30">
+              <p className="pt-6 text-center text-[12px] text-ink-3">
                 Nothing matches “{query}”.
               </p>
             )}
             <button
               onClick={() => invoke("open_skills_folder").catch(() => {})}
-              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-white/[0.14] py-2.5 text-[11px] text-white/45 transition-colors duration-150 hover:border-white/25 hover:text-white/70"
+              className="flex w-full items-center justify-center gap-1.5 rounded-xl border border-dashed border-line py-2.5 text-[11px] text-ink-2 transition-colors duration-150 hover:border-white/25 hover:text-ink-2"
             >
               <Plus />
               Add a skill
@@ -118,18 +118,18 @@ export function Skills({ onBack }: { onBack: () => void }) {
 function Empty({ onAdd }: { onAdd: () => void }) {
   return (
     <div className="flex flex-col items-center px-4 pt-7 text-center">
-      <span className="grid size-10 place-items-center rounded-xl bg-[#1e1e1e] text-white/45 inset-ring-1 inset-ring-white/[0.09]">
+      <span className="grid size-10 place-items-center rounded-xl bg-raise text-ink-2 hairline">
         <Bolt />
       </span>
       <h3 className="mt-3 text-[12.5px] font-semibold">No skills yet</h3>
-      <p className="mt-1.5 max-w-[250px] text-[10.5px] leading-relaxed text-white/45">
-        A skill is a folder with a <code className="text-white/60">SKILL.md</code> in
+      <p className="mt-1.5 max-w-[250px] text-[10.5px] leading-relaxed text-ink-2">
+        A skill is a folder with a <code className="text-ink">SKILL.md</code> in
         it — a name, a line about what it does, and the steps. Nudge reads the line
         on every turn and the steps only when it needs them.
       </p>
       <button
         onClick={onAdd}
-        className="mt-3.5 flex items-center gap-1.5 rounded-full bg-[#0a84ff] px-3 py-[6px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-[#0a7ae8]"
+        className="mt-3.5 flex items-center gap-1.5 rounded-full bg-blue px-3 py-[6px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi"
       >
         <Plus />
         Open the skills folder
@@ -140,21 +140,21 @@ function Empty({ onAdd }: { onAdd: () => void }) {
 
 function Card({ skill }: { skill: Skill }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-xl bg-[#1e1e1e] p-2.5 inset-ring-1 inset-ring-white/[0.09]">
-      <span className="grid size-5 shrink-0 place-items-center rounded-[6px] bg-white/[0.09] text-white/55">
+    <div className="flex items-start gap-2.5 rounded-xl bg-raise p-2.5 hairline">
+      <span className="grid size-5 shrink-0 place-items-center rounded-[6px] bg-raise-hi text-ink-2">
         <Bolt small />
       </span>
 
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="truncate text-[12px] font-semibold">{skill.name}</h3>
-          <span className="shrink-0 rounded bg-[#0a84ff]/15 px-1.5 py-[1px] text-[9px] text-[#4da3ff]">
+          <span className="shrink-0 rounded bg-blue/15 px-1.5 py-[1px] text-[9px] text-[#4da3ff]">
             Ready
           </span>
         </div>
         {/* A skill with no description is still usable; saying so beats an empty
             line that looks like something failed to load. */}
-        <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-white/45">
+        <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-ink-2">
           {skill.about || "No description in its SKILL.md."}
         </p>
       </div>

@@ -125,7 +125,7 @@ export default function Connect() {
           <h1 className="truncate text-[13.5px] font-semibold tracking-tight">
             Connect {offer.name} to Nudge
           </h1>
-          <p className="mt-[2px] text-[11px] text-white/40">Use Nudge to:</p>
+          <p className="mt-[2px] text-[11px] text-ink-3">Use Nudge to:</p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -228,7 +228,7 @@ function Chip({ text, ...rest }: { text: string } & React.HTMLAttributes<HTMLSpa
   return (
     <span
       {...rest}
-      className="shrink-0 rounded-full bg-white/[0.06] px-3 py-[6px] text-[11.5px] whitespace-nowrap text-white/70 inset-ring-1 inset-ring-white/[0.06]"
+      className="shrink-0 rounded-full bg-raise px-3 py-[6px] text-[11.5px] whitespace-nowrap text-ink-2 hairline"
     >
       {text}
     </span>
@@ -253,8 +253,8 @@ function Choice({
       className={[
         "flex items-center gap-1.5 rounded-full px-3 py-[6px] text-[11.5px] font-medium transition-colors duration-150 active:scale-[0.97]",
         primary
-          ? "bg-[#0a84ff] text-white hover:bg-[#0a7ae8]"
-          : "bg-white/[0.07] text-white/85 hover:bg-white/[0.12]",
+          ? "bg-blue text-white hover:bg-blue-hi"
+          : "bg-raise text-white/85 hover:bg-raise-hi",
       ].join(" ")}
     >
       <svg

@@ -1,6 +1,55 @@
 @import "tailwindcss";
 
 @theme {
+  /* ------------------------------------------------------------------
+   * The surfaces.
+   *
+   * Six near-identical greys had accumulated -- #1e1e1e, #262626, #272727,
+   * #2e2e2e, #303030, #141824 -- which is not a palette, it is a drift. Nobody
+   * chose six; each one was chosen once, next to whatever was already there.
+   * That drift is why the last attempt at this looked uneven: a redesign laid
+   * over six accidental greys produces six accidental results.
+   *
+   * Three levels, and a reason to move between them. macOS builds depth by
+   * layering translucency over what is behind, not by painting progressively
+   * lighter boxes, so these are white at low opacity rather than fixed greys --
+   * they pick up whatever the window is over and stay related to each other at
+   * any backdrop.
+   * ------------------------------------------------------------------ */
+
+  /* The window itself: dark and translucent, the way an AppKit sidebar is. */
+  --color-window: rgba(30, 30, 32, 0.72);
+  /* A thing sitting on the window -- a card, a row, a field. */
+  --color-raise: rgba(255, 255, 255, 0.06);
+  /* The same thing under the pointer. */
+  --color-raise-hi: rgba(255, 255, 255, 0.11);
+  /* And pressed, or selected. */
+  --color-raise-on: rgba(255, 255, 255, 0.16);
+  /* Hairlines. Never a grey: a separator is an absence of surface, and drawing
+   * it as its own colour makes it a line somebody put there on purpose. */
+  --color-line: rgba(255, 255, 255, 0.09);
+
+  /* Text, in the three weights macOS actually uses. */
+  --color-ink: rgba(255, 255, 255, 0.95);
+  --color-ink-2: rgba(255, 255, 255, 0.55);
+  --color-ink-3: rgba(255, 255, 255, 0.32);
+
+  /* System blue, dark-mode value. The one saturated colour in the interface,
+   * spent only on the thing a person is most likely to want. */
+  --color-blue: #0a84ff;
+  --color-blue-hi: #3d9bff;
+
+  /* ------------------------------------------------------------------
+   * The corners.
+   *
+   * Four, matched to what they wrap. A window corner on a button is a lozenge
+   * and a button corner on a window is a box, and having four named values is
+   * what stops the next person picking a fifth.
+   * ------------------------------------------------------------------ */
+  --radius-window: 20px;
+  --radius-card: 12px;
+  --radius-control: 8px;
+
   --color-accent: #ff2d55;
 
   /* The pill's bottom corners.
@@ -127,6 +176,26 @@ body,
   height: 100%;
   background: transparent;
   overflow: hidden;
+}
+
+/* The material every floating surface is made of.
+ *
+ * Blur plus saturation, which is the part people forget: macOS vibrancy pushes
+ * the saturation of what is behind it up as it blurs, which is why a Mac panel
+ * looks like frosted glass rather than like a grey rectangle with a soft edge.
+ * Blur alone reads as fog. */
+.material {
+  background-color: var(--color-window);
+  backdrop-filter: blur(30px) saturate(180%);
+  -webkit-backdrop-filter: blur(30px) saturate(180%);
+}
+
+/* A hairline that survives a Retina display.
+ *
+ * A 1px border at 2x is two device pixels and reads heavy. This is the thinnest
+ * line the screen can draw, which is what AppKit separators actually are. */
+.hairline {
+  box-shadow: inset 0 0 0 0.5px var(--color-line);
 }
 
 body {

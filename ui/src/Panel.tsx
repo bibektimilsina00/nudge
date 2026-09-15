@@ -117,13 +117,20 @@ export default function Panel() {
     <div className="flex w-full justify-center">
       <div
         className={[
-          "overflow-hidden bg-black text-white select-none",
+          "overflow-hidden text-ink select-none",
+          // Black while it is a pill, glass once it is a panel.
+          //
+          // The pill has to read as part of the notch -- the same black, the same
+          // corners -- and frosted glass stuck to a piece of hardware reads as a
+          // sticker on it. Open, it is plainly a window and should be made of
+          // what every other macOS window is made of.
+          open ? "material" : "bg-black",
           // The busy pill is a strip in the menu bar, not a panel: a big radius
           // on something 34px tall reads as a lozenge stuck to the notch.
           // Matching the notch exactly is what makes the pill read as part of the
           // hardware. The open panel is far bigger than the notch and carries a
           // slightly larger radius, or 12px on a 500px sheet looks like a mistake.
-          open ? "rounded-b-[20px]" : "notch-corner",
+          open ? "rounded-b-window" : "notch-corner",
           // No shadow while open. The panel is black on a dark menu bar, so the
           // drop shadow never read as depth -- it read as a grey smear along the
           // bottom edge. The resting pill keeps a faint one so it separates from
@@ -173,8 +180,8 @@ export default function Panel() {
                 "grid size-[26px] shrink-0 place-items-center rounded-full",
                 "transition-colors duration-150",
                 view === "settings"
-                  ? "bg-[#2e2e2e] text-white"
-                  : "text-white/45 hover:bg-[#1e1e1e] hover:text-white/80",
+                  ? "bg-raise-hi text-white"
+                  : "text-ink-2 hover:bg-raise hover:text-white/80",
               ].join(" ")}
             >
               <Gear />
@@ -199,24 +206,24 @@ export default function Panel() {
           <div className="grid flex-1 grid-cols-[1fr_auto] gap-4 px-3.5 pt-1.5">
             <section>
               <h2 className="text-[13.5px] font-semibold tracking-tight">Add skills</h2>
-              <p className="mt-0.5 text-[10.5px] text-white/40">
+              <p className="mt-0.5 text-[10.5px] text-ink-3">
                 Skills give Nudge superpowers
               </p>
               <button
                 onClick={() => openSkills("home")}
                 aria-label="Add skills"
-                className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-[#272727] text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-[#303030]"
+                className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-raise text-[20px] font-light text-ink-2 transition-colors duration-150 hover:bg-raise-hi"
               >
                 +
               </button>
             </section>
 
             <section className="w-[214px]">
-              <h3 className="mb-1.5 text-[10.5px] text-white/45">⌘ Shortcuts</h3>
+              <h3 className="mb-1.5 text-[10.5px] text-ink-2">⌘ Shortcuts</h3>
               <dl className="space-y-[6px]">
                 {SHORTCUTS.map(([name, keys]) => (
                   <div key={name} className="flex items-center justify-between gap-2">
-                    <dt className="truncate text-[10.5px] text-white/45">{name}</dt>
+                    <dt className="truncate text-[10.5px] text-ink-2">{name}</dt>
                     <dd className="flex shrink-0 gap-1">
                       {keys.map((k) => (
                         <Key key={k}>{k}</Key>
@@ -229,7 +236,7 @@ export default function Panel() {
           </div>
 
           <div className="px-3.5 pb-3">
-            <p className="mb-1.5 text-[10.5px] text-white/40">Integrations</p>
+            <p className="mb-1.5 text-[10.5px] text-ink-3">Integrations</p>
             <div className="flex items-center gap-2">
               {/* The whole field opens the browser, not just the little square --
                   a 26px target inside a 34px row that looks pressable is a
@@ -237,17 +244,17 @@ export default function Panel() {
               <button
                 onClick={() => openIntegrations("home")}
                 aria-label="Browse integrations"
-                className="flex h-[30px] flex-1 items-center rounded-[10px] bg-[#1e1e1e] px-1.5 text-left transition-colors duration-150 hover:bg-[#262626] inset-ring-1 inset-ring-white/[0.09]"
+                className="flex h-[30px] flex-1 items-center rounded-[10px] bg-raise px-1.5 text-left transition-colors duration-150 hover:bg-raise-hi hairline"
               >
                 <span className="grid size-[22px] place-items-center rounded-md bg-white/[0.11] text-[13px] font-light text-white/60">
                   +
                 </span>
-                <span className="ml-2 text-[11px] text-white/35">Add an integration</span>
+                <span className="ml-2 text-[11px] text-ink-3">Add an integration</span>
               </button>
 
               <Perch docked={docked} onToggle={() => dock(!docked)} />
 
-              <button className="grid size-[30px] place-items-center rounded-[10px] bg-[#1e1e1e] text-[11px] text-white/45 transition-colors duration-150 hover:text-white/70 inset-ring-1 inset-ring-white/[0.09]">
+              <button className="grid size-[30px] place-items-center rounded-[10px] bg-raise text-[11px] text-ink-2 transition-colors duration-150 hover:text-ink-2 hairline">
                 i
               </button>
             </div>
@@ -275,7 +282,7 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
     <button
       onClick={onToggle}
       aria-pressed={docked}
-      className="flex h-[30px] items-center gap-2 rounded-full bg-[#1e1e1e] pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-[#262626] inset-ring-1 inset-ring-white/[0.09]"
+      className="flex h-[30px] items-center gap-2 rounded-full bg-raise pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-raise-hi hairline"
     >
       <span
         className={[
@@ -344,7 +351,7 @@ function Tab({
       onClick={onClick}
       className={[
         "flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px] transition-colors duration-150",
-        active ? "bg-[#2e2e2e] text-white" : "text-white/40 hover:text-white/65",
+        active ? "bg-raise-hi text-white" : "text-ink-3 hover:text-ink-2",
       ].join(" ")}
     >
       {icon}
@@ -356,7 +363,7 @@ function Tab({
 /** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
 function Key({ children }: { children: ReactNode }) {
   return (
-    <kbd className="rounded-[5px] bg-[#262626] px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-white/65 inset-ring-1 inset-ring-white/[0.08]">
+    <kbd className="rounded-[5px] bg-raise-hi px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-ink-2 inset-ring-1 inset-ring-white/[0.08]">
       {children}
     </kbd>
   );

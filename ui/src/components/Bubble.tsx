@@ -34,7 +34,7 @@ export function Bubble({
         TONES[tone],
       ].join(" ")}
     >
-      {heard && <p className="mb-1 text-[13px] text-white/45">heard “{heard}”</p>}
+      {heard && <p className="mb-1 text-[13px] text-ink-2">heard “{heard}”</p>}
       {children}
       {typing && (
         <p className="mt-2 rounded-lg bg-black/45 px-3 py-2 font-mono text-[13px] break-all text-white/95 inset-ring-1 inset-ring-white/10">

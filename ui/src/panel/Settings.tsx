@@ -114,7 +114,7 @@ export function Settings({
         <Row icon={<I.Power />} label="Quit Nudge" danger onClick={() => void invoke("quit")} />
       </Section>
 
-      <p className="pt-3 pl-1 font-mono text-[10px] text-white/25">v{version}</p>
+      <p className="pt-3 pl-1 font-mono text-[10px] text-ink-3">v{version}</p>
     </div>
   );
 }

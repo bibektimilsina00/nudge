@@ -83,7 +83,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
         <button
           onClick={onBack}
           aria-label="Back"
-          className="grid size-[21px] shrink-0 place-items-center rounded-full bg-[#1e1e1e] text-white/70 transition-colors duration-150 hover:bg-[#262626] hover:text-white"
+          className="grid size-[21px] shrink-0 place-items-center rounded-full bg-raise text-ink-2 transition-colors duration-150 hover:bg-raise-hi hover:text-white"
         >
           <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
             <path d="M9.5 3.5 5 8l4.5 4.5" />
@@ -93,8 +93,8 @@ export function Integrations({ onBack }: { onBack: () => void }) {
       </header>
 
       <div className="px-3.5 pb-2.5">
-        <div className="flex h-[30px] items-center gap-2 rounded-[10px] bg-[#1e1e1e] px-2.5 inset-ring-1 inset-ring-white/[0.09]">
-          <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-white/35" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
+        <div className="flex h-[30px] items-center gap-2 rounded-[10px] bg-raise px-2.5 hairline">
+          <svg viewBox="0 0 16 16" className="size-3.5 shrink-0 text-ink-3" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
             <circle cx="7.2" cy="7.2" r="4.2" />
             <path d="m10.4 10.4 2.6 2.6" />
           </svg>
@@ -103,7 +103,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search integrations"
             spellCheck={false}
-            className="w-full bg-transparent text-[11.5px] text-white outline-none placeholder:text-white/30"
+            className="w-full bg-transparent text-[11.5px] text-white outline-none placeholder:text-ink-3"
           />
         </div>
       </div>
@@ -113,7 +113,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
           <Card key={s.name} service={s} />
         ))}
         {shown.length === 0 && (
-          <p className="pt-6 text-center text-[12px] text-white/30">Nothing matches “{query}”.</p>
+          <p className="pt-6 text-center text-[12px] text-ink-3">Nothing matches “{query}”.</p>
         )}
       </div>
     </div>
@@ -122,7 +122,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
 
 function Card({ service }: { service: Service }) {
   return (
-    <div className="flex items-start gap-2.5 rounded-xl bg-[#1e1e1e] p-2.5 inset-ring-1 inset-ring-white/[0.09]">
+    <div className="flex items-start gap-2.5 rounded-xl bg-raise p-2.5 hairline">
       <span
         className="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-bold"
         style={{
@@ -136,18 +136,18 @@ function Card({ service }: { service: Service }) {
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-2">
           <h3 className="text-[12px] font-semibold">{service.name}</h3>
-          <span className="rounded bg-white/[0.09] px-1.5 py-[1px] text-[9px] text-white/40">
+          <span className="rounded bg-raise px-1.5 py-[1px] text-[9px] text-ink-3">
             Not connected
           </span>
         </div>
         {/* Two lines, then clipped -- the same shape for every card keeps the list
             scannable no matter how much the service has to say about itself. */}
-        <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-white/45">
+        <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-ink-2">
           {service.blurb}
         </p>
       </div>
 
-      <button className="flex shrink-0 items-center gap-1.5 rounded-full bg-[#0a84ff] px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-[#0a7ae8]">
+      <button className="flex shrink-0 items-center gap-1.5 rounded-full bg-blue px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi">
         <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
           <path d="M6.6 9.4a2.8 2.8 0 0 0 4 0l2-2a2.8 2.8 0 1 0-4-4l-.6.6" />
           <path d="M9.4 6.6a2.8 2.8 0 0 0-4 0l-2 2a2.8 2.8 0 1 0 4 4l.6-.6" />

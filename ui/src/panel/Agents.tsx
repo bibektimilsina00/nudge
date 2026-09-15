@@ -89,8 +89,8 @@ function Card({ agent }: { agent: Agent }) {
       className={[
         "rounded-xl p-2.5 inset-ring-1",
         running
-          ? "bg-[#141824] inset-ring-white/[0.12]"
-          : "bg-[#1e1e1e] inset-ring-white/[0.09]",
+          ? "bg-raise inset-ring-white/[0.12]"
+          : "bg-raise inset-ring-white/[0.09]",
       ].join(" ")}
     >
       <div className="flex items-center gap-2">
@@ -99,25 +99,25 @@ function Card({ agent }: { agent: Agent }) {
             a sentence and the colour is a glance. */}
         <Face state={agent.state} step={agent.step} size={18} hue={hue(agent.id)} />
         <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold">{agent.title}</h3>
-        <span className="shrink-0 text-[9px] text-white/30">{at(agent.started)}</span>
-        <span className="shrink-0 text-[9px] tracking-wide text-white/35 uppercase">
+        <span className="shrink-0 text-[9px] text-ink-3">{at(agent.started)}</span>
+        <span className="shrink-0 text-[9.5px] text-ink-3 capitalize">
           {agent.state}
         </span>
         <button
           onClick={() => void invoke("dismiss_agent", { id: agent.id })}
           aria-label="Dismiss"
-          className="shrink-0 text-[11px] text-white/30 transition-colors duration-150 hover:text-white/70"
+          className="shrink-0 text-[11px] text-ink-3 transition-colors duration-150 hover:text-ink-2"
         >
           ×
         </button>
       </div>
-      <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-white/45">
+      <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-ink-2">
         {agent.state === "failed" ? agent.why : agent.state === "waiting" ? agent.question : agent.status}
       </p>
       {running && (
-        <div className="mt-2 h-[2px] overflow-hidden rounded-full bg-white/10">
+        <div className="mt-2 h-[2px] overflow-hidden rounded-full bg-raise">
           <div
-            className="h-full rounded-full bg-[#0a84ff] transition-[width] duration-500 ease-out"
+            className="h-full rounded-full bg-blue transition-[width] duration-500 ease-out"
             style={{ width: `${progress(agent) * 100}%` }}
           />
         </div>
@@ -160,7 +160,7 @@ function Empty() {
           which is exactly the state being described. */}
       <Face state="done" step={0} size={64} />
       <h2 className="mt-2.5 text-[12.5px] font-medium">No agents yet</h2>
-      <p className="mt-1 max-w-[300px] text-[10.5px] leading-snug text-white/35">
+      <p className="mt-1 max-w-[300px] text-[10.5px] leading-snug text-ink-3">
         Ask for a whole task — “play a song on YouTube” — and Nudge will go and do
         it, reporting back as it works.
       </p>

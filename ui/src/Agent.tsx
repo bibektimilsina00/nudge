@@ -32,7 +32,7 @@ export type Agent = {
 } & AgentState;
 
 const TONE = {
-  running: { label: "Running", dot: "bg-[#0a84ff]" },
+  running: { label: "Running", dot: "bg-blue" },
   waiting: { label: "Needs you", dot: "bg-[#e8b027]" },
   done: { label: "Done", dot: "bg-[#30d158]" },
   failed: { label: "Failed", dot: "bg-[#ff5f57]" },
@@ -56,10 +56,10 @@ export function Plan({ plan }: { plan: Todo[] }) {
           <span
             className={
               t.status === "done"
-                ? "text-white/30 line-through decoration-white/20"
+                ? "text-ink-3 line-through decoration-white/20"
                 : t.status === "active"
                   ? "text-white"
-                  : "text-white/55"
+                  : "text-ink-2"
             }
           >
             {t.text}
@@ -86,7 +86,7 @@ function Mark({ status }: { status: Todo["status"] }) {
   }
   if (status === "active") {
     return (
-      <span className="mt-[4px] size-2 shrink-0 rounded-full bg-[#0a84ff] ring-2 ring-[#0a84ff]/25" />
+      <span className="mt-[4px] size-2 shrink-0 rounded-full bg-blue ring-2 ring-[#0a84ff]/25" />
     );
   }
   return <span className="mt-[4px] size-2 shrink-0 rounded-full ring-1 ring-white/25" />;
@@ -109,10 +109,10 @@ export function Steps({ history }: { history: string[] }) {
     <Fold count={history.length} label={`step${history.length === 1 ? "" : "s"} taken`}>
       <ol className="mt-1.5 max-h-44 space-y-1 overflow-y-auto">
         {[...history].reverse().map((line, i) => (
-          <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-snug text-white/55">
+          <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-snug text-ink-2">
             {/* Numbered from the real position, not from the top of a reversed
                 list -- otherwise the newest step is called number one. */}
-            <span className="mt-[1px] w-4 shrink-0 text-right font-mono text-[9px] text-white/25">
+            <span className="mt-[1px] w-4 shrink-0 text-right font-mono text-[9px] text-ink-3">
               {history.length - i}
             </span>
             <span className="min-w-0">{line}</span>
@@ -140,7 +140,7 @@ function Fold({
 }) {
   return (
     <details className="group mt-2">
-      <summary className="flex cursor-default list-none items-center gap-1 text-[9.5px] tracking-wide text-white/30 uppercase transition-colors duration-150 hover:text-white/55">
+      <summary className="flex cursor-default list-none items-center gap-1 text-[10.5px] text-ink-3 transition-colors duration-150 hover:text-ink-2">
         <svg
           viewBox="0 0 12 12"
           className="size-2.5 transition-transform duration-200 ease-out group-open:rotate-90"
@@ -170,7 +170,7 @@ export function Artifacts({ made }: { made: Made[] }) {
   if (made.length === 0) return null;
   return (
     <div className="mt-2.5">
-      <p className="mb-1 text-[9.5px] tracking-wide text-white/30 uppercase">
+      <p className="mb-1 text-[10.5px] text-ink-3">
         {made.length} file{made.length === 1 ? "" : "s"} — click to open
       </p>
       <div className="flex flex-wrap gap-1.5">
@@ -179,9 +179,9 @@ export function Artifacts({ made }: { made: Made[] }) {
           key={m.path}
           onClick={() => void invoke("open_artifact", { path: m.path })}
           title={m.path}
-          className="flex max-w-full items-center gap-1.5 rounded-lg bg-white/[0.07] py-1 pr-2 pl-1.5 text-[10.5px] text-white/75 transition-colors duration-150 hover:bg-white/[0.13] hover:text-white active:scale-[0.97]"
+          className="flex max-w-full items-center gap-1.5 rounded-lg bg-raise py-1 pr-2 pl-1.5 text-[10.5px] text-ink-2 transition-colors duration-150 hover:bg-raise-hi hover:text-white active:scale-[0.97]"
         >
-          <svg viewBox="0 0 16 16" className="size-3 shrink-0 text-white/45" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
+          <svg viewBox="0 0 16 16" className="size-3 shrink-0 text-ink-2" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinecap="round" strokeLinejoin="round">
             <path d="M9 1.5H4.5A1.5 1.5 0 0 0 3 3v10a1.5 1.5 0 0 0 1.5 1.5h7A1.5 1.5 0 0 0 13 13V5.5Z" />
             <path d="M9 1.5V5.5H13" />
           </svg>
@@ -212,10 +212,10 @@ export function Commands({ ran }: { ran: Ran[] }) {
         {ran.map((r, i) => (
           <div key={i} className="rounded-lg bg-black/40 p-1.5">
             <code className="block font-mono text-[10px] break-all text-[#8ec6ff]">
-              <span className="text-white/25">$ </span>
+              <span className="text-ink-3">$ </span>
               {r.command}
             </code>
-            <pre className="mt-1 font-mono text-[9.5px] leading-snug whitespace-pre-wrap text-white/45">
+            <pre className="mt-1 font-mono text-[9.5px] leading-snug whitespace-pre-wrap text-ink-2">
               {r.output.trim()}
             </pre>
           </div>
@@ -441,7 +441,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
     //
     // The surface is the panel's, not one of its own: `#1e1e1e` with a hairline
     // inset ring is the language everything else in Nudge is already written in.
-    <div className="w-[326px] rounded-2xl bg-[#1e1e1e] text-white inset-ring-1 inset-ring-white/[0.09]">
+    <div className="w-[326px] rounded-2xl bg-raise text-white hairline">
       <header className="flex items-center gap-2.5 px-3 pt-2.5 pb-2">
         <Face state={agent.state} step={agent.step} size={26} hue={hue(agent.id)} />
         <div className="min-w-0 flex-1">
@@ -449,7 +449,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
           {/* State and step on one quiet line rather than a loud pill beside the
               title. The pill was the largest thing on the card and said the least
               -- the face already says running, continuously. */}
-          <p className="mt-[1px] flex items-center gap-1.5 text-[10px] text-white/35">
+          <p className="mt-[1px] flex items-center gap-1.5 text-[10px] text-ink-3">
             <span className={`size-1.5 shrink-0 rounded-full ${tone.dot}`} />
             {tone.label}
             {agent.state === "running" && <> · step {agent.step}</>}
@@ -470,7 +470,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
         {agent.state === "waiting" ? (
           <Question id={agent.id} question={agent.question} />
         ) : (
-          <p className="text-[11.5px] leading-snug text-white/70">
+          <p className="text-[11.5px] leading-snug text-ink-2">
             {agent.state === "failed" ? agent.why : agent.status}
           </p>
         )}
@@ -485,19 +485,19 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
           one thing that must never be hunted for, and a rule says "this is not
           part of the report" more cheaply than a gap does. */}
       {agent.state === "running" && (
-        <div className="flex items-center gap-2.5 border-t border-white/[0.07] px-3 py-2">
-          <div className="h-[3px] min-w-0 flex-1 overflow-hidden rounded-full bg-white/[0.08]">
+        <div className="flex items-center gap-2.5 border-t border-line px-3 py-2">
+          <div className="h-[3px] min-w-0 flex-1 overflow-hidden rounded-full bg-raise">
             <div
-              className="h-full rounded-full bg-[#0a84ff] transition-[width] duration-500 ease-out"
+              className="h-full rounded-full bg-blue transition-[width] duration-500 ease-out"
               // A floor, so the bar reads as a bar on the first step instead of as
               // an empty groove somebody forgot to fill.
               style={{ width: `${Math.max(4, progress(agent) * 100)}%` }}
             />
           </div>
-          <span className="shrink-0 text-[9.5px] text-white/30">cursor in use</span>
+          <span className="shrink-0 text-[9.5px] text-ink-3">cursor in use</span>
           <button
             onClick={() => void invoke("stop_agent", { id: agent.id }).catch(() => {})}
-            className="shrink-0 rounded-lg bg-white/[0.08] px-2.5 py-[3px] text-[11px] font-medium transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
+            className="shrink-0 rounded-lg bg-raise px-2.5 py-[3px] text-[11px] font-medium transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
           >
             Stop
           </button>
@@ -522,7 +522,7 @@ function Ghost({
       onClick={onClick}
       aria-label={label}
       title={label}
-      className="grid size-[20px] shrink-0 place-items-center rounded-md text-white/35 transition-colors duration-150 hover:bg-white/[0.09] hover:text-white"
+      className="grid size-[20px] shrink-0 place-items-center rounded-md text-ink-3 transition-colors duration-150 hover:bg-raise hover:text-white"
     >
       <svg viewBox="0 0 12 12" className="size-2.5" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
         {children}
@@ -562,7 +562,7 @@ function Question({ id, question }: { id: number; question: string }) {
         onChange={(e) => setText(e.target.value)}
         placeholder="Type your answer…"
         spellCheck={false}
-        className="mt-2 w-full rounded-lg bg-black/40 px-2.5 py-1.5 text-[11.5px] text-white outline-none inset-ring-1 inset-ring-white/[0.12] placeholder:text-white/25 focus:inset-ring-[#0a84ff]"
+        className="mt-2 w-full rounded-lg bg-black/40 px-2.5 py-1.5 text-[11.5px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
       />
     </form>
   );
