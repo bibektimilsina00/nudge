@@ -420,8 +420,23 @@ write anywhere, and the shell allow-list and workspace rules do not reach inside
 somebody else's process. That is 2.2, and it is now the more urgent half.
 
 *Done when:* an MCP server the project has never heard of can be added to a config
-file and used by voice on the next turn. **Done** -- though "by voice" is proven
-only as far as the prompt and the parser; no live spoken turn has run one.
+file and used by voice on the next turn. **Done, and proven by voice.**
+
+Spoken into a running Nudge, with nothing but three lines of config added:
+
+    agent#2 started: "What's on my shopping list"
+      turn 0: files/search_files  {"path":".","pattern":"*shop*"}
+      turn 1: files/read_file     {"path":"shopping.txt"}
+      turn 2: Done "Your shopping list has Milk, Coffee beans, and Oat milk."
+    reach: tool server "files" switched off
+
+Three turns, two tool calls, and the last line is the Tools menu being clicked.
+Nothing in that chain existed a day earlier, and none of it needed a line of UI.
+
+Worth noting what the model did *unprompted*: asked for a shopping list, it
+searched for one before reading it, rather than guessing at a filename. The tools
+were described to it in one line each -- names and starred arguments, no schemas --
+which was the decision taken to keep the token cost down, and it was enough.
 
 **2.2 Boundaries a person can widen.**
 
@@ -551,6 +566,19 @@ What does not move whatever is granted:
 the method, says it could change something, says where to grant it, and says what
 it can still do -- and there is a test asserting all of that, because a refusal
 the model cannot act on is the same as a silent one.
+
+*What the live exercise cost, and it was not the feature:* two hours of the
+session went on being unable to see what the app was doing. Running the binary
+directly aborts -- macOS will not apply the bundle's `Info.plist` to a Mach-O
+started from a shell, so the first call into speech recognition is killed by TCC
+with `SIGABRT` and no message -- and `open --stdout` does not capture it either.
+
+The answer was already in the codebase: `keep_a_log` has been redirecting stdout
+and stderr to `/tmp/nudge.log` since long before any of this, and its comment
+explains the same TCC reasoning that a crash report was read to rediscover. A
+second copy was written before that was found, and deleted after. **`tail -f
+/tmp/nudge.log` is how you watch Nudge**, and it is written here because it was
+not written anywhere a reader would look.
 
 ### Phase 3 — Invisibility
 
