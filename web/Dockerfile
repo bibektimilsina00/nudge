@@ -3,7 +3,11 @@ FROM node:24-slim AS build
 RUN corepack enable
 WORKDIR /srv
 
-COPY package.json pnpm-lock.yaml ./
+# pnpm-workspace.yaml as well as the lockfile: it carries `allowBuilds`, and
+# without it here pnpm refuses the install over a script it has not been told
+# about -- a failure that only happens in a clean checkout, which is to say only
+# in the place it matters.
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .

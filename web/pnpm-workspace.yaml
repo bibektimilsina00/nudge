@@ -1,3 +1,11 @@
+# Which packages may run install scripts.
+#
+# pnpm refuses by default, which is the right default -- a postinstall script is
+# arbitrary code from a transitive dependency. Each one here is a decision.
 allowBuilds:
+  # Next's image optimiser. Not used: the one image on the page is a static file
+  # served as-is, so this would be a native build for nothing.
   sharp: false
-  unrs-resolver: false
+  # eslint-config-next's module resolver, which needs its native binding to run
+  # at all. Allowed because the alternative is lint not working.
+  unrs-resolver: true
