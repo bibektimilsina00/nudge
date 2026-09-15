@@ -4,7 +4,7 @@
 pub(crate) mod agent;
 pub mod commands;
 mod input;
-pub(crate) mod state;
+mod state;
 mod ui;
 
 use crate::config::Config;

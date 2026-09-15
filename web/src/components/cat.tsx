@@ -9,26 +9,32 @@ import { Alignment, Fit, Layout, useRive } from "@rive-app/react-canvas";
  *
  * The same `cat.riv` the app ships, running the same state machine — so what is
  * on the page is the thing you download rather than a picture of it. It idles
- * and blinks on its own, which is the entire reason to carry a canvas runtime
- * here; a still of it would be a sticker and a PNG would do.
+ * and blinks on its own, which is the whole reason to carry a canvas runtime for
+ * it; a still would be a sticker and a PNG would do.
  *
- * Mounted only on the client and only after the page is interactive. The runtime
- * is around 1.9MB, which is not a thing to put in front of somebody's first
- * paint — the static cat holds the space until it is ready, so the layout never
- * shifts and there is always a cat.
+ * The still sits underneath and stays there. It is rendered from the same
+ * artboard at the same fit, so the canvas lands exactly on top of it and the two
+ * are indistinguishable — which is what makes layering safe.
+ *
+ * It did not start that way. The still was a tight crop of the artwork while
+ * Rive draws the whole artboard, so they never lined up and both were visible at
+ * once: a large blurred cat behind a smaller sharp one. Swapping one for the
+ * other on Rive's `onLoad` fixed the doubling and introduced a worse bug --
+ * `onLoad` means the file parsed, not that anything was painted, and in a
+ * context where the canvas never paints it removed the only cat on the page.
+ * Aligning them removes the need to choose.
  */
 export function Cat() {
-  const [ready, setReady] = useState(false);
+  const [wanted, setWanted] = useState(false);
   const reduced = usePrefersReducedMotion();
 
   useEffect(() => {
     if (reduced) return;
-
     // After paint, not during. The hero should be readable before a megabyte of
     // canvas runtime is fetched for something decorative.
     const id = window.requestIdleCallback
-      ? window.requestIdleCallback(() => setReady(true), { timeout: 2500 })
-      : window.setTimeout(() => setReady(true), 900);
+      ? window.requestIdleCallback(() => setWanted(true), { timeout: 2500 })
+      : window.setTimeout(() => setWanted(true), 900);
     return () => {
       if (window.cancelIdleCallback) window.cancelIdleCallback(id as number);
       else window.clearTimeout(id as number);
@@ -37,18 +43,17 @@ export function Cat() {
 
   return (
     <div className="relative aspect-square w-full max-w-[26rem]">
-      {/* Always present, and underneath. If the runtime never arrives -- blocked,
-          slow, or reduced-motion -- this is what is on the page, at the same size
-          and in the same place. */}
+      {/* Always present. Under reduced motion, on a slow connection, or if the
+          runtime never arrives, this is simply what is on the page. */}
       <Image
         src="/cat.png"
         alt="Nudge, a small black cat"
-        width={512}
-        height={512}
+        width={1024}
+        height={1024}
         priority
         className="absolute inset-0 size-full object-contain"
       />
-      {!reduced && ready && <Live />}
+      {wanted && !reduced && <Live />}
     </div>
   );
 }
@@ -57,13 +62,14 @@ function Live() {
   const { RiveComponent } = useRive({
     src: "/cat.riv",
     // The machine, not a timeline: that is what gives it an idle of its own
-    // rather than a loop being driven from outside.
+    // rather than a loop driven from outside.
     stateMachines: "State Machine 1",
     autoplay: true,
+    // The same fit and alignment the still was rendered at, which is what lets
+    // it sit on top without a seam.
     layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
   });
 
-  // Sits exactly over the still, so the swap is invisible.
   return <RiveComponent className="absolute inset-0 size-full" />;
 }
 
@@ -71,12 +77,8 @@ function Live() {
  * Whether the reader has asked for less movement.
  *
  * Subscribed to rather than read once in an effect: it is external state that
- * can change while the page is open, and `useSyncExternalStore` is the thing
- * built for external state. Reading it with `setState` in an effect also costs a
- * second render on every visit, for a value that is known before the first.
- *
- * The server snapshot is `false`, so the markup matches a machine that has not
- * expressed a preference; the animation only ever mounts on the client anyway.
+ * can change while the page is open, and reading it with `setState` in an effect
+ * also costs a second render on every visit for a value known before the first.
  */
 function usePrefersReducedMotion() {
   return useSyncExternalStore(
