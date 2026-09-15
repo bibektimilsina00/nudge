@@ -622,11 +622,52 @@ instrument was wrong.
 
 *Done when:* the prompt names what is here rather than the model guessing. **Done.**
 
-**3.2 Ask for what is missing, once.**
+**3.2 Ask for what is missing, once.** *Built.*
 
-In plain language, at the moment it matters: *"I could do that if you install X."*
-Not a setup wizard, not a checklist. The alternative is a person who never
-discovers that their machine is missing the one thing that would have worked.
+The defect this turned out to be about: **two different failures were wearing one
+message.** Reaching for something not on the allow-list said *"X is not one of the
+commands I may run -- I can only read, not change anything"*, whether X was
+forbidden or simply absent. Those ask opposite things of the person listening --
+one is a permission they can grant in the menu bar, the other is software they
+have to install -- and being told the wrong one sends them looking in the wrong
+place.
+
+Now:
+
+    zzconvert   →  "zzconvert is not on this Mac"
+    ffmpeg      →  "ffmpeg is not on this Mac. I can do that once it is --
+                    `brew install ffmpeg`"
+    cp          →  "cp is here, but running it is not something I have been
+                    allowed to do. Someone can change that under "Allowed to"
+                    in the menu bar."
+
+*Not installed* is checked first, because it is the more useful answer when both
+are true: granting a shell does not conjure `ffmpeg`.
+
+The same sentence covers the case the allow-list cannot see. `docker` is allowed
+and plenty of Macs do not have it, so the shell answers 127 and `sh: docker:
+command not found` reaches the model. That is now translated at the point it
+happens.
+
+**Install advice only where it is not a guess.** About twenty names have one; the
+rest are named without it. A wrong instruction is worse than none -- somebody runs
+it, it fails, and now they have a broken command and a reason to distrust the next
+thing they are told. And `brew install x` is only offered when Homebrew is
+actually here to run it. Being told *this machine does not have it* is the useful
+half on its own.
+
+The prompt says to pass it on: name the thing, give the command if there was one,
+offer what is possible without it -- and **never quietly substitute a different
+program**, which is how a person never finds out that one command would have
+worked.
+
+*On "once":* read as *at the moment it matters rather than up front*. There is no
+suppression table, because nothing here is proactive -- a sentence is only ever
+produced because something was actually reached for, and the history carries what
+was already said. A checklist at startup is the thing being avoided, and this is
+its opposite.
+
+*Done when:* a person is told what is missing, in words they can act on. **Done.**
 
 **3.3 Credentials.**
 

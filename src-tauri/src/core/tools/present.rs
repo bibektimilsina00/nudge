@@ -44,6 +44,54 @@ const INTERESTING: &[(&str, &[&str])] = &[
     ("this Mac", &["osascript", "shortcuts", "pbcopy", "pbpaste", "mdfind", "brew"]),
 ];
 
+/// How to install something, for the ones we can honestly say.
+///
+/// Only where the answer is not a guess. A wrong instruction is worse than
+/// none -- somebody runs it, it fails, and now they have a broken command and a
+/// reason to distrust the next thing they are told. Anything not here is named
+/// without advice, which is still the useful half: **the machine does not have
+/// this** is what they did not know.
+const HOW: &[(&str, &str)] = &[
+    ("gh", "brew install gh"),
+    ("glab", "brew install glab"),
+    ("jj", "brew install jj"),
+    ("just", "brew install just"),
+    ("kubectl", "brew install kubectl"),
+    ("rg", "brew install ripgrep"),
+    ("fd", "brew install fd"),
+    ("jq", "brew install jq"),
+    ("yq", "brew install yq"),
+    ("ffmpeg", "brew install ffmpeg"),
+    ("magick", "brew install imagemagick"),
+    ("pandoc", "brew install pandoc"),
+    ("qpdf", "brew install qpdf"),
+    ("wget", "brew install wget"),
+    ("sqlite3", "brew install sqlite"),
+    ("docker", "brew install --cask docker"),
+    ("pnpm", "npm install -g pnpm"),
+    ("yarn", "npm install -g yarn"),
+    ("bun", "brew install oven-sh/bun/bun"),
+    ("deno", "brew install deno"),
+    ("uv", "brew install uv"),
+];
+
+/// Say that something is not here, and how to change that if we know.
+///
+/// The sentence a person can act on, at the moment it would have helped -- which
+/// is the only moment it is worth saying. Nothing here is proactive: this is only
+/// ever reached because something was actually reached for.
+pub fn missing(program: &str) -> String {
+    let install = HOW.iter().find(|(n, _)| *n == program).map(|(_, h)| *h);
+    match install {
+        Some(how) if installed("brew") || !how.starts_with("brew") => {
+            format!("{program} is not on this Mac. I can do that once it is -- `{how}`")
+        }
+        // Advice that cannot be followed is not advice. Without Homebrew, "brew
+        // install x" is a second thing to go and find out about.
+        _ => format!("{program} is not on this Mac"),
+    }
+}
+
 /// Is this on the PATH?
 ///
 /// Walks `PATH` rather than running `which`. Thirty names would be thirty forks
@@ -142,6 +190,22 @@ pub fn line(anything: bool) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_missing_program_is_named_and_the_fix_offered() {
+        let said = missing("ffmpeg");
+        assert!(said.contains("ffmpeg is not on this Mac"));
+        // Only claimed when Homebrew is actually here to run it.
+        assert_eq!(said.contains("brew install ffmpeg"), installed("brew"));
+    }
+
+    /// Advice we do not have is left out rather than invented. Being told the
+    /// machine lacks something is the useful half on its own.
+    #[test]
+    fn something_we_cannot_advise_on_is_still_named() {
+        let said = missing("some-private-cli");
+        assert_eq!(said, "some-private-cli is not on this Mac");
+    }
 
     /// Not an assertion -- a look at what this actually says on this machine.
     ///

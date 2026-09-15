@@ -684,6 +684,16 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Anything other than GET or HEAD needs to have been allowed, and if it \
          has not been you will be told so plainly -- say what you would have done \
          and that it needs allowing, rather than trying it another way.\n\n\
+         ## When the machine does not have it\n\n\
+         If something is not installed you will be told so, by name, at the \
+         moment you reach for it -- often with the one command that would fix it. \
+         **Pass that on.** Say plainly that this Mac does not have the thing, give \
+         the install command if you were given one, and offer whatever you can do \
+         without it.\n\
+         Say it once, when it comes up. Do not open with an inventory of what is \
+         missing, do not ask them to set anything up before you have tried, and do \
+         not quietly substitute a different program -- a person who is never told \
+         what was missing never finds out that one command would have worked.\n\n\
          ## Choosing where to act\n\n\
          Use the cheapest thing that can ACTUALLY answer, in this order: what the \
          system reports above; {ordering}a command; a fetch; and last the screen. \

@@ -188,8 +188,22 @@ pub fn refuse(command: &str, anything: bool) -> Option<String> {
         // A path, not a name: `/bin/rm` must not pass as `rm` would not.
         let name = program.rsplit('/').next().unwrap_or(program);
         if !ALLOWED.contains(&name) {
+            // Two different failures wearing one message, until now. "I may not
+            // run that" and "that is not here" ask opposite things of the person
+            // listening: one is a permission they can grant in the menu bar, the
+            // other is software they have to install, and being told the wrong
+            // one sends them looking in the wrong place.
+            //
+            // Checked in this order because *not installed* is the more useful
+            // answer when both are true. Granting a shell does not conjure
+            // `ffmpeg`.
+            if !super::present::installed(name) {
+                return Some(super::present::missing(name));
+            }
             return Some(format!(
-                "{name} is not one of the commands I may run -- I can only read, not change anything"
+                "{name} is here, but running it is not something I have been \
+                 allowed to do -- I can only read. Someone can change that under \
+                 \u{201c}Allowed to\u{201d} in the menu bar."
             ));
         }
         if let Some((_, verbs)) = SUBCOMMANDS.iter().find(|(p, _)| *p == name) {
@@ -238,6 +252,26 @@ pub fn run(workspace: &std::path::Path, command: &str, anything: bool) -> Result
     }
 
     let out = child.wait_with_output()?;
+
+    // 127 is the shell's way of saying it could not find the program. It reaches
+    // here for things on the allow-list that are not installed -- `docker` is
+    // allowed and plenty of Macs do not have it -- and `sh: docker: command not
+    // found` is a worse answer than saying so plainly.
+    if out.status.code() == Some(127) {
+        let program = command
+            .trim()
+            .split('|')
+            .next()
+            .unwrap_or("")
+            .split_whitespace()
+            .next()
+            .unwrap_or("");
+        let name = program.rsplit('/').next().unwrap_or(program);
+        if !name.is_empty() && !super::present::installed(name) {
+            return Err(Error::Click(super::present::missing(name)));
+        }
+    }
+
     let mut text = String::from_utf8_lossy(&out.stdout).to_string();
     if text.trim().is_empty() {
         text = String::from_utf8_lossy(&out.stderr).to_string();
@@ -254,6 +288,7 @@ pub fn run(workspace: &std::path::Path, command: &str, anything: bool) -> Result
 
 #[cfg(test)]
 mod tests {
+    use std::ops::Not;
     use super::*;
 
     #[test]
@@ -363,6 +398,49 @@ mod tests {
                 "{command} was allowed with a full grant"
             );
         }
+    }
+
+    /// 3.2: the sentence a person can act on, at the moment it would have helped.
+    #[test]
+    fn a_missing_program_says_so_rather_than_saying_it_is_forbidden() {
+        // A name no machine has, so the test says the same thing everywhere --
+        // the first version used `ffmpeg`, which is installed here.
+        let why = refuse("zzconvert -i a.mov b.mp4", false).unwrap();
+        assert!(why.contains("not on this Mac"), "got: {why}");
+        assert!(!why.contains("allowed"), "wrong half of the story: {why}");
+
+        // A full shell does not conjure it. The attempt is permitted and fails
+        // honestly instead, where `run` turns the shell's 127 into the same
+        // sentence.
+        assert!(refuse("zzconvert -i a.mov b.mp4", true).is_none());
+    }
+
+    /// Allowed, but not installed, which the allow-list cannot catch: `docker` is
+    /// on it and plenty of Macs do not have Docker. The shell answers 127 and
+    /// `sh: docker: command not found` is a worse sentence than ours.
+    #[test]
+    fn a_command_that_is_allowed_but_absent_is_explained_not_echoed() {
+        let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        // `find` is allowed and present, so this exercises the 127 path only if
+        // something allowed is genuinely missing on this machine. Pick whichever.
+        let absent = ["docker", "java", "php", "ruby", "go"]
+            .into_iter()
+            .find(|n| super::super::present::installed(n).not());
+        let Some(absent) = absent else {
+            // Everything on the list is installed here; nothing to prove.
+            return;
+        };
+        let err = run(here, absent, true).unwrap_err().to_string();
+        assert!(err.contains("not on this Mac"), "got: {err}");
+    }
+
+    /// The other half: here, but not permitted -- which is fixable in the menu.
+    #[test]
+    fn a_forbidden_program_that_exists_points_at_the_menu() {
+        // `cp` is on this Mac and is not on the allow-list.
+        let why = refuse("cp a b", false).unwrap();
+        assert!(why.contains("is here"), "got: {why}");
+        assert!(why.contains("Allowed to"), "it should say where to change it: {why}");
     }
 
     #[test]
