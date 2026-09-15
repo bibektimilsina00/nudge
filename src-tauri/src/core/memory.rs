@@ -144,15 +144,15 @@ impl Memory {
             return String::new();
         }
         format!(
-            "## What {app} turned out to be like\\n\\n\
+            "## What {app} turned out to be like\n\n\
              Learned here, by getting it wrong once. Treat it as true unless the \
              screen says otherwise -- the screen is what is happening now and this \
-             is only what happened before.\\n{}\\n\\n",
+             is only what happened before.\n{}\n\n",
             notes
                 .iter()
                 .map(|n| format!("- {n}"))
                 .collect::<Vec<_>>()
-                .join("\\n")
+                .join("\n")
         )
     }
 

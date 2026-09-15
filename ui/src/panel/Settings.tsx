@@ -24,10 +24,12 @@ export function Settings({
   docked,
   onDock,
   onIntegrations,
+  onSkills,
 }: {
   docked: boolean;
   onDock: (v: boolean) => void;
   onIntegrations: () => void;
+  onSkills: () => void;
 }) {
   const [voice, setVoice] = useState<VoiceMode>("system");
   const [mic, setMic] = useState("…");
@@ -62,7 +64,7 @@ export function Settings({
       <Section title="Connections">
         {/* Wired: opens the browser. */}
         <Row icon={<I.Grid />} label="Integrations" chevron onClick={onIntegrations} />
-        <Row icon={<I.Bolt />} label="Skills" sub="Power-ups that attach to Nudge" chevron />
+        <Row icon={<I.Bolt />} label="Skills" sub="Power-ups that attach to Nudge" chevron onClick={onSkills} />
       </Section>
 
       <Section title="Customization">

@@ -115,3 +115,44 @@ pub fn open_artifact(app: AppHandle, path: String) -> Result<()> {
 pub fn fit_panel(app: AppHandle, height: f64) {
     crate::app::ui::panel::fit(&app, height);
 }
+
+/// Every skill installed, for the skills window.
+#[tauri::command]
+pub fn skills() -> Vec<crate::core::skills::Skill> {
+    crate::core::skills::installed()
+}
+
+/// Open the skills folder in Finder, making it if it is not there yet.
+///
+/// This is the whole of "load a skill": drop a folder in. No importer, no
+/// archive format, no registry -- the unit is a directory with a `SKILL.md`, which
+/// is a thing people already have and already know how to copy.
+#[tauri::command]
+pub fn open_skills_folder() -> Result<()> {
+    let Some(dir) = crate::core::skills::folder() else {
+        return Err(crate::error::Error::Config("no home directory".into()));
+    };
+    std::fs::create_dir_all(&dir)?;
+    // A folder somebody opens for the first time and finds empty teaches nothing.
+    let example = dir.join("example-skill/SKILL.md");
+    if crate::core::skills::installed().is_empty() && !example.exists() {
+        if let Some(parent) = example.parent() {
+            std::fs::create_dir_all(parent)?;
+        }
+        std::fs::write(&example, EXAMPLE)?;
+    }
+    std::process::Command::new("open").arg(&dir).spawn()?;
+    Ok(())
+}
+
+/// Written once, into an empty folder, so the format is obvious from the folder
+/// rather than from documentation nobody opened.
+const EXAMPLE: &str = "---\n\
+    name: Example skill\n\
+    description: Delete this folder once you have written a real one.\n\
+    ---\n\n\
+    Write the steps here, the way you would tell a capable person who cannot see\n\
+    your screen. Nudge reads the name and the description above on every turn, and\n\
+    only reads this part when it decides this is the skill you meant.\n\n\
+    A skill is just a folder with a SKILL.md in it, which is the same shape Claude\n\
+    Code and other agents use -- so one you already have will work here.\n";

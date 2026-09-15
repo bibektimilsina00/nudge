@@ -173,6 +173,12 @@ pub enum Step {
     /// Just talking. Not every hotkey press is a task -- sometimes it is a
     /// question, a greeting, or someone bored at 2am.
     Reply { say: String },
+    /// Open a skill and follow what it says.
+    ///
+    /// Only the name and one line reach the prompt; the instructions arrive here,
+    /// when one has actually been chosen. Twenty skills is then a couple of
+    /// hundred tokens a turn rather than twenty thousand.
+    Skill { name: String, say: String },
     /// Keep a note about an application, for next time.
     ///
     /// `about` is the application the note concerns -- normally the one in front,
@@ -303,6 +309,8 @@ impl Step {
             // Learns nothing from outside; it writes down what was already
             // learned from something that did.
             Step::Remember { .. } => false,
+            // Brings back instructions somebody wrote, which is a source.
+            Step::Skill { .. } => true,
             // Changes the world or says something about it, and learns nothing.
             Step::Point { .. }
             | Step::Done { .. }
@@ -352,6 +360,7 @@ impl Step {
             | Step::Request { say, .. }
             | Step::Delegate { say, .. }
             | Step::Remember { say, .. }
+            | Step::Skill { say, .. }
             | Step::Reply { say } => say,
         }
     }
@@ -446,6 +455,7 @@ impl Step {
             // Named by the work, never by who did it.
             Step::Delegate { task, .. } => format!("Handed over: {}", short(task)),
             Step::Remember { about, note, .. } => format!("Noted about {about}: {}", short(note)),
+            Step::Skill { name, .. } => format!("Opened the {name:?} skill"),
             Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
             Step::Show { path, .. } => format!("Showed {path}"),
             Step::Workspace { path, .. } => format!("Working in {path} now"),
@@ -527,6 +537,8 @@ pub struct Ask<'a> {
     /// the two as one list believes it has already made progress on something it
     /// has not started.
     pub earlier: &'a [String],
+    /// The skills installed, as names and one line each. Never the instructions.
+    pub skills: String,
     /// Whether the shell may run anything, which decides which installed tools
     /// are worth naming -- see [`crate::core::tools::present`].
     pub shell: bool,
@@ -600,6 +612,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
     let reach = &ask.reach;
     let memory = &ask.memory;
+    let skills = &ask.skills;
     // Labelled as over, so "that" and "it" resolve without any of it reading as
     // work already done towards the goal above.
     let earlier = match ask.earlier.is_empty() {
@@ -713,7 +726,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Paths are relative to it. If you need to know what is in there, look \
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
-         {facts}{here}{memory}{earlier}{controls}{tools}{reach}\
+         {facts}{here}{memory}{earlier}{skills}{controls}{tools}{reach}\
          Steps already completed:\n{history}{stalled}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
@@ -1181,6 +1194,10 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
         }),
         "unsure" => Some(Step::Unsure { say }),
         "reply" => Some(Step::Reply { say }),
+        "skill" => Some(Step::Skill {
+            name: v["name"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
         "remember" => Some(Step::Remember {
             about: v["about"].as_str().unwrap_or_default().to_string(),
             note: v["note"].as_str().unwrap_or_default().to_string(),
@@ -1455,6 +1472,7 @@ mod tests {
             shell: false,
             memory: String::new(),
             earlier: &[],
+            skills: String::new(),
             workspace: "/tmp/workspace".into(),
         }
     }
@@ -1587,6 +1605,37 @@ mod tests {
 
     /// Each tool is described once. Saying the same thing twice in one prompt is
     /// how two versions of a rule drift apart.
+    /// No section may contain a literal backslash-n.
+    ///
+    /// Written after making the same mistake twice in one sitting: a prompt
+    /// fragment built with `\\n` in the source produces the two characters rather
+    /// than a newline, and the whole section arrives as one unbroken line reading
+    /// `## Skills\\n\\nThings this person...`. It still half-works, which is why
+    /// nothing catches it -- the model copes and nobody looks at the prompt.
+    #[test]
+    fn no_section_has_escaped_newlines_in_it() {
+        let done = ["Opened Safari".to_string()];
+        let mut a = ask("do something", &done, false);
+        let tools = [crate::core::tools::mcp::Tool {
+            server: "files".into(),
+            name: "read".into(),
+            about: "Reads a file.".into(),
+            schema: serde_json::json!({}),
+        }];
+        let before = ["They had asked: x".to_string()];
+        a.tools = &tools;
+        a.earlier = &before;
+        a.memory = crate::core::memory::Memory::default().prompt(None);
+        a.skills = crate::core::skills::prompt();
+        a.reach = crate::core::reach::Reach::default().prompt();
+
+        let p = prompt(&a);
+        assert!(
+            !p.contains("\\n"),
+            "a prompt section contains a literal backslash-n"
+        );
+    }
+
     #[test]
     fn nothing_is_said_twice() {
         let mut a = ask("x", &[], false);

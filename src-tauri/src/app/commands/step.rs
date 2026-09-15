@@ -281,6 +281,28 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
             .record_run(format!("search {query:?}"), found);
         crate::app::agent::publish(app);
     }
+    if let Step::Skill { name, .. } = step {
+        match crate::core::skills::open(name) {
+            Some(how) => {
+                eprintln!("skill {name:?} -> {} chars", how.len());
+                app.state::<Nudge>()
+                    .note(format!("The {name:?} skill says:\n{how}"));
+            }
+            // Named rather than ignored, and with the list, because the usual
+            // cause is a name half-remembered from the summary line.
+            None => {
+                let have = crate::core::skills::installed()
+                    .iter()
+                    .map(|s| s.name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ");
+                app.state::<Nudge>().note(match have.is_empty() {
+                    true => format!("There is no skill called {name:?}; none are installed."),
+                    false => format!("There is no skill called {name:?}. There is: {have}."),
+                });
+            }
+        }
+    }
     if let Step::Remember { about, note, .. } = step {
         let said = app.state::<Nudge>().memory.learn(about, note);
         app.state::<Nudge>().note(said);

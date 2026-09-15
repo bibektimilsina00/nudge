@@ -616,6 +616,7 @@ impl Nudge {
             shell: self.reach.has(crate::core::reach::Grant::Shell),
             memory,
             earlier: &earlier,
+            skills: crate::core::skills::prompt(),
             workspace: self.workspace().display().to_string(),
         };
         // When the system has already named exactly the control that was asked

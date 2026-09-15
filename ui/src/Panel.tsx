@@ -5,6 +5,7 @@ import { Companion } from "./components/Companion";
 import { Agents } from "./panel/Agents";
 import { StatusPill, type Status } from "./panel/Status";
 import { Integrations } from "./panel/Integrations";
+import { Skills } from "./panel/Skills";
 import { Settings } from "./panel/Settings";
 
 /**
@@ -42,18 +43,29 @@ const HEIGHT = {
   agents: "h-[320px]",
   settings: "h-[640px]",
   integrations: "h-[640px]",
+  // The same as the other browsers. A list that grows as folders are added needs
+  // the room whether or not it is using it today.
+  skills: "h-[640px]",
 } as const;
 
 export default function Panel() {
   const [open, setOpen] = useState(false);
   // Three places to be, so a name rather than a pile of booleans that can all be
   // true at once.
-  const [view, setView] = useState<"home" | "agents" | "settings" | "integrations">("home");
+  const [view, setView] = useState<"home" | "agents" | "settings" | "integrations" | "skills">("home");
   // Integrations opens from two places, so "back" has to mean the one you left
   // rather than a fixed destination -- entering from Home and landing in Settings
   // is the kind of small wrongness that makes a panel feel untrustworthy.
   const [cameFrom, setCameFrom] = useState<"home" | "settings">("home");
   const [status, setStatus] = useState<Status>("idle");
+
+  // Both entry points -- the tile on the home page and the row in settings --
+  // come back to where they were opened from, which is the only reason `cameFrom`
+  // exists.
+  const openSkills = (from: "home" | "settings") => {
+    setCameFrom(from);
+    setView("skills");
+  };
 
   const openIntegrations = (from: "home" | "settings") => {
     setCameFrom(from);
@@ -173,11 +185,14 @@ export default function Panel() {
             <Agents />
           ) : view === "integrations" ? (
             <Integrations onBack={() => setView(cameFrom)} />
+          ) : view === "skills" ? (
+            <Skills onBack={() => setView(cameFrom)} />
           ) : view === "settings" ? (
             <Settings
               docked={docked}
               onDock={dock}
               onIntegrations={() => openIntegrations("settings")}
+              onSkills={() => openSkills("settings")}
             />
           ) : (
           <>
@@ -187,7 +202,11 @@ export default function Panel() {
               <p className="mt-0.5 text-[10.5px] text-white/40">
                 Skills give Nudge superpowers
               </p>
-              <button className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-[#272727] text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-[#303030]">
+              <button
+                onClick={() => openSkills("home")}
+                aria-label="Add skills"
+                className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-[#272727] text-[20px] font-light text-white/70 transition-colors duration-150 hover:bg-[#303030]"
+              >
                 +
               </button>
             </section>

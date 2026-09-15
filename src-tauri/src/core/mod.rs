@@ -17,6 +17,7 @@ pub mod provider;
 pub mod reach;
 pub mod run;
 pub mod screen;
+pub mod skills;
 pub mod tools;
 pub mod voice;
 

@@ -155,6 +155,7 @@ where
             reach: String::new(),
             memory: String::new(),
             earlier: &[],
+            skills: String::new(),
             shell: false,
             workspace: String::new(),
         };
@@ -262,6 +263,7 @@ where
             reach: reach.to_string(),
             memory: String::new(),
             earlier: &[],
+            skills: String::new(),
             shell,
             workspace: workspace.display().to_string(),
         };

@@ -926,11 +926,45 @@ has not yet -- nothing has been learned in anger. Promoting a remembered sequenc
 into a named skill while the thing it is promoted from is unproven would be
 building the second floor first.
 
-**4.2 Skills, if memory proves out.** *Waiting, on purpose.*
+**4.2 Skills.** *Built -- and not the shape this originally described.*
 
-A remembered sequence that worked, replayable by name. Deliberately after memory,
-because a skill is a memory that has been promoted -- and nothing has been
-remembered in anger yet. See 4.1.
+The plan said *a remembered sequence that worked, replayable by name*: a skill as
+a promoted memory. That is still a good idea and it is not what got built, because
+it has the dependency backwards. A promoted memory needs memories worth promoting,
+and it gives somebody nothing on the day they install Nudge.
+
+**A skill is a folder with a `SKILL.md` in it** -- a name, a line about what it
+does, and the steps. Deliberately the shape the rest of the agent world already
+settled on, which means a skill somebody already wrote works here unchanged, and
+one written here is not trapped. Inventing a format would have bought nothing and
+cost every skill that already exists.
+
+    ~/.config/nudge/skills/weekly-report/SKILL.md
+
+**Only the description is ever loaded.** The prompt carries each skill's name and
+one line, never the instructions; those arrive through a `skill` step when one is
+actually chosen. Twenty skills is a couple of hundred tokens a turn instead of
+twenty thousand -- the same progressive disclosure the tool list uses, for the same
+reason: Nudge pays for its context on every hotkey press.
+
+**Installing one is dropping a folder in.** No importer, no archive format, no
+registry. The window lists what is there, re-reading on focus so a folder added a
+moment ago is simply present, and its only button opens the folder -- writing an
+example `SKILL.md` into it the first time, so the format is obvious from the folder
+rather than from documentation nobody opened.
+
+Reached from both places that already said the word: the `+` on the home page and
+the Skills row in settings, each returning to where it was opened from.
+
+*Found while verifying:* the prompt section was arriving as `## Skills\n\nThings
+this person…` -- literal backslash-n rather than newlines, from `\\n` in the source.
+The same mistake was in the memory section. Both fixed, and there is now a test
+that fails if any assembled prompt contains an escaped newline, because the failure
+half-works: the model copes, and nobody reads the prompt.
+
+*Still open, and now genuinely 4.2's original idea:* promoting something Nudge
+learned into a skill of its own. That still waits on 4.1 producing a memory worth
+promoting.
 
 **4.3 What it knows about you.**
 
