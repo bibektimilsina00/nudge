@@ -116,7 +116,9 @@ pub fn on_key(app: &AppHandle, state: ShortcutState) {
                 if let Err(e) = ask_by_voice(app.clone(), rec).await {
                     // Whatever went wrong, the notch must not be left mid-state.
                     app.emit("status", "idle").ok();
-                    app.emit("error", e.to_string()).ok();
+                    eprintln!("listening failed: {e}");
+                    let goal = app.state::<Nudge>().goal();
+                    app.emit("error", crate::error::plainly(&goal, &e)).ok();
                 }
             });
         }

@@ -113,7 +113,12 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
                 Err(e) => Err(e),
             };
             if let Err(e) = done {
-                app.emit("error", e.to_string()).ok();
+                // Two audiences, two sentences. The person gets what it means for
+                // what they asked; the log keeps the original, which is the one
+                // worth having when somebody actually looks.
+                let goal = app.state::<Nudge>().goal();
+                eprintln!("step failed: {e}");
+                app.emit("error", crate::error::plainly(&goal, &e)).ok();
             }
         }
     }

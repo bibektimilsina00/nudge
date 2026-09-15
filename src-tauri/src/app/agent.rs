@@ -283,6 +283,16 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         // writing it to a log the user cannot see is not answering them.
         //
         // Said before acting, because acting changes the screen and an
+        // Before it says anything at all.
+        //
+        // The two checks below guard *acting*, and a terminal step never reaches
+        // them -- it speaks and returns first. So a stop pressed during the model
+        // call let the answer through: "I have submitted the task" for work that
+        // had just been cancelled. Silence is the right response to being stopped.
+        if app.state::<Agents>().stopping() {
+            return State::Stopped;
+        }
+
         // explanation arriving after that is just noise.
         if !matches!(agent::outcome(&step), Some(State::Waiting { .. })) {
             commands::speak(app, step.say());

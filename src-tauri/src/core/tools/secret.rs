@@ -126,6 +126,60 @@ pub fn sign_in(program: &str) -> String {
     }
 }
 
+/// Take the secrets out of text before it is shown, spoken or written down.
+///
+/// The one that made this necessary: `reqwest` puts the whole URL in its error
+/// message, and the provider's URL carries the API key in a query parameter. One
+/// rate limit and the key is in `/tmp/nudge.log`, in the error bubble on screen,
+/// and in whatever the person pastes into a bug report. It reached a terminal
+/// once already.
+///
+/// Markers rather than shapes. Guessing which long strings are secret means
+/// deciding how long is long, and a rule like that redacts a commit hash and
+/// misses a short token. What is reliable is the word in front: `key=`,
+/// `Bearer `, `token=`. Everything up to the next thing that cannot be part of a
+/// credential is replaced.
+pub fn redact(text: &str) -> String {
+    const MARKERS: &[&str] = &[
+        "key=",
+        "apikey=",
+        "api_key=",
+        "access_token=",
+        "token=",
+        "password=",
+        "secret=",
+        "bearer ",
+        "basic ",
+    ];
+    // Deliberately not "authorization: ", which is followed by the *scheme* and
+    // only then the credential -- redacting from there cut at "Bearer" and left
+    // the token standing. The scheme word is the reliable marker.
+    let mut out = String::with_capacity(text.len());
+    let mut rest = text;
+    loop {
+        let lower = rest.to_lowercase();
+        // The earliest marker, so overlapping ones cannot step over each other.
+        let Some((at, marker)) = MARKERS
+            .iter()
+            .filter_map(|m| lower.find(m).map(|i| (i, *m)))
+            .min_by_key(|(i, _)| *i)
+        else {
+            out.push_str(rest);
+            return out;
+        };
+        let after = at + marker.len();
+        out.push_str(&rest[..after]);
+        out.push('\u{2026}');
+        // A credential runs until something that cannot be part of one. `&` ends
+        // a query parameter, `)` ends reqwest\'s bracketed URL, whitespace ends a
+        // header value.
+        let end = rest[after..]
+            .find(|c: char| c.is_whitespace() || matches!(c, '&' | ')' | '"' | '\'' | ',' | ';'))
+            .map_or(rest.len(), |i| after + i);
+        rest = &rest[end..];
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -184,6 +238,32 @@ mod tests {
         ] {
             assert!(!unauthenticated(said), "wrongly blamed auth: {said}");
         }
+    }
+
+    /// The leak this exists for, in the exact shape it arrived in.
+    #[test]
+    fn an_api_key_in_a_url_does_not_survive() {
+        let said = "HTTP status client error (429 Too Many Requests) for url \
+                    (https://generativelanguage.googleapis.com/v1beta/models/\
+                     gemini-3.6-flash:generateContent?key=AQ.Ab8RN6I4ct_MOTlWxvz0)";
+        let clean = redact(said);
+        assert!(!clean.contains("AQ.Ab8RN6"), "the key survived: {clean}");
+        // And what is left still says what went wrong and where.
+        assert!(clean.contains("429"));
+        assert!(clean.contains("generativelanguage.googleapis.com"));
+    }
+
+    #[test]
+    fn it_takes_the_value_and_leaves_the_sentence() {
+        assert_eq!(
+            redact("Authorization: Bearer ghp_abc123 was refused"),
+            "Authorization: Bearer \u{2026} was refused"
+        );
+        assert_eq!(redact("?key=abc&model=flash"), "?key=\u{2026}&model=flash");
+        // More than one, and text with none at all.
+        assert!(!redact("token=aaa and key=bbb").contains("aaa"));
+        assert!(!redact("token=aaa and key=bbb").contains("bbb"));
+        assert_eq!(redact("nothing secret here"), "nothing secret here");
     }
 
     #[test]

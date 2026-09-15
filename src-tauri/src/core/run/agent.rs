@@ -228,8 +228,20 @@ impl Agents {
         });
     }
 
+    /// Stopped is final. Nothing moves an agent out of it.
+    ///
+    /// The failure this is for: Escape marked an agent stopped while a model call
+    /// was already in flight, the call came back `Done`, and the loop wrote that
+    /// over the top -- so a task somebody had just cancelled announced *"I have
+    /// submitted the task"* and was recorded as finished. Two seconds of
+    /// in-flight work is enough for that to happen, which means it is not a race
+    /// worth being careful about; it is one the type has to refuse.
     pub fn set_state(&self, id: u64, state: State) {
-        self.edit(id, |a| a.state = state);
+        self.edit(id, |a| {
+            if !matches!(a.state, State::Stopped) {
+                a.state = state;
+            }
+        });
     }
 
     /// Answer a question and let the loop continue.
@@ -697,6 +709,17 @@ mod tests {
         a.stop(id);
         assert!(a.stopping(), "the loop has to see this between steps");
         assert_eq!(a.list()[0].state, State::Stopped);
+    }
+
+    /// Cancelling has to mean cancelled, including against work already running.
+    #[test]
+    fn nothing_moves_an_agent_out_of_stopped() {
+        let a = agents();
+        let id = a.start("g".into(), "t".into(), "s".into(), false).unwrap();
+        a.stop(id);
+        // The model call that was in flight when Escape was pressed comes back.
+        a.set_state(id, State::Done);
+        assert_eq!(a.list()[0].state, State::Stopped, "a cancelled task reported success");
     }
 
     #[test]

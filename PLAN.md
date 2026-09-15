@@ -751,12 +751,49 @@ here logs anybody in; it tells them, precisely, what to run. That is the honest
 half, and the other half wants a person at the keyboard anyway -- every one of
 these logins ends in a browser.
 
-**3.4 Failures that are about the task.**
+**3.4 Failures that are about the task.** *Built.*
 
-When the thing underneath breaks, nobody sees it break; they see Nudge fail. A
-CLI's stack trace passed up unedited is a bug report about a program the person
-does not know is running. Errors have to be rewritten into something about what
-they asked for, with the detail still available to anyone who looks.
+**A credential was leaking through an error message.** `reqwest` puts the whole
+URL in its text and the provider's URL carries the API key, so one rate limit put
+the key in `/tmp/nudge.log`, in the error bubble on screen, and in whatever got
+pasted into a bug report. It reached a terminal once already this session.
+
+Fixed at the root -- `Error::Http` redacts where it is turned into text -- so every
+path is covered at once, including the ones written next year. Markers rather than
+shapes: `key=`, `Bearer `, `token=`. Guessing which long strings are secret means
+deciding how long is long, which redacts a commit hash and misses a short token.
+(`Authorization: ` is deliberately *not* a marker: it is followed by the scheme,
+so cutting there left the token standing. The scheme word is the reliable one.)
+
+**`error::plainly`** turns what is left into a sentence about the task. Nobody
+using Nudge knows `reqwest` exists, or which of the programs underneath just
+failed. *"That file is not there while trying to open my shopping list"*, not
+`No such file or directory (os error 2)`. Nudge's own refusals pass through
+untouched, because they are already sentences with the fix in them. The original
+still goes to the log and to the model, which is the audience it was written for.
+
+**And a cancelled task was announcing success.** From the shakedown: Escape
+stopped an agent, and it then said *"I have submitted the task to add bread to
+your shopping list"*. The cause is a plain ordering bug -- a terminal step speaks
+and returns *before* the stop check, which only ever guarded acting:
+
+    model returns Done → speak(…) → set_state(Done) → return
+                                 ↑ the stop check was below this
+
+Two fixes. The check moved above the speaking, and `set_state` now refuses to move
+an agent out of `Stopped` at all. Two seconds of in-flight model call is enough for
+that race, which makes it not a race worth being careful about but one the type has
+to refuse.
+
+The prompt carries the rest: say what an error means for what they asked, keep the
+original to yourself, and **never report finishing something you did not finish** --
+a wrong "done" costs more than a failure, because a failure is something a person
+can act on.
+
+*Honestly unverified:* the live stop. A synthetic Escape from System Events is not
+seen by `escape_down`, which polls the physical key, so the race could not be
+reproduced from here. The guard has a unit test; the ordering change is reasoned,
+not observed.
 
 **3.5 Delegation stops being visible.**
 
