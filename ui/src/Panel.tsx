@@ -23,6 +23,12 @@ import { Settings } from "./panel/Settings";
  * display. Only the bottom corners are rounded, because the illusion is that the
  * notch got wider.
  */
+const SHORTCUTS: [string, string[]][] = [
+  ["Talk", ["⌃ control", "⇧ shift", "space"]],
+  ["Next step", ["tap", "⌃⇧ space"]],
+  ["Type", ["tap", "then type"]],
+  ["Stop", ["esc"]],
+];
 
 /**
  * Each view gets the height it needs; the pill is a separate case.
@@ -33,9 +39,8 @@ import { Settings } from "./panel/Settings";
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  // Home holds the work now, so it needs the room the Agents tab used to have --
-  // a running agent, then a grid of what ran earlier.
-  home: "h-[430px]",
+  home: "h-[238px]",
+  agents: "h-[320px]",
   settings: "h-[640px]",
   integrations: "h-[640px]",
   // The same as the other browsers. A list that grows as folders are added needs
@@ -47,7 +52,7 @@ export default function Panel() {
   const [open, setOpen] = useState(false);
   // Three places to be, so a name rather than a pile of booleans that can all be
   // true at once.
-  const [view, setView] = useState<"home" | "settings" | "integrations" | "skills">("home");
+  const [view, setView] = useState<"home" | "agents" | "settings" | "integrations" | "skills">("home");
   // Integrations opens from two places, so "back" has to mean the one you left
   // rather than a fixed destination -- entering from Home and landing in Settings
   // is the kind of small wrongness that makes a panel feel untrustworthy.
@@ -92,7 +97,7 @@ export default function Panel() {
   // tallest view's size, the panel stayed open far below anything visible.
   useEffect(() => {
     const [w, h] = open
-      ? [540, view === "home" ? 430 : 640]
+      ? [540, view === "home" ? 266 : view === "agents" ? 320 : 640]
       : [248, 33];
     void invoke("set_open_size", { w: w + 30, h: h + 12 });
   }, [open, view]);
@@ -154,43 +159,38 @@ export default function Panel() {
             open ? "opacity-100 delay-150" : "pointer-events-none opacity-0",
           ].join(" ")}
         >
-          {/* No tabs.
-           *
-           * There were two -- Home and Agents -- and they split one question
-           * across two places: Home held configuration nobody opens twice, and
-           * the thing that actually changes was behind the other tab. The panel
-           * gets opened to see what Nudge is doing or what it just did, so that
-           * is what it opens onto. Configuration is a gear and a footer, which is
-           * the weight it deserves in something used by voice. */}
-          <header className="flex items-center gap-2 px-3 pt-2.5 pb-1">
-            {/* The companion's perch, which the old home page carried and which
-             * went out with it -- a deletion, not a decision. It belongs here
-             * rather than buried in a list: it is the one control that is about
-             * the thing living on your screen, and it says where that thing is by
-             * showing you whether the socket is full.
-             *
-             * It also gives the header something to do. A window titled with its
-             * own name is telling you what you already know. */}
-            <Perch docked={docked} onToggle={() => dock(!docked)} />
+          <header className="flex items-center gap-1.5 px-3 pt-2.5">
+            <Tab active={view === "home"} icon={<Home />} onClick={() => setView("home")}>
+              Home
+            </Tab>
+            <Tab active={view === "agents"} icon={<Sparkle />} onClick={() => setView("agents")}>
+              Agents
+            </Tab>
             <span className="flex-1" />
-            <span className="text-[10.5px] text-ink-3">hold ⌃ to ask</span>
             <button
+              // Settings toggles against wherever you were, rather than always
+              // dumping you on Home when you leave it.
               onClick={() => setView((v) => (v === "settings" ? "home" : "settings"))}
               aria-label="Settings"
               aria-pressed={view === "settings"}
+              // Same height as the tabs beside it, so the header reads as one row
+              // rather than a row with something floating in it -- and a 30px
+              // target instead of a 15px glyph with padding round it.
               className={[
-                "grid size-[24px] shrink-0 place-items-center rounded-full",
+                "grid size-[26px] shrink-0 place-items-center rounded-full",
                 "transition-colors duration-150",
                 view === "settings"
-                  ? "bg-raise-hi text-ink"
-                  : "text-ink-3 hover:bg-raise hover:text-ink",
+                  ? "bg-raise-hi text-white"
+                  : "text-ink-2 hover:bg-raise hover:text-white/80",
               ].join(" ")}
             >
               <Gear />
             </button>
           </header>
 
-          {view === "integrations" ? (
+          {view === "agents" ? (
+            <Agents />
+          ) : view === "integrations" ? (
             <Integrations onBack={() => setView(cameFrom)} />
           ) : view === "skills" ? (
             <Skills onBack={() => setView(cameFrom)} />
@@ -202,111 +202,68 @@ export default function Panel() {
               onSkills={() => openSkills("settings")}
             />
           ) : (
-            <>
-              <Agents />
-              {/* The one row of configuration this window still carries.
-               *
-               * Everything here is a place somebody goes once and forgets, so it
-               * is a footer rather than a page: reachable, and never the first
-               * thing seen. */}
-              <footer className="flex items-center gap-2 border-t border-line px-3 py-2">
-                <Quick label="Skills" onClick={() => openSkills("home")}>
-                  <path d="M8.8 1.8 3.6 9.1h3.4l-.8 5.1 5.2-7.3H8l.8-5.1Z" />
-                </Quick>
-                <Quick label="Integrations" onClick={() => openIntegrations("home")}>
-                  <path d="M2.5 2.5h4v4h-4zM9.5 2.5h4v4h-4zM2.5 9.5h4v4h-4zM9.5 9.5h4v4h-4z" />
-                </Quick>
-                <span className="flex-1" />
-                <span className="text-[10px] text-ink-3">{"alpha"}</span>
-              </footer>
-            </>
+          <>
+          <div className="grid flex-1 grid-cols-[1fr_auto] gap-4 px-3.5 pt-1.5">
+            <section>
+              <h2 className="text-[13.5px] font-semibold tracking-tight">Add skills</h2>
+              <p className="mt-0.5 text-[10.5px] text-ink-3">
+                Skills give Nudge superpowers
+              </p>
+              <button
+                onClick={() => openSkills("home")}
+                aria-label="Add skills"
+                className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-raise text-[20px] font-light text-ink-2 transition-colors duration-150 hover:bg-raise-hi"
+              >
+                +
+              </button>
+            </section>
+
+            <section className="w-[214px]">
+              <h3 className="mb-1.5 text-[10.5px] text-ink-2">⌘ Shortcuts</h3>
+              <dl className="space-y-[6px]">
+                {SHORTCUTS.map(([name, keys]) => (
+                  <div key={name} className="flex items-center justify-between gap-2">
+                    <dt className="truncate text-[10.5px] text-ink-2">{name}</dt>
+                    <dd className="flex shrink-0 gap-1">
+                      {keys.map((k) => (
+                        <Key key={k}>{k}</Key>
+                      ))}
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </section>
+          </div>
+
+          <div className="px-3.5 pb-3">
+            <p className="mb-1.5 text-[10.5px] text-ink-3">Integrations</p>
+            <div className="flex items-center gap-2">
+              {/* The whole field opens the browser, not just the little square --
+                  a 26px target inside a 34px row that looks pressable is a
+                  needlessly small thing to hit. */}
+              <button
+                onClick={() => openIntegrations("home")}
+                aria-label="Browse integrations"
+                className="flex h-[30px] flex-1 items-center rounded-[10px] bg-raise px-1.5 text-left transition-colors duration-150 hover:bg-raise-hi hairline"
+              >
+                <span className="grid size-[22px] place-items-center rounded-md bg-white/[0.11] text-[13px] font-light text-white/60">
+                  +
+                </span>
+                <span className="ml-2 text-[11px] text-ink-3">Add an integration</span>
+              </button>
+
+              <Perch docked={docked} onToggle={() => dock(!docked)} />
+
+              <button className="grid size-[30px] place-items-center rounded-[10px] bg-raise text-[11px] text-ink-2 transition-colors duration-150 hover:text-ink-2 hairline">
+                i
+              </button>
+            </div>
+          </div>
+          </>
           )}
         </div>
       </div>
     </div>
-  );
-}
-
-
-/**
- * Collapsed state: what sits in the notch.
- *
- * No label -- the point of living in the notch is reading as part of the hardware,
- * and a word beside the Apple menu reads as an app announcing itself.
- */
-function Pill({ open }: { open: boolean }) {
-  return (
-    <div
-      // One height class, not two. Listing `h-[38px]` and `h-0` together lets CSS
-      // source order decide the winner rather than the condition -- the pill kept
-      // its 38px while open, pushed the panel down, and clipped exactly that much
-      // off the bottom.
-      className={[
-        "flex items-center justify-end pr-3 transition-opacity duration-200",
-        open ? "pointer-events-none h-0 opacity-0" : "h-(--notch-h) opacity-100 delay-150",
-      ].join(" ")}
-    >
-      {/* Nudged up and in from the corner: sitting hard against the right edge
-          it reads as clipped by the pill rather than resting in it. */}
-      <div className="-translate-y-[6px] scale-[0.5]">
-        <Companion mode="idle" anchored />
-      </div>
-    </div>
-  );
-}
-
-/**
- * A footer entry. Icon and word, quiet until pointed at.
- *
- * Deliberately not a tab: a tab claims to be one of the places this window is
- * about, and these are places somebody visits once.
- */
-function Quick({
-  label,
-  onClick,
-  children,
-}: {
-  label: string;
-  onClick: () => void;
-  children: ReactNode;
-}) {
-  return (
-    <button
-      onClick={onClick}
-      className="flex items-center gap-1.5 rounded-control px-2 py-1 text-[11px] text-ink-2 transition-colors duration-150 hover:bg-raise hover:text-ink"
-    >
-      <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.5} strokeLinejoin="round">
-        {children}
-      </svg>
-      {label}
-    </button>
-  );
-}
-
-
-/** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
-
-const stroke = {
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.6,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
-
-
-
-/**
- * A cog, not a sun. The previous icon was a circle with eight radiating lines --
- * which is the brightness glyph, and reads as a display control rather than
- * settings.
- */
-function Gear() {
-  return (
-    <svg viewBox="0 0 24 24" className="size-[15px]" {...stroke} strokeWidth={1.8}>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
-    </svg>
   );
 }
 
@@ -348,5 +305,109 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
       </span>
       {docked ? "Release" : "Call back"}
     </button>
+  );
+}
+
+/**
+ * Collapsed state: what sits in the notch.
+ *
+ * No label -- the point of living in the notch is reading as part of the hardware,
+ * and a word beside the Apple menu reads as an app announcing itself.
+ */
+function Pill({ open }: { open: boolean }) {
+  return (
+    <div
+      // One height class, not two. Listing `h-[38px]` and `h-0` together lets CSS
+      // source order decide the winner rather than the condition -- the pill kept
+      // its 38px while open, pushed the panel down, and clipped exactly that much
+      // off the bottom.
+      className={[
+        "flex items-center justify-end pr-3 transition-opacity duration-200",
+        open ? "pointer-events-none h-0 opacity-0" : "h-(--notch-h) opacity-100 delay-150",
+      ].join(" ")}
+    >
+      {/* Nudged up and in from the corner: sitting hard against the right edge
+          it reads as clipped by the pill rather than resting in it. */}
+      <div className="-translate-y-[6px] scale-[0.5]">
+        <Companion mode="idle" anchored />
+      </div>
+    </div>
+  );
+}
+
+function Tab({
+  active = false,
+  icon,
+  children,
+  onClick,
+}: {
+  active?: boolean;
+  icon: ReactNode;
+  children: ReactNode;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={[
+        "flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px] transition-colors duration-150",
+        active ? "bg-raise-hi text-white" : "text-ink-3 hover:text-ink-2",
+      ].join(" ")}
+    >
+      {icon}
+      {children}
+    </button>
+  );
+}
+
+/** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
+function Key({ children }: { children: ReactNode }) {
+  return (
+    <kbd className="rounded-[5px] bg-raise-hi px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-ink-2 inset-ring-1 inset-ring-white/[0.08]">
+      {children}
+    </kbd>
+  );
+}
+
+const stroke = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
+function Home() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-3" {...stroke}>
+      <path d="M2.5 7 8 2.5 13.5 7v6a.8.8 0 0 1-.8.8H3.3a.8.8 0 0 1-.8-.8Z" />
+    </svg>
+  );
+}
+
+/** An agent: a head with an antenna and two eyes. A sparkle means "something
+ *  clever happens here", which is what every icon in every product means. */
+function Sparkle() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
+      <rect x="2.6" y="5.2" width="10.8" height="8" rx="2.4" />
+      <path d="M8 5.2V2.8" />
+      <circle cx="6" cy="9.2" r="0.9" fill="currentColor" stroke="none" />
+      <circle cx="10" cy="9.2" r="0.9" fill="currentColor" stroke="none" />
+    </svg>
+  );
+}
+
+/**
+ * A cog, not a sun. The previous icon was a circle with eight radiating lines --
+ * which is the brightness glyph, and reads as a display control rather than
+ * settings.
+ */
+function Gear() {
+  return (
+    <svg viewBox="0 0 24 24" className="size-[15px]" {...stroke} strokeWidth={1.8}>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
+    </svg>
   );
 }
