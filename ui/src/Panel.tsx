@@ -253,10 +253,6 @@ export default function Panel() {
               </button>
 
               <Perch docked={docked} onToggle={() => dock(!docked)} />
-
-              <button className="grid size-[30px] place-items-center rounded-[10px] bg-raise text-[11px] text-ink-2 transition-colors duration-150 hover:text-ink-2 hairline">
-                i
-              </button>
             </div>
           </div>
           </>
