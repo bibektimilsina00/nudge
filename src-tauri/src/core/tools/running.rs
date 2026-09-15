@@ -74,6 +74,77 @@ const AGENTS: &[(&str, &str, &str)] = &[
     ("aider", "Aider", "aider --yes --message {task}"),
 ];
 
+/// Which agent to hand a coding job to, and the exact command for it.
+///
+/// **The choice is Nudge's, not a menu.** Somebody who has never heard of a
+/// coding agent should be able to install one, forget it, and never be reminded
+/// it exists -- which cannot be true while the model is handed a list of product
+/// names and asked to pick. Order is [`AGENTS`] order, which is the order they
+/// were verified in.
+///
+/// `named` honours a person who did ask for one by name, because they picked it
+/// for a reason. `Err` when the one they named is not here: the 3.2 rule, since
+/// quietly using a different agent is the one thing worse than saying so.
+pub fn choose(named: Option<&str>) -> Result<(&'static str, &'static str, &'static str)> {
+    let here = agents_installed();
+    let Some(named) = named.map(str::trim).filter(|n| !n.is_empty()) else {
+        return here.into_iter().next().ok_or_else(|| {
+            Error::Click(
+                "there is no coding agent on this Mac. Installing one -- Claude \
+                 Code, Codex, Aider -- would let me take on whole jobs like this."
+                    .into(),
+            )
+        });
+    };
+
+    // Matched loosely, because a spoken name arrives as whatever the ear made of
+    // it: "claude code", "Claude", "cloud code".
+    let want = named.to_lowercase().replace(' ', "");
+    let matches = |s: &str| {
+        let s = s.to_lowercase().replace(' ', "");
+        s.starts_with(&want) || want.starts_with(&s)
+    };
+    if let Some(found) = here
+        .iter()
+        .find(|(name, known_as, _)| matches(name) || matches(known_as))
+    {
+        return Ok(*found);
+    }
+    let known = AGENTS
+        .iter()
+        .find(|(name, known_as, _)| matches(name) || matches(known_as));
+    Err(Error::Click(match known {
+        Some((_, known_as, _)) => format!(
+            "{known_as} is not on this Mac.{}",
+            match here.is_empty() {
+                true => String::new(),
+                false => format!(
+                    " {} is, if that would do.",
+                    here.iter()
+                        .map(|(_, k, _)| *k)
+                        .collect::<Vec<_>>()
+                        .join(" and ")
+                ),
+            }
+        ),
+        None => format!("I do not know of a coding agent called {named:?}."),
+    }))
+}
+
+/// The command to run, with the job in it.
+///
+/// The exact form lives here rather than in the prompt, where it used to be
+/// copied by the model. The shapes differ between agents and a rearranged flag
+/// makes one of them ignore the job entirely while appearing to run fine -- which
+/// is a thing to get right once, in the place it is written down and checked,
+/// rather than every time somebody asks for something.
+pub fn command_for(form: &str, task: &str) -> String {
+    // Quoted, because the job is a sentence. Single quotes with any of its own
+    // escaped, which is the only form `sh` does not reinterpret.
+    let quoted = format!("'{}'", task.replace('\'', r"'\''"));
+    form.replace("{task}", &quoted)
+}
+
 /// Which coding agents are actually on this machine.
 ///
 /// The same problem as applications, one layer up: without asking, a model
@@ -348,6 +419,45 @@ impl Pipe {
 
 #[cfg(test)]
 mod tests {
+    /// The job is a sentence, and a sentence has apostrophes in it.
+    #[test]
+    fn the_job_survives_being_put_in_a_command() {
+        let out = command_for("claude -p {task}", "fix Bibek's parser");
+        assert!(out.starts_with("claude -p '"));
+        assert!(out.contains("Bibek"), "got: {out}");
+        // The apostrophe must not close the quote and hand the rest to the shell.
+        assert!(!out.contains("'fix Bibek's parser'"), "unescaped: {out}");
+    }
+
+    /// Nobody is presented with a list. If one is here, it is used.
+    #[test]
+    fn it_picks_without_being_asked() {
+        match choose(None) {
+            Ok((name, _, form)) => {
+                assert!(!name.is_empty());
+                assert!(form.contains("{task}"), "the form must take the job");
+            }
+            // A machine with none is a legitimate outcome, and the message has to
+            // be about what that means rather than about an empty list.
+            Err(e) => assert!(e.to_string().contains("no coding agent")),
+        }
+    }
+
+    /// Someone who names one picked it for a reason, and being quietly given a
+    /// different one is worse than being told.
+    #[test]
+    fn naming_one_that_is_absent_says_so_rather_than_substituting() {
+        let e = choose(Some("Aider")).err();
+        match e {
+            // Not installed here: it must name Aider, not silently use another.
+            Some(e) => assert!(e.to_string().contains("Aider"), "got: {e}"),
+            // Installed: then it was honoured, which is the other correct answer.
+            None => assert_eq!(choose(Some("Aider")).unwrap().0, "aider"),
+        }
+        let unknown = choose(Some("Zebra Code")).unwrap_err().to_string();
+        assert!(unknown.contains("do not know"), "got: {unknown}");
+    }
+
     use super::*;
 
     fn tmp() -> std::path::PathBuf {

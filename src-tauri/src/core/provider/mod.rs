@@ -173,6 +173,22 @@ pub enum Step {
     /// Just talking. Not every hotkey press is a task -- sometimes it is a
     /// question, a greeting, or someone bored at 2am.
     Reply { say: String },
+    /// Hand a whole coding job to a coding agent.
+    ///
+    /// Which agent is Nudge's business, not the model's and not the user's --
+    /// see [`crate::core::tools::running::choose`]. `named` carries a preference
+    /// only when a person actually expressed one, because they picked it for a
+    /// reason; the rest of the time it is empty and something gets chosen.
+    ///
+    /// Replaces composing the invocation by hand. The exact flags differ between
+    /// agents and a rearranged one makes an agent ignore the job entirely while
+    /// appearing to run fine, so that belongs where it is written down and
+    /// checked rather than in a prompt.
+    Delegate {
+        task: String,
+        named: Option<String>,
+        say: String,
+    },
     /// A request with a method, headers and a body.
     ///
     /// Separate from `Fetch`, which reads a page as prose and is the right
@@ -206,26 +222,23 @@ pub enum Step {
 /// Empty when there are none, so the prompt does not carry a heading over a list
 /// of nothing -- and so a model told to use one has to notice there isn't one.
 fn agents_here() -> String {
-    let found = crate::core::tools::running::agents_installed();
-    if found.is_empty() {
+    // Only whether there is one, never which. Somebody who has never heard of a
+    // coding agent should be able to install one, forget it, and never be
+    // reminded it exists -- and a prompt listing product names guarantees those
+    // names come back out of the assistant's mouth.
+    if crate::core::tools::running::agents_installed().is_empty() {
         return String::new();
     }
-    let lines: Vec<String> = found
-        .iter()
-        .map(|(name, known_as, form)| format!("- **{known_as}** (`{name}`): `{form}`"))
-        .collect();
-    format!(
-        "## Coding agents on this machine\n\n\
-         They are asked for by name -- Antigravity, Claude Code, Codex -- so \
-         match what was said to the list and use that one. If the one they named \
-         is not here, say which and offer what is, rather than quietly using a \
-         different agent: they picked it for a reason.\n\n\
-         Invoke with start, EXACTLY as written, putting the job in quotes where \
-         {{task}} is -- the shape differs between them and a rearranged flag \
-         makes one of them ignore the job entirely while appearing to run \
-         fine. Then read its output with output.\n\n{}\n\n",
-        lines.join("\n")
-    )
+    "## Whole jobs\n\n\
+     Some things are not a sequence of clicks -- refactor this, write the tests, \
+     find why the build is failing. Answer `delegate` with the job written out in \
+     full, as you would brief somebody competent who cannot see your screen, and \
+     it will be carried out. Then read what came back with output.\n\
+     Do not name whoever does it, choose between them, or mention that anything \
+     was handed over at all: report what was done. Only if the person themselves \
+     names one, put that name in `named` and it will be honoured or you will be \
+     told plainly why it could not be.\n\n"
+        .to_string()
 }
 
 /// First line, bounded -- an edit's `old` can be a paragraph, and history is
@@ -276,7 +289,8 @@ impl Step {
             // said, and that is a source in the room, which is what this
             // question is actually asking.
             | Step::Mcp { .. }
-            | Step::Request { .. } => true,
+            | Step::Request { .. }
+            | Step::Delegate { .. } => true,
             // Changes the world or says something about it, and learns nothing.
             Step::Point { .. }
             | Step::Done { .. }
@@ -324,6 +338,7 @@ impl Step {
             | Step::Question { question: say }
             | Step::Mcp { say, .. }
             | Step::Request { say, .. }
+            | Step::Delegate { say, .. }
             | Step::Reply { say } => say,
         }
     }
@@ -415,6 +430,8 @@ impl Step {
             Step::Search { query, .. } => format!("Searched for {query:?}"),
             Step::Mcp { tool, args, .. } => format!("Ran {tool} with {}", short(&args.to_string())),
             Step::Request { method, url, .. } => format!("{method} {url}"),
+            // Named by the work, never by who did it.
+            Step::Delegate { task, .. } => format!("Handed over: {}", short(task)),
             Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
             Step::Show { path, .. } => format!("Showed {path}"),
             Step::Workspace { path, .. } => format!("Working in {path} now"),
@@ -1110,6 +1127,15 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
         }),
         "unsure" => Some(Step::Unsure { say }),
         "reply" => Some(Step::Reply { say }),
+        "delegate" => Some(Step::Delegate {
+            task: v["task"].as_str().unwrap_or_default().to_string(),
+            named: v["named"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
+            say,
+        }),
         "request" => Some(Step::Request {
             method: v["method"].as_str().unwrap_or("GET").to_string(),
             url: v["url"].as_str().unwrap_or_default().to_string(),
@@ -1665,32 +1691,41 @@ mod tests {
         assert!(prompt(&ask("x", &[], false)).contains("Nothing yet."));
     }
 
-    /// The same failure as applications, one layer up: told to use an agent and
-    /// given no list, a model names one it half-remembers and the launch fails
-    /// with something useless.
+    /// The inverse of what this used to assert, which is the whole of 3.5.
+    ///
+    /// It used to check that every installed agent appeared by name, with its
+    /// exact invocation, so the model could match what somebody said against a
+    /// list and copy a command line. That is a choice being presented -- and a
+    /// list of product names in the prompt is a guarantee that those names come
+    /// back out of the assistant's mouth. Somebody who has never heard of a
+    /// coding agent should be able to install one and never learn it exists.
     #[test]
-    fn the_prompt_names_the_agents_that_are_actually_here() {
+    fn the_prompt_never_names_a_coding_agent() {
         let p = prompt(&ask("refactor this", &[], false));
-        let found = crate::core::tools::running::agents_installed();
-        if found.is_empty() {
-            assert!(
-                !p.contains("Coding agents on this machine"),
-                "a heading over an empty list"
-            );
-            return;
+        let here = crate::core::tools::running::agents_installed();
+
+        // The invocation is the unambiguous half: if no command form appears
+        // anywhere, the model cannot be composing one.
+        for (name, _, form) in &here {
+            assert!(!p.contains(form), "the prompt carries {name}'s invocation");
         }
-        assert!(p.contains("Coding agents on this machine"));
-        for (name, known_as, form) in found {
-            assert!(p.contains(name), "{name} is installed and unlisted");
-            // Nobody asks for "agy"; they ask for Antigravity. Without the name
-            // people use, the list gives the model nothing to match against.
-            assert!(
-                p.contains(known_as),
-                "{name} listed without the name people say"
-            );
-            // The invocation matters as much as the name: the flag meaning "do
-            // not ask me anything" differs per agent, and a wrong one hangs.
-            assert!(p.contains(form), "{name} listed without how to run it");
+
+        match here.is_empty() {
+            true => assert!(!p.contains("Whole jobs"), "offered with nothing to offer"),
+            false => {
+                let lo = p.find("## Whole jobs").expect("no way to hand a job over");
+                let section = &p[lo..p[lo..].find("\n\n## ").map_or(p.len(), |x| lo + x)];
+                // Names are checked in this section alone. Elsewhere they are
+                // legitimate: `Claude Code URL Handler` is a real application and
+                // the apps list is right to name it -- which is what caught the
+                // first version of this test.
+                for (_, known_as, _) in &here {
+                    assert!(
+                        !section.contains(known_as),
+                        "handing a job over names {known_as}"
+                    );
+                }
+            }
         }
     }
 

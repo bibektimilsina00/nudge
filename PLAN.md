@@ -795,14 +795,42 @@ seen by `escape_down`, which polls the physical key, so the race could not be
 reproduced from here. The guard has a unit test; the ordering change is reasoned,
 not observed.
 
-**3.5 Delegation stops being visible.**
+**3.5 Delegation stops being visible.** *Built.*
 
-Choosing between agents becomes Nudge's job rather than a choice presented. The
-card reports the plan, the commands and the files -- *what was done* -- and not
-*who did it*.
+The prompt used to list every installed coding agent by product name, with its
+exact invocation, so the model could match what somebody said against the list and
+copy a command line. Two things wrong with that. It is a choice being presented --
+and **a list of product names in the prompt guarantees those names come back out
+of the assistant's mouth.**
+
+Now there is one outcome, `delegate`, carrying the job written out in full and
+nothing about who does it. `running::choose` picks, in the order the agents were
+verified in. The invocation moved out of the prompt and into
+`running::command_for`, which is a second win: the flags differ between agents and
+a rearranged one makes an agent ignore the job entirely *while appearing to run
+fine*, so that belongs where it is written down and checked rather than copied
+freshly every time somebody asks for something.
+
+**Naming one is still honoured.** Somebody who says "use Codex for this" picked it
+for a reason, so `named` carries that through, matched loosely because a spoken
+name arrives as whatever the ear made of it. If the one they named is absent they
+are told which -- never quietly given a different agent, which is the one thing
+worse than saying so.
+
+The test that used to assert every agent was named now asserts the opposite, and
+is narrowed to the delegation section: `Claude Code URL Handler` is a real
+application and the apps list is right to name it, which is what caught the first
+version of this.
+
+*Honestly unverified:* no live delegation. Given a one-line bug to fix and a haiku
+to write, the model correctly did both itself rather than handing them over -- so
+the path is unit-tested at both ends and never yet run end to end. Forcing it
+wants a job big enough to be worth an agent, which costs real time and somebody's
+quota.
 
 *Phase 3 is done when:* someone who has never heard of a coding agent can install
-one, forget it, and never be reminded it exists.
+one, forget it, and never be reminded it exists. **The prompt no longer contains
+their names, and there is a test holding that.**
 
 ### Phase 4 — Learning
 
