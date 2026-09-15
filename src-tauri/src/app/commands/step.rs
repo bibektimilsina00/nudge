@@ -123,6 +123,16 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
         }
     }
 
+    // It could not, and said what would have let it.
+    //
+    // Here rather than anywhere else because this is where a turn ends and
+    // nothing is about to happen -- the one moment an offer is not an
+    // interruption. Checked against the catalogue so a model that names
+    // something imaginary is simply ignored.
+    if let Some(Step::Unsure { needed: Some(want), .. }) = &step {
+        offer_if_it_is_a_good_moment(&app, want);
+    }
+
     // Finishing ends the session; being unsure does not -- open the right app and
     // tap the hotkey again and the same goal carries on.
     if matches!(&step, Some(Step::Done { .. } | Step::Reply { .. })) {
@@ -365,6 +375,37 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         crate::app::agent::publish(app);
     }
     Ok(())
+}
+
+/// Put a connect offer on screen, if this is a reasonable moment for one.
+///
+/// Every reason not to is in `core::offers`; the only thing decided here is what
+/// counts as busy, which needs the app to answer.
+fn offer_if_it_is_a_good_moment(app: &AppHandle, want: &str) {
+    let Some(offer) = crate::core::offers::catalogue()
+        .into_iter()
+        .find(|o| o.name.eq_ignore_ascii_case(want.trim()))
+    else {
+        eprintln!("offer: no service called {want:?} -- ignoring");
+        return;
+    };
+    // Busy means an agent is working, and nothing else.
+    //
+    // It also asked whether a session was open, which is wrong in exactly the
+    // case this exists for: `unsure` deliberately leaves the session open so the
+    // same goal can be picked up again, so the one moment an offer is wanted was
+    // the one moment it read as "mid-task" and said nothing. An open session is a
+    // thing that can be resumed, not a person in the middle of something.
+    let busy = app.state::<Agents>().running();
+    let offers = app.state::<crate::core::offers::Offers>();
+    if !offers.may_ask(&offer.name, busy) {
+        eprintln!("offer: not asking about {} right now", offer.name);
+        return;
+    }
+    offers.asked();
+    app.state::<crate::app::state::Offering>().set(offer.clone());
+    crate::app::ui::connect::ask(app, &offer);
+    eprintln!("offer: asking about {}", offer.name);
 }
 
 /// Ask whether to replace a file, and hold the task until the answer comes.

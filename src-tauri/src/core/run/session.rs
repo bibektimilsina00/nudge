@@ -506,6 +506,7 @@ impl Nudge {
         if !agent && done.len() >= MAX_STEPS {
             self.end();
             return Ok(Some(Step::Unsure {
+                needed: None,
                 say: format!("Stopping after {MAX_STEPS} steps -- this isn't converging."),
             }));
         }

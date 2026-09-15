@@ -19,82 +19,8 @@
 //! *When* one of these appears is not decided yet, and deliberately so -- the
 //! shape is worth getting right before the timing, because the timing is easy to
 //! change and the shape is what people react to.
-use serde::Serialize;
+pub use crate::core::offers::{catalogue, Offer};
 use tauri::{AppHandle, Emitter, Manager};
-
-/// A service worth offering, and what it would be good for.
-#[derive(Clone, Debug, Serialize)]
-pub struct Offer {
-    pub name: String,
-    /// A letter or two for the tile. Other companies' logos are a licensing
-    /// question, and a coloured initial carries the same recognition at 38px.
-    pub mark: String,
-    pub tint: String,
-    /// Dark text, for a light tile.
-    pub dark: bool,
-    /// Things somebody could ask for once it is connected. Written as requests
-    /// in their words, never as capabilities in ours: "summarise the open PRs",
-    /// not "read repository metadata".
-    pub examples: Vec<String>,
-}
-
-/// The offers there are, for now written down rather than discovered.
-///
-/// This will come from somewhere else eventually -- what is installed, what is
-/// configured, what the person keeps asking for and cannot have. Hard-coded here
-/// because the question being answered today is what the bar looks like.
-pub fn catalogue() -> Vec<Offer> {
-    vec![
-        Offer {
-            name: "GitHub".into(),
-            mark: "GH".into(),
-            tint: "#e6e6e6".into(),
-            dark: true,
-            examples: vec![
-                "What broke the build?".into(),
-                "Summarise the open PRs".into(),
-                "Find issues about this bug".into(),
-                "Draft a release checklist".into(),
-                "Who reviewed this last?".into(),
-            ],
-        },
-        Offer {
-            name: "Calendar".into(),
-            mark: "31".into(),
-            tint: "#1a73e8".into(),
-            dark: false,
-            examples: vec![
-                "What does my day look like?".into(),
-                "Move the standup to Thursday".into(),
-                "Find an hour with Sara this week".into(),
-                "Am I free on Friday afternoon?".into(),
-            ],
-        },
-        Offer {
-            name: "Mail".into(),
-            mark: "M".into(),
-            tint: "#ea4335".into(),
-            dark: false,
-            examples: vec![
-                "Anything urgent this morning?".into(),
-                "Reply saying I will be late".into(),
-                "Find the invoice from March".into(),
-                "Draft a reply to the last one".into(),
-            ],
-        },
-        Offer {
-            name: "Slack".into(),
-            mark: "S".into(),
-            tint: "#4a154b".into(),
-            dark: false,
-            examples: vec![
-                "What did I miss in #general?".into(),
-                "Tell the team I am running late".into(),
-                "Find where we discussed pricing".into(),
-            ],
-        },
-    ]
-}
 
 /// Park it under the notch, the width of the notch's screen.
 ///

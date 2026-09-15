@@ -297,7 +297,7 @@ where
             }
             // Not a failure: a subagent that cannot answer says so, and the
             // parent decides what that means for the larger task.
-            Step::Unsure { say } => {
+            Step::Unsure { say, .. } => {
                 return Ok(Found {
                     answer: format!("Could not: {say}"),
                     steps,

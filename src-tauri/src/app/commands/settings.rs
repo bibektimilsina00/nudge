@@ -174,7 +174,14 @@ pub fn pending_offer(app: AppHandle) -> Option<crate::app::ui::connect::Offer> {
 /// question as when to ask in the first place, still open on purpose.
 #[tauri::command]
 pub fn answer_offer(app: AppHandle, service: String, said: String) {
-    println!("offer: {service} -> {said}");
+    use crate::core::offers::Said;
+    let said = match said.as_str() {
+        "yes" => Said::Yes,
+        "no" => Said::No,
+        // Anything unrecognised is the cautious answer, not the permanent one.
+        _ => Said::Later,
+    };
+    app.state::<crate::core::offers::Offers>().answered(&service, said);
     app.state::<crate::app::state::Offering>().clear();
     crate::app::ui::connect::hide(&app);
 }

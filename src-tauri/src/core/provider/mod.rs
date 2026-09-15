@@ -57,7 +57,18 @@ pub enum Step {
     /// now?" every single time is a worse agent than one that never does.
     Done { say: String, next: Option<String> },
     /// The control is not on this screen. Not an error -- often the right answer.
-    Unsure { say: String },
+    ///
+    /// `needed` names the service that would have let it do the thing, when
+    /// there is one. Asked for rather than inferred: the model already knows why
+    /// it could not, and having it say so is one field against pattern-matching
+    /// its own refusals, which is the kind of guess that ages badly.
+    ///
+    /// Checked against the catalogue before anything is shown, so it cannot
+    /// invent a service -- the same shape as `recalled` in 1.3.
+    Unsure {
+        say: String,
+        needed: Option<String>,
+    },
     /// Open an application. Some goals ("open Blender") cannot be satisfied by
     /// pointing at anything, because the thing to point at does not exist yet.
     Launch { app: String, say: String },
@@ -336,7 +347,7 @@ impl Step {
         match self {
             Step::Point { say, .. }
             | Step::Done { say, .. }
-            | Step::Unsure { say }
+            | Step::Unsure { say, .. }
             | Step::Launch { say, .. }
             | Step::Open { say, .. }
             | Step::Type { say, .. }
@@ -612,6 +623,13 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
     let reach = &ask.reach;
     let memory = &ask.memory;
+    // Named in the prompt so the model picks from the catalogue rather than
+    // inventing a service nobody can connect.
+    let services = crate::core::offers::catalogue()
+        .iter()
+        .map(|o| o.name.clone())
+        .collect::<Vec<_>>()
+        .join(", ");
     let skills = &ask.skills;
     // Labelled as over, so "that" and "it" resolve without any of it reading as
     // work already done towards the goal above.
@@ -791,6 +809,16 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          that was in the file, and reading it back afterwards will not tell you \
          what you destroyed -- it will show you exactly what you wrote and look \
          like success.\n\n\
+         ## When a service would have done it\n\n\
+         Some things you cannot do because they are somebody else\u{2019}s: their \
+         calendar, their mail, their issues, their team\u{2019}s messages. When that is \
+         why you are stuck, answer `unsure`, say so plainly, and put the service \
+         in `needed` -- one of: {services}.\n\
+         Only when connecting it would genuinely have answered what was asked. \
+         Not as a suggestion, not because it might be handy one day, and never \
+         for something you could have done another way. They will be asked once, \
+         and being asked about a thing they did not want is how a person learns \
+         to dismiss everything.\n\n\
          ## When the machine does not have it\n\n\
          If something is not installed you will be told so, by name, at the \
          moment you reach for it -- often with the one command that would fix it. \
@@ -1192,7 +1220,14 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
                 .filter(|s| !s.is_empty())
                 .map(str::to_string),
         }),
-        "unsure" => Some(Step::Unsure { say }),
+        "unsure" => Some(Step::Unsure {
+            say,
+            needed: v["needed"]
+                .as_str()
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(str::to_string),
+        }),
         "reply" => Some(Step::Reply { say }),
         "skill" => Some(Step::Skill {
             name: v["name"].as_str().unwrap_or_default().to_string(),

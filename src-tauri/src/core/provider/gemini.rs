@@ -214,7 +214,7 @@ impl Provider for Gemini {
              {{\"kind\":\"remember\",\"about\":\"AppName\",\"note\":\"what would have saved you\",\"say\":\"...\"}}\n\
              {{\"kind\":\"skill\",\"name\":\"exact skill name\",\"say\":\"...\"}}\n\
              {{\"kind\":\"done\",\"say\":\"what you found, in full\"}}\n\
-             {{\"kind\":\"unsure\",\"say\":\"why you could not\"}}",
+             {{\"kind\":\"unsure\",\"say\":\"why you could not\",\"needed\":\"Calendar (only if a service would have done it)\"}}",
             prompt(ask)
         );
         let body = json!({

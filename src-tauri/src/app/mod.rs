@@ -111,6 +111,7 @@ pub fn run() {
             app.manage(Settle(std::sync::Mutex::new(None)));
             app.manage(Grants::default());
             app.manage(crate::app::state::Offering::default());
+            app.manage(crate::core::offers::Offers::load());
             app.manage(Background::default());
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.

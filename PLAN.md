@@ -704,6 +704,43 @@ its opposite.
 
 *Done when:* a person is told what is missing, in words they can act on. **Done.**
 
+**3.2a Offering a connection, at the moment it would have helped.** *Built.*
+
+The same rule as 3.2, one layer out. *"ffmpeg is not on this Mac"* and *"I cannot
+see your Slack"* are the same sentence about different things.
+
+A bar grows out of the notch naming the service and showing four things somebody
+could ask for once it is connected. **The examples are the design** -- "Connect
+Slack?" is a permission request and people refuse those by reflex, because access
+to your messages in the abstract is only a risk. And the trigger is what makes
+them land: one of the examples is what they said thirty seconds ago.
+
+    "what did i miss in slack today"
+      → Unsure { say: "I cannot check your Slack messages without Slack
+                       connected.", needed: Some("Slack") }
+      → offer: asking about Slack
+
+**The model names it**, in a `needed` field on `unsure`, checked against the
+catalogue so it cannot invent one. Asked for rather than inferred from the wording
+of a refusal, which is the kind of guess that ages badly -- the same choice as
+`recalled` in 1.3.
+
+Three answers and all of them remembered, in `~/.config/nudge/offers.toml`. *No*
+is forever. *Not now* is a fortnight. *Yes* is never asked again either, because
+there is nothing to offer somebody who already has it. At most one offer a day
+whatever it is about -- somebody who hits three walls in an afternoon has three
+good reasons to be asked and one appetite for being asked.
+
+*A finding that changes what this is worth:* asked the same question about a
+calendar, Nudge opened **Calendar.app** instead, which is correct -- it can read a
+screen, so "I cannot" is rarer than it looks. The offer fires for services with no
+local application, and the ones where it will earn its keep are the web-shaped
+ones rather than the Apple ones.
+
+*Never done:* offering because the environment suggests it. `gh` is installed, so
+here is GitHub. That is inference rather than a request, it can fire on the first
+day, and it is how every application that nags you begins.
+
 **3.3 Credentials.** *Built.*
 
 Two things go wrong with tokens, and they are different problems.
