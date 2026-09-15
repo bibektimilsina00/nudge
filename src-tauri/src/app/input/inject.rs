@@ -24,7 +24,7 @@
 //! ```
 //!
 //! The file is emptied as it is read, so one line is one turn.
-use tauri::{AppHandle, Manager};
+use tauri::AppHandle;
 
 /// How often the file is looked at.
 ///
@@ -70,22 +70,19 @@ pub fn start(app: &AppHandle) {
     });
 }
 
-/// Is a turn in progress? Written to the same file, for whoever is watching.
-///
-/// Not used by Nudge itself -- it exists so that a script driving this can tell
-/// the difference between a turn that has not started and one that has finished.
-pub fn is_enabled() -> bool {
-    std::env::var_os(VAR).is_some()
-}
-
 #[cfg(test)]
 mod tests {
-    /// The safety property, and the only one worth a test: nothing happens unless
-    /// this run was started with the variable set.
+    /// The safety property, and the only one worth a test: nothing happens
+    /// unless this run was started with the variable set.
+    ///
+    /// Asserted on the environment rather than through a helper. There was a
+    /// helper, it was used by nothing but this test, and a function that exists
+    /// to be tested is a function testing itself -- `start` reads the variable
+    /// directly, so this reads the variable directly.
     #[test]
     fn it_is_off_unless_the_environment_asks_for_it() {
         // The test process was not started with it, and neither is Nudge unless
         // somebody types it in front of the command.
-        assert!(!super::is_enabled());
+        assert!(std::env::var_os(super::VAR).is_none());
     }
 }

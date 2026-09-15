@@ -101,6 +101,5 @@ pub fn open_app(name: &str) -> Result<()> {
                 .is_some_and(|s| s.eq_ignore_ascii_case(name))
         })
         .ok_or_else(|| Error::Launch(format!("{name} is not installed on this machine")))?;
-    open::that_detached(&target)
-        .map_err(|e| Error::Launch(format!("could not start {name}: {e}")))
+    open::that_detached(&target).map_err(|e| Error::Launch(format!("could not start {name}: {e}")))
 }

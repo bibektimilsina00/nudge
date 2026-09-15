@@ -7,7 +7,7 @@ fn main() {
         .default_input_device()
         .expect("no input device");
     let cfg = device.default_input_config().unwrap();
-    println!("device: {:?}", device.name());
+    println!("device: {:?}", device.description());
     println!(
         "config: {:?} {}ch {:?}",
         cfg.sample_format(),

@@ -193,7 +193,9 @@ mod tests {
     /// says so in its own words somewhere nobody is reading.
     #[test]
     fn a_missing_item_is_an_error_that_says_how_to_fix_it() {
-        let e = resolve("keychain:nudge-definitely-not-here").unwrap_err().to_string();
+        let e = resolve("keychain:nudge-definitely-not-here")
+            .unwrap_err()
+            .to_string();
         assert!(e.contains("no Keychain item"));
         assert!(e.contains("add-generic-password"), "it should say how: {e}");
     }
@@ -205,7 +207,16 @@ mod tests {
     fn a_stored_secret_comes_back() {
         let name = "nudge-secret-roundtrip";
         std::process::Command::new("/usr/bin/security")
-            .args(["add-generic-password", "-s", name, "-a", "nudge", "-w", "hunter2", "-U"])
+            .args([
+                "add-generic-password",
+                "-s",
+                name,
+                "-a",
+                "nudge",
+                "-w",
+                "hunter2",
+                "-U",
+            ])
             .status()
             .unwrap();
         assert_eq!(resolve(&format!("keychain:{name}")).unwrap(), "hunter2");

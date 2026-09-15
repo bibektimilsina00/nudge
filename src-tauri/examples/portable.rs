@@ -19,8 +19,13 @@ fn main() {
         Ok(shot) => {
             let img = image::load_from_memory(&shot.bytes).expect("the JPEG does not decode");
             let grey = img.to_luma8();
-            let mean = grey.as_raw().iter().map(|p| *p as f64).sum::<f64>() / grey.as_raw().len() as f64;
-            let sd = (grey.as_raw().iter().map(|p| (*p as f64 - mean).powi(2)).sum::<f64>()
+            let mean =
+                grey.as_raw().iter().map(|p| *p as f64).sum::<f64>() / grey.as_raw().len() as f64;
+            let sd = (grey
+                .as_raw()
+                .iter()
+                .map(|p| (*p as f64 - mean).powi(2))
+                .sum::<f64>()
                 / grey.as_raw().len() as f64)
                 .sqrt();
             println!(
@@ -29,7 +34,11 @@ fn main() {
                 shot.sent.0,
                 shot.sent.1,
                 shot.bytes.len() / 1024,
-                if sd > 5.0 { "" } else { "   <- FLAT, captured nothing" }
+                if sd > 5.0 {
+                    ""
+                } else {
+                    "   <- FLAT, captured nothing"
+                }
             );
         }
         Err(e) => println!("  capture     FAILED: {e}"),
@@ -40,14 +49,21 @@ fn main() {
         None => println!("  cursor      FAILED"),
     }
     println!("  may_click   {}", click::may_click());
-    println!("  ctrl alone  {} (hold Control while running to see this flip)", click::control_alone());
+    println!(
+        "  ctrl alone  {} (hold Control while running to see this flip)",
+        click::control_alone()
+    );
     println!("  button down {}", click::left_button_down());
 
     let apps = launch::installed_apps();
-    println!("  apps        {} found{}", apps.len(), match apps.first() {
-        Some(a) => format!("  e.g. {a}"),
-        None => "   (none -- this machine keeps them somewhere else)".into(),
-    });
+    println!(
+        "  apps        {} found{}",
+        apps.len(),
+        match apps.first() {
+            Some(a) => format!("  e.g. {a}"),
+            None => "   (none -- this machine keeps them somewhere else)".into(),
+        }
+    );
 
     // The one that is not optional. `blocked_by` is handed what this returns, so
     // a platform where it answers nothing is a platform with no privacy guard.

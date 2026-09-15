@@ -1,6 +1,5 @@
 //! Pointer watching: where the cursor is, and when a click actually happens.
 use crate::app::state::{Mic, Screen};
-use crate::core::run::session::Nudge;
 use crate::core::screen::click;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_global_shortcut::ShortcutState;

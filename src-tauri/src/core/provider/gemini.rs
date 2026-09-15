@@ -164,7 +164,10 @@ impl Provider for Gemini {
                 return Ok(Step::Point {
                     // Named, so this can be pressed rather than clicked at.
                     control: Some(c.label.clone()),
-                    at: shot.to_image(Point { x: c.at.0, y: c.at.1 }),
+                    at: shot.to_image(Point {
+                        x: c.at.0,
+                        y: c.at.1,
+                    }),
                     say,
                     act: super::act_from(v["act"].as_str()),
                 });

@@ -221,6 +221,10 @@ where
 /// `act` performs a step and returns what came back -- a command's output, a
 /// page's text. Passed in rather than called directly so this module stays free
 /// of Tauri and of anything that touches a screen.
+// Eight, and each is a separate thing the caller already holds. Bundling them
+// into a struct would move the list rather than shorten it, and give the struct
+// a name that means "the arguments to run".
+#[allow(clippy::too_many_arguments)]
 pub async fn run<F, Fut>(
     provider: &dyn Provider,
     workspace: &std::path::Path,
@@ -399,9 +403,16 @@ mod tests {
                 next: None,
             },
         ]));
-        let found = run(&p, std::path::Path::new("/tmp"), "x", &[], "", false, false, |_| async {
-            Err(crate::error::Error::Click("rm is not allowed".into()))
-        })
+        let found = run(
+            &p,
+            std::path::Path::new("/tmp"),
+            "x",
+            &[],
+            "",
+            false,
+            false,
+            |_| async { Err(crate::error::Error::Click("rm is not allowed".into())) },
+        )
         .await
         .unwrap();
         assert!(found.answer.contains("refused"));
@@ -417,28 +428,43 @@ mod tests {
             })
             .collect();
         let p = Scripted(std::sync::Mutex::new(forever));
-        let found = run(&p, std::path::Path::new("/tmp"), "x", &[], "", false, false, |_| async {
-            Ok(String::new())
-        })
+        let found = run(
+            &p,
+            std::path::Path::new("/tmp"),
+            "x",
+            &[],
+            "",
+            false,
+            false,
+            |_| async { Ok(String::new()) },
+        )
         .await
         .unwrap();
         assert!(found.answer.contains("Gave up"));
         assert_eq!(found.steps.len(), MAX_TURNS);
     }
 
-
     /// The cheapest of the three gates, and the one that removes the most: most
     /// of what a subagent says has no number in it.
     #[test]
     fn only_an_answer_stating_a_specific_is_worth_checking() {
         use super::worth_checking;
-        assert!(worth_checking(true, "macOS 27 was released on 14 September 2026."));
+        assert!(worth_checking(
+            true,
+            "macOS 27 was released on 14 September 2026."
+        ));
         // Nothing was looked up, so there is no source to go back to.
         assert!(!worth_checking(false, "macOS 27 was released in 2026."));
         // No specific to be wrong about.
-        assert!(!worth_checking(true, "The page explains how the parser works."));
+        assert!(!worth_checking(
+            true,
+            "The page explains how the parser works."
+        ));
         // Already an admission.
-        assert!(!worth_checking(true, "I could not find a date for version 27."));
+        assert!(!worth_checking(
+            true,
+            "I could not find a date for version 27."
+        ));
     }
 
     #[test]

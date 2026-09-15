@@ -146,18 +146,11 @@ mod tests {
             "below even the settings sheet"
         );
         assert!(!N.is_hovered(1200.0, 100.0, true), "beside the panel");
-    }
 
-    /// Reaching for the gear in the top-right corner must not shut the sheet.
-    ///
-    /// The bug: the open region was the panel rectangle exactly, so a pointer that
-    /// clipped the edge on its way to a corner control left the region, and the
-    /// panel closed under the thing being aimed at.
-    #[test]
-    fn the_corner_controls_are_reachable() {
-        let (w, h) = (540.0, 640.0);
-        super::set_open_size(w, h);
-        let edge = N.center_x + w / 2.0;
+        // And the corner controls, which is why the region is wider than the
+        // panel: reaching for the gear means clipping the edge on the way, and
+        // a region flush to the panel shuts the sheet being aimed at.
+        let edge = N.center_x + 530.0 / 2.0;
         assert!(N.is_hovered(edge - 12.0, 14.0, true), "on the gear");
         assert!(
             N.is_hovered(edge + 20.0, 14.0, true),

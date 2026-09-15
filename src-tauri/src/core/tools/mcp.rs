@@ -174,7 +174,7 @@ impl Server {
         let stdin = child.stdin.take().ok_or_else(|| no_pipe(&spec.name))?;
         let stdout = child.stdout.take().ok_or_else(|| no_pipe(&spec.name))?;
 
-        let mut server = Server {
+        let server = Server {
             spec,
             wire: tokio::sync::Mutex::new(Wire {
                 stdin,
@@ -222,15 +222,18 @@ impl Server {
     }
 
     /// Send a request and wait for the reply with the same id.
-    async fn request(&self, method: &str, params: Value, patience: std::time::Duration) -> Result<Value> {
+    async fn request(
+        &self,
+        method: &str,
+        params: Value,
+        patience: std::time::Duration,
+    ) -> Result<Value> {
         let mut wire = self.wire.lock().await;
         wire.id += 1;
         let id = wire.id;
         let line = json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params});
 
-        wire.stdin
-            .write_all(format!("{line}\n").as_bytes())
-            .await?;
+        wire.stdin.write_all(format!("{line}\n").as_bytes()).await?;
         wire.stdin.flush().await?;
 
         let read = async {
@@ -383,7 +386,10 @@ impl Servers {
 /// screenshot pasted into a history that already carries one is a lot of tokens
 /// for a second opinion nobody asked for.
 fn read_content(result: &Value) -> String {
-    let blocks = result["content"].as_array().map(Vec::as_slice).unwrap_or_default();
+    let blocks = result["content"]
+        .as_array()
+        .map(Vec::as_slice)
+        .unwrap_or_default();
     let text: Vec<String> = blocks
         .iter()
         .filter_map(|b| match b["type"].as_str() {
@@ -420,7 +426,8 @@ mod tests {
         let t = Tool {
             server: "files".into(),
             name: "read_text_file".into(),
-            about: "Read a file from disk. Supports head and tail. Only within allowed dirs.".into(),
+            about: "Read a file from disk. Supports head and tail. Only within allowed dirs."
+                .into(),
             schema: json!({
                 "properties": {"path": {"type": "string"}, "tail": {"type": "number"}},
                 "required": ["path"],
@@ -500,13 +507,19 @@ mod tests {
             .call("files", &read.name, json!({"path": "/etc/passwd"}))
             .await;
         println!("  outside the allowed directory -> {refused:?}");
-        assert!(refused.is_err(), "reading outside its own directory was allowed");
+        assert!(
+            refused.is_err(),
+            "reading outside its own directory was allowed"
+        );
     }
 
     /// A tool that did its job and said nothing must not read as one that failed.
     #[test]
     fn silence_is_reported_as_success() {
-        assert_eq!(read_content(&json!({"content": []})), "Done, with nothing to report.");
+        assert_eq!(
+            read_content(&json!({"content": []})),
+            "Done, with nothing to report."
+        );
         assert_eq!(read_content(&json!({})), "Done, with nothing to report.");
     }
 }

@@ -86,10 +86,7 @@ fn record(spec: &str) -> std::io::Result<()> {
     let (spec, asked) = match spec.split_once("--pid ") {
         Some((before, rest)) => {
             let (num, tail) = rest.split_once(' ').unwrap_or((rest, ""));
-            (
-                format!("{before}{tail}"),
-                num.trim().parse::<i32>().ok(),
-            )
+            (format!("{before}{tail}"), num.trim().parse::<i32>().ok())
         }
         None => (spec.to_string(), None),
     };
@@ -126,7 +123,9 @@ fn record(spec: &str) -> std::io::Result<()> {
     // A case whose answer is not in its own control list can never pass, and
     // would look like a matcher bug forever.
     if !expect.eq_ignore_ascii_case("none")
-        && !controls.iter().any(|c| c.label.eq_ignore_ascii_case(expect))
+        && !controls
+            .iter()
+            .any(|c| c.label.eq_ignore_ascii_case(expect))
     {
         eprintln!("{app} has no control called {expect:?}. It exposes:");
         for c in controls.iter().take(40) {
@@ -156,13 +155,21 @@ fn record(spec: &str) -> std::io::Result<()> {
             c.role, c.label, c.at.0, c.at.1, c.size.0, c.size.1
         )?;
     }
-    println!("wrote {} ({} controls from {app})", path.display(), controls.len());
+    println!(
+        "wrote {} ({} controls from {app})",
+        path.display(),
+        controls.len()
+    );
     Ok(())
 }
 
 fn count() -> usize {
     std::fs::read_dir(dir())
-        .map(|d| d.flatten().filter(|e| e.path().extension().is_some_and(|x| x == "txt")).count())
+        .map(|d| {
+            d.flatten()
+                .filter(|e| e.path().extension().is_some_and(|x| x == "txt"))
+                .count()
+        })
         .unwrap_or(0)
 }
 
@@ -221,7 +228,11 @@ fn load() -> std::io::Result<Vec<Case>> {
             })
             .collect();
         cases.push(Case {
-            name: path.file_stem().unwrap_or_default().to_string_lossy().into(),
+            name: path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into(),
             goal,
             expect,
             controls,

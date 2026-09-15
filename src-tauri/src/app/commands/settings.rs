@@ -198,7 +198,8 @@ pub fn answer_offer(app: AppHandle, service: String, said: String) {
         // Anything unrecognised is the cautious answer, not the permanent one.
         _ => Said::Later,
     };
-    app.state::<crate::core::offers::Offers>().answered(&service, said);
+    app.state::<crate::core::offers::Offers>()
+        .answered(&service, said);
     app.state::<crate::app::state::Offering>().clear();
     crate::app::ui::connect::hide(&app);
 }
@@ -346,7 +347,10 @@ pub fn reach(app: AppHandle) -> Vec<Allowed> {
 
 #[tauri::command]
 pub fn set_reach(app: AppHandle, key: String, on: bool) {
-    let Some(g) = crate::core::reach::Grant::ALL.iter().find(|g| g.key() == key) else {
+    let Some(g) = crate::core::reach::Grant::ALL
+        .iter()
+        .find(|g| g.key() == key)
+    else {
         return;
     };
     app.state::<crate::core::run::session::Nudge>()
@@ -419,17 +423,37 @@ pub fn brain(app: AppHandle) -> Brain {
         // Written as the trade being made, because that is the only thing that
         // distinguishes them to somebody who has not read the code.
         providers: vec![
-            pick("ollama", "Ollama", "On your machine. Free, private, slower."),
+            pick(
+                "ollama",
+                "Ollama",
+                "On your machine. Free, private, slower.",
+            ),
             pick("gemini", "Gemini", "Fast and cheap. A round trip per step."),
-            pick("anthropic", "Anthropic", "Strongest at reading a screen. Dearest."),
+            pick(
+                "anthropic",
+                "Anthropic",
+                "Strongest at reading a screen. Dearest.",
+            ),
         ],
         // The single most expensive line in the config, so it says so. Thinking
         // bills at the output rate -- five times input -- which outweighs the
         // choice of model.
         thinks: vec![
-            pick("low", "Brief", "No thinking tokens at all. Cheapest by far."),
-            pick("medium", "Considered", "Hundreds to thousands of extra tokens a step."),
-            pick("default", "The model's own", "Whatever it does when not told."),
+            pick(
+                "low",
+                "Brief",
+                "No thinking tokens at all. Cheapest by far.",
+            ),
+            pick(
+                "medium",
+                "Considered",
+                "Hundreds to thousands of extra tokens a step.",
+            ),
+            pick(
+                "default",
+                "The model's own",
+                "Whatever it does when not told.",
+            ),
         ],
     }
 }

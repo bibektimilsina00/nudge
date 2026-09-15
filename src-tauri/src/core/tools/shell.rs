@@ -282,7 +282,6 @@ pub fn run(workspace: &std::path::Path, command: &str, anything: bool) -> Result
     // Somebody told "the build failed" goes and looks at their build.
     if !out.status.success() && super::secret::unauthenticated(&text) {
         let program = command
-            .trim()
             .split_whitespace()
             .next()
             .unwrap_or("")
@@ -307,8 +306,8 @@ pub fn run(workspace: &std::path::Path, command: &str, anything: bool) -> Result
 
 #[cfg(test)]
 mod tests {
-    use std::ops::Not;
     use super::*;
+    use std::ops::Not;
 
     #[test]
     fn plain_reading_is_allowed() {
@@ -350,7 +349,10 @@ mod tests {
     /// command in a pipe would carry anything after it.
     #[test]
     fn every_stage_of_a_pipeline_is_checked() {
-        assert!(refuse("ls | rm -rf .", false).is_some(), "second stage ignored");
+        assert!(
+            refuse("ls | rm -rf .", false).is_some(),
+            "second stage ignored"
+        );
         assert!(refuse("cat x | sudo tee /etc/hosts", false).is_some());
         assert_eq!(refuse("ls | grep src | wc -l", false), None);
     }
@@ -432,7 +434,10 @@ mod tests {
             .unwrap_err()
             .to_string();
         assert!(err.contains("nobody has signed in"), "got: {err}");
-        assert!(err.contains("It said:"), "the original words are worth keeping: {err}");
+        assert!(
+            err.contains("It said:"),
+            "the original words are worth keeping: {err}"
+        );
 
         // And an ordinary failure is still an ordinary failure.
         let plain = run(here, "sh -c 'echo no such file >&2; exit 1'", true);
@@ -482,7 +487,10 @@ mod tests {
         // `cp` is on this Mac and is not on the allow-list.
         let why = refuse("cp a b", false).unwrap();
         assert!(why.contains("is here"), "got: {why}");
-        assert!(why.contains("Allowed to"), "it should say where to change it: {why}");
+        assert!(
+            why.contains("Allowed to"),
+            "it should say where to change it: {why}"
+        );
     }
 
     #[test]

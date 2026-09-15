@@ -19,11 +19,17 @@ fn main() {
         }
     };
 
-    let Some(c) = ax::controls(pid).into_iter().find(|c| c.label.eq_ignore_ascii_case(&label)) else {
+    let Some(c) = ax::controls(pid)
+        .into_iter()
+        .find(|c| c.label.eq_ignore_ascii_case(&label))
+    else {
         eprintln!("no control called {label:?} in pid {pid}");
         std::process::exit(1);
     };
-    println!("  target  {} {:?} at ({:.0},{:.0})", c.role, c.label, c.at.0, c.at.1);
+    println!(
+        "  target  {} {:?} at ({:.0},{:.0})",
+        c.role, c.label, c.at.0, c.at.1
+    );
 
     let before = click::cursor();
     let began = std::time::Instant::now();
@@ -45,9 +51,7 @@ fn main() {
 
 #[cfg(target_os = "macos")]
 fn tap(pid: i32, x: f64, y: f64) {
-    use core_graphics::event::{
-        CGEvent, CGEventType, CGMouseButton,
-    };
+    use core_graphics::event::{CGEvent, CGEventType, CGMouseButton};
     use core_graphics::event_source::{CGEventSource, CGEventSourceStateID};
     use core_graphics::geometry::CGPoint;
 

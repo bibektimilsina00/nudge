@@ -39,9 +39,22 @@ const INTERESTING: &[(&str, &[&str])] = &[
         ],
     ),
     ("searching", &["rg", "fd", "jq", "yq", "sqlite3"]),
-    ("files and media", &["ffmpeg", "magick", "pandoc", "qpdf", "zip", "unzip"]),
+    (
+        "files and media",
+        &["ffmpeg", "magick", "pandoc", "qpdf", "zip", "unzip"],
+    ),
     ("the web", &["curl", "wget"]),
-    ("this Mac", &["osascript", "shortcuts", "pbcopy", "pbpaste", "mdfind", "brew"]),
+    (
+        "this Mac",
+        &[
+            "osascript",
+            "shortcuts",
+            "pbcopy",
+            "pbpaste",
+            "mdfind",
+            "brew",
+        ],
+    ),
 ];
 
 /// How to install something, for the ones we can honestly say.
@@ -177,8 +190,10 @@ pub fn line(anything: bool) -> String {
     }
     let note = match anything {
         true => "",
-        false => " Only what can be run without changing anything is listed; \
-                  there is more here that a wider grant would reach.",
+        false => {
+            " Only what can be run without changing anything is listed; \
+                  there is more here that a wider grant would reach."
+        }
     };
     format!(
         "Installed and usable right now -- {}.{note} Anything not named is either \

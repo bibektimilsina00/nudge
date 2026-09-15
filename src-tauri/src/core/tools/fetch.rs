@@ -200,7 +200,9 @@ pub async fn request(
 
     let status = resp.status();
     if resp.content_length().is_some_and(|n| n > MAX_BYTES) {
-        return Err(Error::Click(format!("{url} answered with too much to read")));
+        return Err(Error::Click(format!(
+            "{url} answered with too much to read"
+        )));
     }
     let text = resp
         .text()
@@ -210,7 +212,12 @@ pub async fn request(
     // The status is part of the answer, not a reason to hide it. A model that
     // can see `401 Unauthorized` knows to look for a token; one handed a bare
     // error message guesses.
-    Ok(format!("{} {}\n\n{}", status.as_u16(), status.canonical_reason().unwrap_or(""), trim(&text)))
+    Ok(format!(
+        "{} {}\n\n{}",
+        status.as_u16(),
+        status.canonical_reason().unwrap_or(""),
+        trim(&text)
+    ))
 }
 
 /// Why this request is not allowed, in words the model can act on.
@@ -318,7 +325,7 @@ fn trim(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{refuse_request as no};
+    use super::refuse_request as no;
 
     /// The line the grant draws: reading is always allowed, acting is not.
     #[test]
@@ -327,8 +334,14 @@ mod tests {
         assert!(no("GET", url, &[], false).is_none());
         assert!(no("HEAD", url, &[], false).is_none());
         for verb in ["POST", "PUT", "PATCH", "DELETE"] {
-            assert!(no(verb, url, &[], false).is_some(), "{verb} needed no grant");
-            assert!(no(verb, url, &[], true).is_none(), "{verb} refused when granted");
+            assert!(
+                no(verb, url, &[], false).is_some(),
+                "{verb} needed no grant"
+            );
+            assert!(
+                no(verb, url, &[], true).is_none(),
+                "{verb} refused when granted"
+            );
         }
     }
 
@@ -338,7 +351,10 @@ mod tests {
     fn a_refusal_says_what_would_lift_it() {
         let why = no("POST", "https://api.example.com", &[], false).unwrap();
         assert!(why.contains("Allowed to"), "got: {why}");
-        assert!(why.contains("GET"), "it should say what it still can do: {why}");
+        assert!(
+            why.contains("GET"),
+            "it should say what it still can do: {why}"
+        );
     }
 
     /// The URL rules are not weakened by having a method. A granted POST to a
@@ -362,10 +378,16 @@ mod tests {
         assert!(no("GET", url, &host, true).is_some(), "Host was accepted");
 
         let split = [("X-Thing".to_string(), "a\r\nX-Other: b".to_string())];
-        assert!(no("GET", url, &split, true).is_some(), "a line break got through");
+        assert!(
+            no("GET", url, &split, true).is_some(),
+            "a line break got through"
+        );
 
         let fine = [("Authorization".to_string(), "Bearer abc".to_string())];
-        assert!(no("GET", url, &fine, false).is_none(), "an ordinary header was refused");
+        assert!(
+            no("GET", url, &fine, false).is_none(),
+            "an ordinary header was refused"
+        );
     }
 
     /// Against a real server, because the refusals above prove only what we

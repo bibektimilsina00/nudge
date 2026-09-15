@@ -130,8 +130,7 @@ pub struct Nudge {
 
 impl Nudge {
     pub fn new(cfg: Config) -> Result<Self> {
-        let provider: std::sync::Arc<dyn Provider> =
-            std::sync::Arc::from(provider::build(&cfg)?);
+        let provider: std::sync::Arc<dyn Provider> = std::sync::Arc::from(provider::build(&cfg)?);
         let reach = crate::core::reach::Reach::from_config(&cfg.reach);
         let tuning = Tuning {
             provider: cfg.provider.clone(),
@@ -439,8 +438,7 @@ impl Nudge {
             // An empty one carries nothing worth keeping and would only push a
             // real conversation out of the slot.
             if !s.done.is_empty() {
-                *self.last.lock().unwrap() =
-                    Some((std::time::Instant::now(), s.goal, s.done));
+                *self.last.lock().unwrap() = Some((std::time::Instant::now(), s.goal, s.done));
             }
         }
     }
@@ -532,12 +530,8 @@ impl Nudge {
 
         // Snapshot and release: the lock must not be held across the await, and a
         // tokio Mutex would be a heavier fix than simply not needing one.
-        let Some((goal, done, seen, agent, earlier)) = self
-            .session
-            .lock()
-            .unwrap()
-            .as_ref()
-            .map(|s| {
+        let Some((goal, done, seen, agent, earlier)) =
+            self.session.lock().unwrap().as_ref().map(|s| {
                 (
                     s.goal.clone(),
                     s.done.clone(),
@@ -684,7 +678,10 @@ impl Nudge {
 
         let step = match shortcut {
             Some(c) => {
-                eprintln!("  obvious: {} {:?} -- not asking the model", c.role, c.label);
+                eprintln!(
+                    "  obvious: {} {:?} -- not asking the model",
+                    c.role, c.label
+                );
                 Step::Point {
                     control: Some(c.label.clone()),
                     at: shot.to_image(crate::core::screen::capture::Point {
@@ -746,7 +743,10 @@ mod tests {
 
         n.begin("now go to wikipedia".into());
         let carried = n.session.lock().unwrap().as_ref().unwrap().earlier.clone();
-        assert!(carried.iter().any(|l| l.contains("Opened Safari")), "{carried:?}");
+        assert!(
+            carried.iter().any(|l| l.contains("Opened Safari")),
+            "{carried:?}"
+        );
     }
 
     #[test]
@@ -757,7 +757,14 @@ mod tests {
         n.end();
         n.forget_thread();
         n.begin("something else".into());
-        assert!(n.session.lock().unwrap().as_ref().unwrap().earlier.is_empty());
+        assert!(n
+            .session
+            .lock()
+            .unwrap()
+            .as_ref()
+            .unwrap()
+            .earlier
+            .is_empty());
     }
 
     /// Paid on every turn that follows another closely, so it is bounded twice.
@@ -782,8 +789,11 @@ mod tests {
     use super::*;
 
     fn nudge() -> Nudge {
-        let mut cfg = Config::default();
-        cfg.provider = "ollama".into(); // never called; just needs to build
+        // Never called; it just has to build.
+        let cfg = Config {
+            provider: "ollama".into(),
+            ..Default::default()
+        };
         Nudge::new(cfg).unwrap()
     }
 
@@ -804,8 +814,14 @@ mod tests {
         };
 
         n.stash(look());
-        assert!(n.take_early(true).is_some(), "a fresh look on a first turn is the whole point");
-        assert!(n.take_early(true).is_none(), "the same picture cannot answer two turns");
+        assert!(
+            n.take_early(true).is_some(),
+            "a fresh look on a first turn is the whole point"
+        );
+        assert!(
+            n.take_early(true).is_none(),
+            "the same picture cannot answer two turns"
+        );
 
         // Not the first turn: something has happened since, and this is a
         // photograph of before it happened.
@@ -820,7 +836,10 @@ mod tests {
         let stale = std::time::Instant::now()
             .checked_sub(EARLY_MAX * 2)
             .expect("this machine has been up for a few seconds");
-        n.stash(Look { taken: stale, ..look() });
+        n.stash(Look {
+            taken: stale,
+            ..look()
+        });
         assert!(n.take_early(true).is_none());
     }
 

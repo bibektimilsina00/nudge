@@ -96,9 +96,15 @@ mod tests {
     /// crate they have never heard of.
     #[test]
     fn a_machine_failure_is_described_as_a_task_failure() {
-        let io = Error::Io(std::io::Error::new(std::io::ErrorKind::NotFound, "no such file"));
+        let io = Error::Io(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            "no such file",
+        ));
         let said = plainly("open my shopping list", &io);
-        assert_eq!(said, "That file is not there while trying to open my shopping list.");
+        assert_eq!(
+            said,
+            "That file is not there while trying to open my shopping list."
+        );
         assert!(!said.contains("os error"));
     }
 
@@ -107,7 +113,10 @@ mod tests {
     #[test]
     fn our_own_refusals_come_through_untouched() {
         let refusal = Error::Click("ffmpeg is not on this Mac".into());
-        assert_eq!(plainly("convert my video", &refusal), "ffmpeg is not on this Mac");
+        assert_eq!(
+            plainly("convert my video", &refusal),
+            "ffmpeg is not on this Mac"
+        );
     }
 
     #[test]

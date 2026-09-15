@@ -34,7 +34,7 @@ fn wait<T>(rx: &mpsc::Receiver<T>, patience: Duration) -> Option<T> {
             return None;
         }
         unsafe {
-            objc2_core_foundation::CFRunLoopRunInMode(
+            objc2_core_foundation::CFRunLoop::run_in_mode(
                 objc2_core_foundation::kCFRunLoopDefaultMode,
                 0.05,
                 false,
@@ -49,7 +49,9 @@ fn main() {
     let probe = unsafe { SFSpeechRecognizer::new() };
     println!("  locale recogniser exists");
     println!("  available:           {}", unsafe { probe.isAvailable() });
-    println!("  supports on-device:  {}", unsafe { probe.supportsOnDeviceRecognition() });
+    println!("  supports on-device:  {}", unsafe {
+        probe.supportsOnDeviceRecognition()
+    });
 
     let status = unsafe { SFSpeechRecognizer::authorizationStatus() };
     println!("  authorisation:       {status:?}");
@@ -71,13 +73,12 @@ fn main() {
 
     let recognizer = unsafe { SFSpeechRecognizer::new() };
     println!("  available: {}", unsafe { recognizer.isAvailable() });
-    println!(
-        "  supports on-device: {}",
-        unsafe { recognizer.supportsOnDeviceRecognition() }
-    );
+    println!("  supports on-device: {}", unsafe {
+        recognizer.supportsOnDeviceRecognition()
+    });
 
     let path = NSString::from_str("/tmp/utter.aiff");
-    let url = unsafe { NSURL::fileURLWithPath(&path) };
+    let url = NSURL::fileURLWithPath(&path);
     let request = unsafe {
         SFSpeechURLRecognitionRequest::initWithURL(SFSpeechURLRecognitionRequest::alloc(), &url)
     };
@@ -91,7 +92,9 @@ fn main() {
         move |result: *mut SFSpeechRecognitionResult, err: *mut objc2_foundation::NSError| {
             let said = unsafe { result.as_ref() }.map(|r| {
                 let t = unsafe { r.bestTranscription() };
-                (unsafe { t.formattedString() }.to_string(), unsafe { r.isFinal() })
+                (unsafe { t.formattedString() }.to_string(), unsafe {
+                    r.isFinal()
+                })
             });
             let failed = unsafe { err.as_ref() }.map(|e| e.localizedDescription().to_string());
             let _ = tx.send((said, failed));
@@ -113,7 +116,10 @@ fn main() {
                 }
             }
             Some((None, Some(e))) => {
-                println!("  failed after {:.0}ms: {e}", began.elapsed().as_secs_f32() * 1000.0);
+                println!(
+                    "  failed after {:.0}ms: {e}",
+                    began.elapsed().as_secs_f32() * 1000.0
+                );
                 return;
             }
             _ => {

@@ -65,10 +65,7 @@ pub enum Step {
     ///
     /// Checked against the catalogue before anything is shown, so it cannot
     /// invent a service -- the same shape as `recalled` in 1.3.
-    Unsure {
-        say: String,
-        needed: Option<String>,
-    },
+    Unsure { say: String, needed: Option<String> },
     /// Open an application. Some goals ("open Blender") cannot be satisfied by
     /// pointing at anything, because the thing to point at does not exist yet.
     Launch { app: String, say: String },
@@ -449,7 +446,12 @@ impl Step {
         match self {
             // Named when it had a name. "Click on Send" reads back better than
             // a coordinate, and the history is what the model reasons from.
-            Step::Point { at, act, say, control } => match control {
+            Step::Point {
+                at,
+                act,
+                say,
+                control,
+            } => match control {
                 Some(name) => format!("{act:?} on {name:?} -- {say}"),
                 None => format!("{act:?} at ({:.0}, {:.0}) -- {say}", at.x, at.y),
             },
@@ -1012,7 +1014,9 @@ fn controls_here(controls: &[crate::core::screen::ax::Control]) -> String {
 ///
 /// Ordered down the screen so the list reads the way the window does, and capped
 /// because a list of four hundred is not a list anyone can choose from.
-fn ordered(controls: &[crate::core::screen::ax::Control]) -> Vec<&crate::core::screen::ax::Control> {
+fn ordered(
+    controls: &[crate::core::screen::ax::Control],
+) -> Vec<&crate::core::screen::ax::Control> {
     const MAX: usize = 60;
     let mut out: Vec<&crate::core::screen::ax::Control> = controls.iter().collect();
     out.sort_by_key(|c| (c.at.1 as i64, c.at.0 as i64));
@@ -1470,7 +1474,11 @@ mod tests {
             .lines()
             .filter(|l| l.starts_with(|ch: char| ch.is_ascii_digit()))
             .collect();
-        assert_eq!(numbered.len(), controls.len(), "not every control was listed");
+        assert_eq!(
+            numbered.len(),
+            controls.len(),
+            "not every control was listed"
+        );
 
         for (i, line) in numbered.iter().enumerate() {
             let n = i as u64 + 1;
@@ -1491,7 +1499,11 @@ mod tests {
         // And the ways a number can mean nothing.
         assert!(control_at(&controls, 0).is_none(), "the list starts at one");
         assert!(control_at(&controls, 5).is_none(), "past the end");
-        assert_eq!(controls_here(&[]), "", "no controls, no heading about controls");
+        assert_eq!(
+            controls_here(&[]),
+            "",
+            "no controls, no heading about controls"
+        );
     }
 
     fn ask<'a>(goal: &'a str, done: &'a [String], stalled: bool) -> Ask<'a> {
@@ -1703,8 +1715,14 @@ mod tests {
         let out = recent(&done);
 
         assert!(out.contains("Cargo.toml"), "the newest lost its contents");
-        assert!(!out.contains(&"a".repeat(200)), "an old file is still in full");
-        assert!(!out.contains(&"b".repeat(200)), "an old file is still in full");
+        assert!(
+            !out.contains(&"a".repeat(200)),
+            "an old file is still in full"
+        );
+        assert!(
+            !out.contains(&"b".repeat(200)),
+            "an old file is still in full"
+        );
 
         // Still remembers doing them, in order, so it does not repeat them.
         assert!(out.contains("1. Read a.rs"));
@@ -1736,7 +1754,10 @@ mod tests {
         // fetched, a command's output.
         let history: Vec<String> = vec![
             format!("Read src/main.rs:\n{}", "x".repeat(38_000)),
-            format!("Read https://example.com, which says:\n{}", "y".repeat(11_000)),
+            format!(
+                "Read https://example.com, which says:\n{}",
+                "y".repeat(11_000)
+            ),
             format!("Ran `cargo test`, which printed:\n{}", "z".repeat(3_800)),
         ];
         let mut b = ask("do a thing", &history, false);

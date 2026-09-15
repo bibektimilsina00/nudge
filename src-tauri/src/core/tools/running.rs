@@ -588,8 +588,10 @@ mod tests {
     /// through a character.
     #[test]
     fn the_cursor_survives_the_buffer_being_trimmed() {
-        let mut b = Buffer::default();
-        b.text = "a".repeat(10);
+        let mut b = Buffer {
+            text: "a".repeat(10),
+            ..Default::default()
+        };
         assert_eq!(b.take_new().len(), 10);
         assert_eq!(b.take_new().len(), 0, "nothing new the second time");
 

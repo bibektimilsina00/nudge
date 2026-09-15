@@ -147,7 +147,11 @@ pub fn active_display() -> ((f64, f64), (f64, f64), u32) {
     let main = CGDisplay::main();
     let fallback = {
         let b = main.bounds();
-        ((b.origin.x, b.origin.y), (b.size.width, b.size.height), main.id)
+        (
+            (b.origin.x, b.origin.y),
+            (b.size.width, b.size.height),
+            main.id,
+        )
     };
     let Some(at) = super::click::cursor() else {
         return fallback;
@@ -293,8 +297,12 @@ pub fn grab(max_edge: u32) -> Result<Shot> {
     // Everything below is the old path, kept because this one wants macOS 14 and
     // a current screen recording grant, and a slow screenshot beats none.
     #[cfg(target_os = "macos")]
-    if let Some((bytes, w, h)) = super::fast::jpeg(id, max_edge, std::process::id() as i32, QUALITY as f64 / 100.0)
-    {
+    if let Some((bytes, w, h)) = super::fast::jpeg(
+        id,
+        max_edge,
+        std::process::id() as i32,
+        QUALITY as f64 / 100.0,
+    ) {
         return Ok(Shot {
             bytes,
             sent: (w, h),
@@ -486,7 +494,10 @@ mod tests {
         for p in [
             Point { x: 0.0, y: 0.0 },
             Point { x: 640.0, y: 400.0 },
-            Point { x: 1280.0, y: 800.0 },
+            Point {
+                x: 1280.0,
+                y: 800.0,
+            },
         ] {
             let there_and_back = shot.to_image(shot.to_global(p));
             assert!(
@@ -497,7 +508,10 @@ mod tests {
 
         // And the direction that matters: a control at the display's own origin
         // is the top-left of the picture, not the top-left of the desktop.
-        let at_origin = shot.to_image(Point { x: 1512.0, y: -200.0 });
+        let at_origin = shot.to_image(Point {
+            x: 1512.0,
+            y: -200.0,
+        });
         assert_eq!((at_origin.x, at_origin.y), (0.0, 0.0));
     }
 

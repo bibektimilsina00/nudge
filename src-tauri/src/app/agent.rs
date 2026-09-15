@@ -140,7 +140,8 @@ pub fn away_from_card(app: &AppHandle, at: crate::core::screen::capture::Point) 
     if !win.is_visible().unwrap_or(false) {
         return false;
     }
-    let (Ok(pos), Ok(size), Ok(scale)) = (win.outer_position(), win.outer_size(), win.scale_factor())
+    let (Ok(pos), Ok(size), Ok(scale)) =
+        (win.outer_position(), win.outer_size(), win.scale_factor())
     else {
         return false;
     };

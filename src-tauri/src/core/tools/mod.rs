@@ -8,6 +8,6 @@ pub mod fetch;
 pub mod files;
 pub mod mcp;
 pub mod present;
-pub mod secret;
 pub mod running;
+pub mod secret;
 pub mod shell;

@@ -178,7 +178,10 @@ impl Reach {
     ///
     /// A function rather than a filter written at the call site, so that what is
     /// tested is what runs.
-    pub fn usable(&self, tools: &[crate::core::tools::mcp::Tool]) -> Vec<crate::core::tools::mcp::Tool> {
+    pub fn usable(
+        &self,
+        tools: &[crate::core::tools::mcp::Tool],
+    ) -> Vec<crate::core::tools::mcp::Tool> {
         tools
             .iter()
             .filter(|t| self.server(&t.server))
@@ -265,10 +268,16 @@ mod tests {
     #[test]
     fn a_configured_server_is_on_until_it_is_switched_off() {
         let r = Reach::default();
-        assert!(r.server("github"), "a configured server should start usable");
+        assert!(
+            r.server("github"),
+            "a configured server should start usable"
+        );
         r.set_server("github", false);
         assert!(!r.server("github"));
-        assert!(r.server("files"), "switching one off must not touch another");
+        assert!(
+            r.server("files"),
+            "switching one off must not touch another"
+        );
         r.set_server("github", true);
         assert!(r.server("github"));
     }
@@ -283,7 +292,11 @@ mod tests {
             about: String::new(),
             schema: serde_json::json!({}),
         };
-        let all = [tool("files", "read"), tool("github", "issue"), tool("files", "write")];
+        let all = [
+            tool("files", "read"),
+            tool("github", "issue"),
+            tool("files", "write"),
+        ];
 
         let r = Reach::default();
         assert_eq!(r.usable(&all).len(), 3);
@@ -303,6 +316,9 @@ mod tests {
         r.set(Grant::Files, true);
         let both = r.prompt();
         assert!(both.contains("run any command") && both.contains("outside the workspace"));
-        assert!(both.contains(" and "), "a list of grants should read as a list");
+        assert!(
+            both.contains(" and "),
+            "a list of grants should read as a list"
+        );
     }
 }

@@ -95,7 +95,11 @@ fn load() -> std::io::Result<Vec<Case>> {
             }
         }
         cases.push(Case {
-            name: path.file_stem().unwrap_or_default().to_string_lossy().into(),
+            name: path
+                .file_stem()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .into(),
             ask,
             must,
             never,
@@ -149,9 +153,17 @@ enum Verdict {
 /// Whether the string handed back is a failure to ask rather than an answer.
 fn task_failed(answer: &str) -> bool {
     let a = answer.to_lowercase();
-    ["429", "too many requests", "timed out", "connection", "503", "500", "dns"]
-        .iter()
-        .any(|m| a.contains(m))
+    [
+        "429",
+        "too many requests",
+        "timed out",
+        "connection",
+        "503",
+        "500",
+        "dns",
+    ]
+    .iter()
+    .any(|m| a.contains(m))
 }
 
 fn judge(case: &Case, answer: &str) -> Verdict {
@@ -248,7 +260,7 @@ async fn score() {
 
     let todo: Vec<&Case> = cases
         .iter()
-        .filter(|c| only.as_ref().is_none_or(|o| c.name.contains(o.as_str())))
+        .filter(|c| only.as_ref().map_or(true, |o| c.name.contains(o.as_str())))
         .collect();
 
     let (mut right, mut unsure, mut wrong, mut errored) = (0, 0, 0, 0);
@@ -271,9 +283,16 @@ async fn score() {
                         eprintln!("      retrying in {secs}s: {last}");
                         tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
                     }
-                    match subagent::run(provider, &workspace, &ask, &[], "", false, verify, |step| {
-                        perform(cfg, provider, step)
-                    })
+                    match subagent::run(
+                        provider,
+                        &workspace,
+                        &ask,
+                        &[],
+                        "",
+                        false,
+                        verify,
+                        |step| perform(cfg, provider, step),
+                    )
                     .await
                     {
                         Ok(f) => return Ok(f.answer),
@@ -335,9 +354,7 @@ async fn score() {
     }
 
     let total = right + unsure + wrong;
-    println!(
-        "\n  {right}/{total} right, {unsure} said they did not know, {wrong} WRONG"
-    );
+    println!("\n  {right}/{total} right, {unsure} said they did not know, {wrong} WRONG");
     if errored > 0 {
         println!("  {errored} never ran, so they are not scored either way");
     }

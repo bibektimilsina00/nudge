@@ -31,7 +31,11 @@ fn main() {
     let decoded = image::load_from_memory(&shot.bytes).expect("the JPEG does not decode");
     let grey = decoded.to_luma8();
     let mean = grey.as_raw().iter().map(|p| *p as f64).sum::<f64>() / grey.as_raw().len() as f64;
-    let sd = (grey.as_raw().iter().map(|p| (*p as f64 - mean).powi(2)).sum::<f64>()
+    let sd = (grey
+        .as_raw()
+        .iter()
+        .map(|p| (*p as f64 - mean).powi(2))
+        .sum::<f64>()
         / grey.as_raw().len() as f64)
         .sqrt();
     println!(
@@ -39,17 +43,32 @@ fn main() {
         decoded.width(),
         decoded.height(),
         shot.bytes.len() / 1024,
-        if sd > 5.0 { "" } else { "   <- FLAT, composited nothing" }
+        if sd > 5.0 {
+            ""
+        } else {
+            "   <- FLAT, composited nothing"
+        }
     );
-    assert_eq!((decoded.width(), decoded.height()), shot.sent, "what we sent is not what we said we sent");
+    assert_eq!(
+        (decoded.width(), decoded.height()),
+        shot.sent,
+        "what we sent is not what we said we sent"
+    );
 
     let t = Instant::now();
     let f = nudge_lib::core::screen::facts::gather();
-    println!("\n  facts::gather           {:>7.0}ms  ({:?})", t.elapsed().as_secs_f32() * 1000.0, f.app);
+    println!(
+        "\n  facts::gather           {:>7.0}ms  ({:?})",
+        t.elapsed().as_secs_f32() * 1000.0,
+        f.app
+    );
 
     if let Some((pid, app, _)) = nudge_lib::core::screen::privacy::frontmost_window() {
         let t = Instant::now();
         let n = nudge_lib::core::screen::ax::controls(pid).len();
-        println!("  ax::controls            {:>7.0}ms  ({n} in {app})", t.elapsed().as_secs_f32() * 1000.0);
+        println!(
+            "  ax::controls            {:>7.0}ms  ({n} in {app})",
+            t.elapsed().as_secs_f32() * 1000.0
+        );
     }
 }

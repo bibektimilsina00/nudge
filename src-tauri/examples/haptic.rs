@@ -12,15 +12,13 @@ fn main() {
     for (name, pattern) in patterns {
         println!("{name} in 1s -- rest a finger on the trackpad");
         std::thread::sleep(std::time::Duration::from_secs(1));
-        let performer = unsafe { NSHapticFeedbackManager::defaultPerformer() };
+        let performer = NSHapticFeedbackManager::defaultPerformer();
         // Three in quick succession: one tick is easy to miss.
         for _ in 0..3 {
-            unsafe {
-                performer.performFeedbackPattern_performanceTime(
-                    pattern,
-                    NSHapticFeedbackPerformanceTime::Now,
-                )
-            };
+            performer.performFeedbackPattern_performanceTime(
+                pattern,
+                NSHapticFeedbackPerformanceTime::Now,
+            );
             std::thread::sleep(std::time::Duration::from_millis(180));
         }
     }

@@ -6,8 +6,8 @@
 //! ask-before-replacing hold everywhere rather than in whichever caller
 //! remembered them.
 use crate::app::state::{may, Background, Grants, Screen, Settle, Voice};
-use crate::core::reach::Grant;
 use crate::core::provider::{Act, Step};
+use crate::core::reach::Grant;
 use crate::core::run::agent::Agents;
 use crate::core::run::session::Nudge;
 use crate::core::screen::click;
@@ -129,7 +129,10 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
     // nothing is about to happen -- the one moment an offer is not an
     // interruption. Checked against the catalogue so a model that names
     // something imaginary is simply ignored.
-    if let Some(Step::Unsure { needed: Some(want), .. }) = &step {
+    if let Some(Step::Unsure {
+        needed: Some(want), ..
+    }) = &step
+    {
         offer_if_it_is_a_good_moment(&app, want);
     } else if matches!(&step, Some(Step::Done { .. } | Step::Reply { .. })) {
         // Nothing was asked for, and the turn is over. The only other moment
@@ -347,14 +350,8 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         ..
     } = step
     {
-        let said = fetch::request(
-            method,
-            url,
-            headers,
-            body.as_deref(),
-            may(&app, Grant::Http),
-        )
-        .await?;
+        let said =
+            fetch::request(method, url, headers, body.as_deref(), may(app, Grant::Http)).await?;
         eprintln!("{method} {url} -> {} chars", said.len());
         app.state::<Nudge>()
             .note(format!("{method} {url} answered:\n{said}"));
@@ -367,7 +364,8 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         eprintln!("mcp {tool} -> {} chars", said.len());
         app.state::<Nudge>()
             .note(format!("Ran {tool}, which said:\n{said}"));
-        app.state::<Agents>().record_run(format!("tool {tool}"), said);
+        app.state::<Agents>()
+            .record_run(format!("tool {tool}"), said);
         crate::app::agent::publish(app);
     }
     if let Step::Fetch { url, .. } = step {
@@ -408,7 +406,8 @@ fn offer_if_it_is_a_good_moment(app: &AppHandle, want: &str) {
         return;
     }
     offers.asked();
-    app.state::<crate::app::state::Offering>().set(offer.clone());
+    app.state::<crate::app::state::Offering>()
+        .set(offer.clone());
     crate::app::ui::connect::ask(app, &offer);
     eprintln!("offer: asking about {}", offer.name);
 }
@@ -440,7 +439,8 @@ fn volunteer_if_it_is_ever_a_good_moment(app: &AppHandle) {
     };
     offers.asked();
     offers.volunteered();
-    app.state::<crate::app::state::Offering>().set(offer.clone());
+    app.state::<crate::app::state::Offering>()
+        .set(offer.clone());
     crate::app::ui::connect::ask(app, &offer);
     eprintln!("offer: raising {} unprompted", offer.name);
 }
@@ -494,7 +494,9 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         // No advance() call here on purpose. Moving the pointer and pressing it
         // are both things the watchers already notice, so Nudge's own clicks
         // travel the same path a person's do and the two cannot drift.
-        Step::Point { at, act, control, .. } => {
+        Step::Point {
+            at, act, control, ..
+        } => {
             // Ask the application to press it, rather than sending the pointer
             // to where it is and clicking.
             //
@@ -515,7 +517,11 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                     // a press that succeeds while doing nothing does not.
                     eprintln!(
                         "  {} {label:?}",
-                        if done { "pressed" } else { "press refused, clicking" }
+                        if done {
+                            "pressed"
+                        } else {
+                            "press refused, clicking"
+                        }
                     );
                     done
                 });
@@ -534,10 +540,10 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         Step::Write { path, content, .. } => {
             let workspace = app.state::<Nudge>().workspace();
             let grants = app.state::<Grants>();
-            let target = files::resolve(&workspace, path, may(&app, Grant::Files))?;
+            let target = files::resolve(&workspace, path, may(app, Grant::Files))?;
             let permitted = grants.granted.lock().unwrap().contains(&target);
 
-            match files::write(&workspace, path, content, permitted, may(&app, Grant::Files))? {
+            match files::write(&workspace, path, content, permitted, may(app, Grant::Files))? {
                 // Asked on the model's behalf; the task waits for the answer.
                 files::Wrote::NeedsPermission { path } => {
                     return ask_to_replace(app, &path, content.clone())
@@ -593,7 +599,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             // The same boundary as writing: a path from a model is a path that
             // has to be proven, and `open` on a file is a real action.
             let workspace = app.state::<Nudge>().workspace();
-            let target = files::resolve(&workspace, path, may(&app, Grant::Files))?;
+            let target = files::resolve(&workspace, path, may(app, Grant::Files))?;
             if !target.is_file() {
                 return Err(crate::error::Error::Click(format!(
                     "{} is not there to show",
@@ -614,7 +620,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                 path,
                 *from,
                 *lines,
-                may(&app, Grant::Files),
+                may(app, Grant::Files),
             )?;
             eprintln!("read {path} @{from} ({} chars)", text.len());
             app.state::<Nudge>().note(format!("Read {path}:\n{text}"));
@@ -622,10 +628,17 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         Step::Edit { path, old, new, .. } => {
             let workspace = app.state::<Nudge>().workspace();
             let grants = app.state::<Grants>();
-            let target = files::resolve(&workspace, path, may(&app, Grant::Files))?;
+            let target = files::resolve(&workspace, path, may(app, Grant::Files))?;
             let permitted = grants.granted.lock().unwrap().contains(&target);
 
-            match files::edit(&workspace, path, old, new, permitted, may(&app, Grant::Files))? {
+            match files::edit(
+                &workspace,
+                path,
+                old,
+                new,
+                permitted,
+                may(app, Grant::Files),
+            )? {
                 files::Wrote::NeedsPermission { path } => {
                     return ask_to_replace(app, &path, String::new())
                 }
@@ -698,7 +711,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             let out = shell::run(
                 &app.state::<Nudge>().workspace(),
                 command,
-                may(&app, Grant::Shell),
+                may(app, Grant::Shell),
             )?;
             eprintln!("$ {command}\n{out}");
             app.state::<Nudge>()

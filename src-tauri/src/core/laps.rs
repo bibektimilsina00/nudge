@@ -45,7 +45,8 @@ impl Laps {
     /// marks is the turn.
     pub fn mark(&mut self, stage: &'static str) {
         let now = Instant::now();
-        self.marks.push((stage, now.saturating_duration_since(self.last)));
+        self.marks
+            .push((stage, now.saturating_duration_since(self.last)));
         self.last = now;
     }
 
@@ -92,7 +93,10 @@ mod tests {
         l.mark("brain");
 
         let line = l.line().expect("a turn was timed");
-        assert!(line.contains("heard"), "the second start wiped the first: {line}");
+        assert!(
+            line.contains("heard"),
+            "the second start wiped the first: {line}"
+        );
         assert!(line.contains("brain"));
         assert!(line.contains("total"));
 
@@ -112,7 +116,11 @@ mod tests {
     fn a_turn_with_nothing_marked_prints_nothing_and_still_ends() {
         let mut l = Laps::default();
         l.start();
-        assert_eq!(l.line(), None, "nothing was measured, so there is nothing to say");
+        assert_eq!(
+            l.line(),
+            None,
+            "nothing was measured, so there is nothing to say"
+        );
 
         l.start();
         l.mark("shot");

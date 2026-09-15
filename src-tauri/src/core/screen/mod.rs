@@ -25,14 +25,14 @@
 //! here rather than on someone else's machine months later.
 pub mod ax;
 pub mod capture;
-#[cfg(target_os = "macos")]
-pub mod fast;
 #[cfg(all(target_os = "macos", not(feature = "portable")))]
 pub mod click;
 #[cfg(any(not(target_os = "macos"), feature = "portable"))]
 #[path = "elsewhere/click.rs"]
 pub mod click;
 pub mod facts;
+#[cfg(target_os = "macos")]
+pub mod fast;
 pub mod haptics;
 #[cfg(all(target_os = "macos", not(feature = "portable")))]
 pub mod keyboard;
@@ -118,9 +118,21 @@ mod seam {
         }
 
         for (module, mac, elsewhere) in [
-            ("click", include_str!("click.rs"), include_str!("elsewhere/click.rs")),
-            ("keyboard", include_str!("keyboard.rs"), include_str!("elsewhere/keyboard.rs")),
-            ("launch", include_str!("launch.rs"), include_str!("elsewhere/launch.rs")),
+            (
+                "click",
+                include_str!("click.rs"),
+                include_str!("elsewhere/click.rs"),
+            ),
+            (
+                "keyboard",
+                include_str!("keyboard.rs"),
+                include_str!("elsewhere/keyboard.rs"),
+            ),
+            (
+                "launch",
+                include_str!("launch.rs"),
+                include_str!("elsewhere/launch.rs"),
+            ),
         ] {
             let (mut here, mut there) = (names(mac), names(elsewhere));
             here.sort();

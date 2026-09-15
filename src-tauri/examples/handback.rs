@@ -17,7 +17,22 @@ fn main() {
 
     let after = click::cursor().expect("a cursor");
     let drift = ((after.x - before.x).powi(2) + (after.y - before.y).powi(2)).sqrt();
-    println!("  clicked ({:.0}, {:.0}) in {:.0}ms", target.x, target.y, took.as_secs_f32() * 1000.0);
-    println!("  after   ({:.0}, {:.0}) -- {drift:.1}px from where it started", after.x, after.y);
-    println!("  {}", if drift < 2.0 { "came home" } else { "LEFT STRANDED" });
+    println!(
+        "  clicked ({:.0}, {:.0}) in {:.0}ms",
+        target.x,
+        target.y,
+        took.as_secs_f32() * 1000.0
+    );
+    println!(
+        "  after   ({:.0}, {:.0}) -- {drift:.1}px from where it started",
+        after.x, after.y
+    );
+    println!(
+        "  {}",
+        if drift < 2.0 {
+            "came home"
+        } else {
+            "LEFT STRANDED"
+        }
+    );
 }

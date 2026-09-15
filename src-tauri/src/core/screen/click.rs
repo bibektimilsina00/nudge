@@ -205,7 +205,10 @@ pub fn we_clicked() -> bool {
 }
 
 pub fn click(at: Point, times: u8) -> Result<()> {
-    OUR_CLICK.store(since_start_ms().max(1), std::sync::atomic::Ordering::Relaxed);
+    OUR_CLICK.store(
+        since_start_ms().max(1),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     // Out of sight for the trip. Dropped at the end of this function, whatever
     // happens in the middle.
     let _hidden = Hidden::now();
@@ -228,9 +231,7 @@ pub fn click(at: Point, times: u8) -> Result<()> {
     if let Some(home) = theirs {
         // Warped, not posted. A warp moves the cursor without generating an
         // event, so nothing downstream sees a second click or a stray drag.
-        unsafe {
-            core_graphics::display::CGWarpMouseCursorPosition(CGPoint::new(home.x, home.y))
-        };
+        unsafe { core_graphics::display::CGWarpMouseCursorPosition(CGPoint::new(home.x, home.y)) };
         // Otherwise the next real movement snaps back to where the click was:
         // the hardware and the cursor stay associated, and warping alone does not
         // tell the system the mouse is somewhere new.

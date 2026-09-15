@@ -81,7 +81,12 @@ pub fn request_click_permission() -> bool {
 }
 
 pub fn left_button_down() -> bool {
-    DeviceState::new().get_mouse().button_pressed.get(1).copied().unwrap_or(false)
+    DeviceState::new()
+        .get_mouse()
+        .button_pressed
+        .get(1)
+        .copied()
+        .unwrap_or(false)
 }
 
 pub fn move_to(at: Point) -> Result<()> {
@@ -113,7 +118,10 @@ pub fn we_clicked() -> bool {
 }
 
 pub fn click(at: Point, times: u8) -> Result<()> {
-    OUR_CLICK.store(since_start_ms().max(1), std::sync::atomic::Ordering::Relaxed);
+    OUR_CLICK.store(
+        since_start_ms().max(1),
+        std::sync::atomic::Ordering::Relaxed,
+    );
     let mut enigo = enigo()?;
     enigo
         .move_mouse(at.x as i32, at.y as i32, Coordinate::Abs)

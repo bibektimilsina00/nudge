@@ -303,10 +303,10 @@ impl Offers {
 
     /// Note what they said, and keep it.
     pub fn answered(&self, service: &str, said: Said) {
-        self.answers.lock().unwrap().insert(
-            service.to_string(),
-            Answer { said, at: now_ms() },
-        );
+        self.answers
+            .lock()
+            .unwrap()
+            .insert(service.to_string(), Answer { said, at: now_ms() });
         self.save();
         eprintln!("offer: {service} -> {said:?}");
     }
@@ -387,11 +387,17 @@ mod tests {
         let o = offers();
         assert!(o.may_ask("Calendar", false));
         o.asked();
-        assert!(!o.may_ask("Mail", false), "a different service is still an interruption");
+        assert!(
+            !o.may_ask("Mail", false),
+            "a different service is still an interruption"
+        );
     }
 
     fn github() -> Offer {
-        catalogue().into_iter().find(|o| o.name == "GitHub").unwrap()
+        catalogue()
+            .into_iter()
+            .find(|o| o.name == "GitHub")
+            .unwrap()
     }
 
     /// Five turns of use before anything is raised unprompted. Somebody finding
@@ -425,7 +431,10 @@ mod tests {
         for _ in 0..5 {
             o.a_turn_happened();
         }
-        let calendar = catalogue().into_iter().find(|c| c.name == "Calendar").unwrap();
+        let calendar = catalogue()
+            .into_iter()
+            .find(|c| c.name == "Calendar")
+            .unwrap();
         assert!(calendar.evidence.is_empty());
         assert!(!o.may_volunteer(&calendar, false, |_| true));
     }

@@ -203,7 +203,10 @@ mod tests {
         let m = blank();
         m.learn("Chrome", "Menus close if you click into them.");
         m.learn("Chrome", "menus close if you click into them.");
-        m.learn("Chrome", "Menus close if you click into them. Use the shortcut.");
+        m.learn(
+            "Chrome",
+            "Menus close if you click into them. Use the shortcut.",
+        );
         assert_eq!(m.about("Chrome").len(), 2, "{:?}", m.about("Chrome"));
     }
 

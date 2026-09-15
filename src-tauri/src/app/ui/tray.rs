@@ -142,7 +142,12 @@ fn build(app: &AppHandle, hotkey: &str) -> tauri::Result<Menu<Wry>> {
     }
     let remembered = match notes.is_empty() {
         true => None,
-        false => Some(Submenu::with_items(app, "Learned", true, &as_items(&notes))?),
+        false => Some(Submenu::with_items(
+            app,
+            "Learned",
+            true,
+            &as_items(&notes),
+        )?),
     };
     if let Some(remembered) = &remembered {
         items.push(remembered);
@@ -152,7 +157,9 @@ fn build(app: &AppHandle, hotkey: &str) -> tauri::Result<Menu<Wry>> {
     Menu::with_items(app, &items)
 }
 
-fn as_items<T: tauri::menu::IsMenuItem<Wry>>(items: &[T]) -> Vec<&dyn tauri::menu::IsMenuItem<Wry>> {
+fn as_items<T: tauri::menu::IsMenuItem<Wry>>(
+    items: &[T],
+) -> Vec<&dyn tauri::menu::IsMenuItem<Wry>> {
     items
         .iter()
         .map(|i| i as &dyn tauri::menu::IsMenuItem<Wry>)
@@ -205,7 +212,10 @@ pub fn install(app: &AppHandle, hotkey: &str) -> tauri::Result<()> {
                     }
                 }
                 _ if id.starts_with("reach:") => {
-                    if let Some(g) = Grant::ALL.iter().find(|g| format!("reach:{}", g.key()) == id) {
+                    if let Some(g) = Grant::ALL
+                        .iter()
+                        .find(|g| format!("reach:{}", g.key()) == id)
+                    {
                         let nudge = app.state::<Nudge>();
                         nudge.reach.set(*g, !nudge.reach.has(*g));
                     }

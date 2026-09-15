@@ -245,11 +245,7 @@ impl Agents {
         // design against.
         let mut last = 0;
         for (title, status, waiting) in [
-            (
-                "Renaming photos",
-                "Reading the dates off 240 files.",
-                false,
-            ),
+            ("Renaming photos", "Reading the dates off 240 files.", false),
             (
                 "Drafting the email",
                 "Which address should this go to?",
@@ -430,7 +426,13 @@ impl Agents {
         // no on-the-way-out to rely on: quitting from the menu bar, a crash and a
         // reboot all end the process without asking, and a history that only
         // survives a polite exit is a history that is missing the interesting runs.
-        if self.items.lock().unwrap().iter().any(|a| a.id == id && a.finished()) {
+        if self
+            .items
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|a| a.id == id && a.finished())
+        {
             self.write_down();
         }
     }
@@ -914,7 +916,11 @@ mod tests {
         a.stop(id);
         // The model call that was in flight when Escape was pressed comes back.
         a.set_state(id, State::Done);
-        assert_eq!(a.list()[0].state, State::Stopped, "a cancelled task reported success");
+        assert_eq!(
+            a.list()[0].state,
+            State::Stopped,
+            "a cancelled task reported success"
+        );
     }
 
     #[test]

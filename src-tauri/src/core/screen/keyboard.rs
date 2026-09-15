@@ -257,7 +257,7 @@ fn parse(spec: &str) -> Result<(CGEventFlags, CGKeyCode)> {
     let lower = spec.trim().to_lowercase();
     let parts: Vec<String> = if lower.contains('+') || (lower.contains('-') && lower.len() > 1) {
         lower
-            .split(|c| c == '+' || c == '-')
+            .split(['+', '-'])
             .map(|s| s.trim().to_string())
             .collect()
     } else {

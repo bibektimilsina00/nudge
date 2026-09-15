@@ -81,7 +81,7 @@ pub fn installed() -> Vec<Skill> {
         .collect();
     // By name, so the list does not reshuffle itself between openings for reasons
     // nobody can see.
-    found.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    found.sort_by_key(|a| a.name.to_lowercase());
     found
 }
 
@@ -184,9 +184,13 @@ mod tests {
 
     #[test]
     fn frontmatter_is_taken_apart_from_the_instructions() {
-        let (front, body) = split("---\nname: Tidy\ndescription: Sorts things.\n---\n\nStep one.\n");
+        let (front, body) =
+            split("---\nname: Tidy\ndescription: Sorts things.\n---\n\nStep one.\n");
         assert_eq!(field(&front, "name").as_deref(), Some("Tidy"));
-        assert_eq!(field(&front, "description").as_deref(), Some("Sorts things."));
+        assert_eq!(
+            field(&front, "description").as_deref(),
+            Some("Sorts things.")
+        );
         assert_eq!(body, "Step one.\n");
     }
 

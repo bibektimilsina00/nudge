@@ -44,7 +44,7 @@ jobs:
             web:
               - 'web/**'
             compose:
-              - 'docker-compose.yml'
+              - 'deploy/compose.yml'
 
   server:
     needs: changed
@@ -66,8 +66,14 @@ jobs:
           rsync -az --delete \
             --exclude .venv --exclude __pycache__ --exclude .pytest_cache \
             --exclude nudge.db --exclude releases --exclude .env \
-            server docker-compose.yml \
+            server \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/nudge/
+          # The production compose, under the name the box expects. Explicitly,
+          # and never the root docker-compose.yml -- that one is for laptops, it
+          # publishes ports and builds its own network, and copying it here once
+          # took the containers off the shared network and the site to 502.
+          rsync -az deploy/compose.yml \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/nudge/docker-compose.yml
 
       - name: Rebuild the API and nothing else
         run: |
@@ -107,8 +113,10 @@ jobs:
         run: |
           rsync -az --delete \
             --exclude node_modules --exclude .next --exclude .env \
-            web docker-compose.yml \
+            web \
             ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/nudge/
+          rsync -az deploy/compose.yml \
+            ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}:/opt/nudge/docker-compose.yml
 
       - name: Rebuild the site and nothing else
         run: |

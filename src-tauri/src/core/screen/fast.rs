@@ -103,24 +103,24 @@ pub fn jpeg(
 ) -> Option<(Vec<u8>, u32, u32)> {
     use objc2_core_foundation::{CFDictionary, CFMutableData, CFNumber, CFString, CFType};
     use objc2_core_graphics::CGImage;
-    use objc2_image_io::{
-        kCGImageDestinationLossyCompressionQuality, CGImageDestinationAddImage,
-        CGImageDestinationCreateWithData, CGImageDestinationFinalize,
-    };
+    // The methods, not the free functions: objc2-image-io deprecated the C-style
+    // names in favour of these, and a deprecation left alone is a warning that
+    // eventually becomes a removal.
+    use objc2_image_io::{kCGImageDestinationLossyCompressionQuality, CGImageDestination};
 
     let frame = frame(display_id, max_edge, exclude_pid)?;
     let (w, h) = (CGImage::width(Some(&frame)), CGImage::height(Some(&frame)));
 
     let data = CFMutableData::new(None, 0)?;
     let kind = CFString::from_static_str("public.jpeg");
-    let dest = unsafe { CGImageDestinationCreateWithData(&data, &kind, 1, None) }?;
+    let dest = unsafe { CGImageDestination::with_data(&data, &kind, 1, None) }?;
     let q = CFNumber::new_f64(quality);
     let props = CFDictionary::from_slices(
         &[unsafe { kCGImageDestinationLossyCompressionQuality }],
         &[q.as_ref() as &CFType],
     );
-    unsafe { CGImageDestinationAddImage(&dest, &frame, Some(props.as_opaque())) };
-    if !unsafe { CGImageDestinationFinalize(&dest) } {
+    unsafe { dest.add_image(&frame, Some(props.as_opaque())) };
+    if !unsafe { dest.finalize() } {
         return None;
     }
     Some((data.to_vec(), w as u32, h as u32))
@@ -165,7 +165,10 @@ pub fn frame(
     // Scaled here rather than afterwards. ScreenCaptureKit is doing the work on
     // the GPU either way, and asking it for the size we want costs nothing where
     // resizing it ourselves cost 232ms.
-    let (dw, dh) = (unsafe { display.width() } as f64, unsafe { display.height() } as f64);
+    let (dw, dh) = (
+        unsafe { display.width() } as f64,
+        unsafe { display.height() } as f64,
+    );
     let scale = (max_edge as f64 / dw.max(dh)).min(1.0);
     let config = unsafe { SCStreamConfiguration::new() };
     unsafe {
@@ -221,10 +224,22 @@ mod tests {
         let began = std::time::Instant::now();
         let img = super::grab(id, 1280, pid).expect("ScreenCaptureKit returned nothing");
         let took = began.elapsed();
-        eprintln!("  cold {cold:?}, warm {took:?}, {}x{}", img.width(), img.height());
+        eprintln!(
+            "  cold {cold:?}, warm {took:?}, {}x{}",
+            img.width(),
+            img.height()
+        );
 
-        assert!(img.width() > 200 && img.height() > 200, "a {}x{} image", img.width(), img.height());
-        assert!(img.width().max(img.height()) <= 1280, "not scaled to what was asked");
+        assert!(
+            img.width() > 200 && img.height() > 200,
+            "a {}x{} image",
+            img.width(),
+            img.height()
+        );
+        assert!(
+            img.width().max(img.height()) <= 1280,
+            "not scaled to what was asked"
+        );
 
         // The whole reason this exists. If it is not comfortably quicker than the
         // 1.5s the old path takes to composite, it has bought nothing.
@@ -236,7 +251,8 @@ mod tests {
         // A black frame is the other way this fails: the call succeeds and
         // composites nothing. Any real screen has a spread of brightness.
         let grey = img.to_luma8();
-        let mean = grey.as_raw().iter().map(|p| *p as f64).sum::<f64>() / grey.as_raw().len() as f64;
+        let mean =
+            grey.as_raw().iter().map(|p| *p as f64).sum::<f64>() / grey.as_raw().len() as f64;
         let sd = (grey
             .as_raw()
             .iter()

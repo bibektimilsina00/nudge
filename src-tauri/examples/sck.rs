@@ -27,7 +27,9 @@ fn shareable() -> Option<Retained<SCShareableContent>> {
         },
     );
     unsafe { SCShareableContent::getShareableContentWithCompletionHandler(&handler) };
-    rx.recv_timeout(std::time::Duration::from_secs(5)).ok().flatten()
+    rx.recv_timeout(std::time::Duration::from_secs(5))
+        .ok()
+        .flatten()
 }
 
 /// A ScreenCaptureKit image, as bytes we can hand to the JPEG encoder.
@@ -75,7 +77,10 @@ fn main() {
         eprintln!("no shareable content -- is Screen Recording granted to this binary?");
         std::process::exit(1);
     };
-    println!("  SCShareableContent        {:>7.0}ms", t.elapsed().as_secs_f32() * 1000.0);
+    println!(
+        "  SCShareableContent        {:>7.0}ms",
+        t.elapsed().as_secs_f32() * 1000.0
+    );
 
     let displays = unsafe { content.displays() };
     let Some(display) = displays.iter().next() else {
@@ -87,7 +92,11 @@ fn main() {
 
     let empty = objc2_foundation::NSArray::new();
     let filter = unsafe {
-        SCContentFilter::initWithDisplay_excludingWindows(SCContentFilter::alloc(), &display, &empty)
+        SCContentFilter::initWithDisplay_excludingWindows(
+            SCContentFilter::alloc(),
+            &display,
+            &empty,
+        )
     };
     let config = unsafe { SCStreamConfiguration::new() };
     unsafe {
@@ -107,8 +116,7 @@ fn main() {
         let t = Instant::now();
         let (tx, rx) = mpsc::channel();
         let handler = block2::RcBlock::new(
-            move |img: *mut objc2_core_graphics::CGImage,
-                  _err: *mut objc2_foundation::NSError| {
+            move |img: *mut objc2_core_graphics::CGImage, _err: *mut objc2_foundation::NSError| {
                 let got = unsafe { img.as_ref() }.map(pixels);
                 let _ = tx.send(got);
             },
@@ -120,7 +128,10 @@ fn main() {
                 Some(&handler),
             )
         };
-        let got = rx.recv_timeout(std::time::Duration::from_secs(5)).ok().flatten();
+        let got = rx
+            .recv_timeout(std::time::Duration::from_secs(5))
+            .ok()
+            .flatten();
         println!(
             "  captureImage #{i}            {:>7.0}ms  {}",
             t.elapsed().as_secs_f32() * 1000.0,
@@ -130,10 +141,7 @@ fn main() {
                     // proof that this is a picture of anything is that the
                     // pixels differ from each other.
                     let mean: f64 = rgb.iter().map(|b| *b as f64).sum::<f64>() / rgb.len() as f64;
-                    let var: f64 = rgb
-                        .iter()
-                        .map(|b| (*b as f64 - mean).powi(2))
-                        .sum::<f64>()
+                    let var: f64 = rgb.iter().map(|b| (*b as f64 - mean).powi(2)).sum::<f64>()
                         / rgb.len() as f64;
                     format!("{w}x{h}, mean {mean:.0}, sd {:.0}", var.sqrt())
                 }
@@ -149,15 +157,29 @@ fn main() {
                 let mine = channels(&rgb);
                 let theirs = {
                     let shot = nudge_lib::core::screen::capture::grab(1280).expect("grab");
-                    let img = image::load_from_memory(&shot.bytes).expect("decode").to_rgb8();
+                    let img = image::load_from_memory(&shot.bytes)
+                        .expect("decode")
+                        .to_rgb8();
                     channels(img.as_raw())
                 };
-                println!("\n  sck    r {:.0} g {:.0} b {:.0}   ({w}x{h})", mine.0, mine.1, mine.2);
-                println!("  cgwin  r {:.0} g {:.0} b {:.0}", theirs.0, theirs.1, theirs.2);
-                let off = (mine.0 - theirs.0).abs() + (mine.1 - theirs.1).abs() + (mine.2 - theirs.2).abs();
+                println!(
+                    "\n  sck    r {:.0} g {:.0} b {:.0}   ({w}x{h})",
+                    mine.0, mine.1, mine.2
+                );
+                println!(
+                    "  cgwin  r {:.0} g {:.0} b {:.0}",
+                    theirs.0, theirs.1, theirs.2
+                );
+                let off = (mine.0 - theirs.0).abs()
+                    + (mine.1 - theirs.1).abs()
+                    + (mine.2 - theirs.2).abs();
                 println!(
                     "  channels {} (total difference {off:.1})",
-                    if off < 12.0 { "AGREE" } else { "DISAGREE -- check the byte order" }
+                    if off < 12.0 {
+                        "AGREE"
+                    } else {
+                        "DISAGREE -- check the byte order"
+                    }
                 );
             }
         }

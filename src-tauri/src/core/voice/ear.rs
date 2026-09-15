@@ -73,7 +73,8 @@ mod imp {
             return None;
         }
         let recognizer = unsafe { SFSpeechRecognizer::new() };
-        if !unsafe { recognizer.isAvailable() } || !unsafe { recognizer.supportsOnDeviceRecognition() }
+        if !unsafe { recognizer.isAvailable() }
+            || !unsafe { recognizer.supportsOnDeviceRecognition() }
         {
             return None;
         }
@@ -96,9 +97,9 @@ mod imp {
             move |result: *mut SFSpeechRecognitionResult, _err: *mut objc2_foundation::NSError| {
                 // Partial results arrive as it works. Only the final one is the
                 // sentence; the rest are it changing its mind mid-word.
-                let done = unsafe { result.as_ref() }.filter(|r| unsafe { r.isFinal() }).map(|r| {
-                    unsafe { r.bestTranscription().formattedString() }.to_string()
-                });
+                let done = unsafe { result.as_ref() }
+                    .filter(|r| unsafe { r.isFinal() })
+                    .map(|r| unsafe { r.bestTranscription().formattedString() }.to_string());
                 if let Some(text) = done {
                     let _ = tx.send(text);
                 }
@@ -128,7 +129,9 @@ mod imp {
             eprintln!("nudge: heard on this machine -- {text:?}");
         }
         if heard.is_none() {
-            eprintln!("nudge: on-device transcription timed out -- using the hosted one from now on");
+            eprintln!(
+                "nudge: on-device transcription timed out -- using the hosted one from now on"
+            );
             GIVEN_UP.store(true, Ordering::Relaxed);
         }
         heard.filter(|t| !t.trim().is_empty())

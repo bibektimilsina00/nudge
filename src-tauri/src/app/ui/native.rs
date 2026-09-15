@@ -152,7 +152,7 @@ pub fn mission_control() -> bool {
         let Some(owner) = win.find(&owner_key).and_then(|v| v.downcast::<CFString>()) else {
             continue;
         };
-        if owner.to_string() != "Dock" {
+        if owner != "Dock" {
             continue;
         }
         let Some(bounds) = win.find(&bounds_key) else {
@@ -251,7 +251,7 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
         // window that is already a child re-orders it -- which the compositor
         // shows as a flash, and a Space transition is exactly when it is most
         // likely to be noticed.
-        let already = unsafe { ns.parentWindow() }.is_some();
+        let already = ns.parentWindow().is_some();
         if !already {
             unsafe { anchor.addChildWindow_ordered(ns, NSWindowOrderingMode::Above) };
         }

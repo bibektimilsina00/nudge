@@ -166,13 +166,26 @@ mod imp {
         let mut point = CGPoint::new(0.0, 0.0);
         let mut size = CGSize::new(0.0, 0.0);
         let ok = unsafe {
-            AXValueGetValue(p.as_CFTypeRef(), CG_POINT, &mut point as *mut _ as *mut c_void)
-                && AXValueGetValue(s.as_CFTypeRef(), CG_SIZE, &mut size as *mut _ as *mut c_void)
+            AXValueGetValue(
+                p.as_CFTypeRef(),
+                CG_POINT,
+                &mut point as *mut _ as *mut c_void,
+            ) && AXValueGetValue(
+                s.as_CFTypeRef(),
+                CG_SIZE,
+                &mut size as *mut _ as *mut c_void,
+            )
         };
         ok.then_some(((point.x, point.y), (size.width, size.height)))
     }
 
-    fn walk(el: Ref, depth: usize, seen: &mut usize, out: &mut Vec<Control>, began: std::time::Instant) {
+    fn walk(
+        el: Ref,
+        depth: usize,
+        seen: &mut usize,
+        out: &mut Vec<Control>,
+        began: std::time::Instant,
+    ) {
         if *seen >= MAX_ELEMENTS || depth > MAX_DEPTH || began.elapsed() > BUDGET {
             return;
         }
@@ -307,7 +320,9 @@ mod imp {
         let yes = CFBoolean::true_value();
         for attribute in ["AXManualAccessibility", "AXEnhancedUserInterface"] {
             let key = CFString::new(attribute);
-            unsafe { AXUIElementSetAttributeValue(app, key.as_concrete_TypeRef(), yes.as_CFTypeRef()) };
+            unsafe {
+                AXUIElementSetAttributeValue(app, key.as_concrete_TypeRef(), yes.as_CFTypeRef())
+            };
         }
 
         let began = std::time::Instant::now();
@@ -534,7 +549,6 @@ pub fn usable(
     })
 }
 
-
 pub use imp::*;
 
 /// The one control a goal obviously means, when there is one.
@@ -594,8 +608,8 @@ pub fn obvious<'a>(goal: &str, controls: &'a [Control]) -> Option<&'a Control> {
     }
 
     const RELATIVE: [&str; 14] = [
-        "next to", "beside", "left of", "right of", "above", "below", "under",
-        "over", "after", "before", "near", "other", "second", "third",
+        "next to", "beside", "left of", "right of", "above", "below", "under", "over", "after",
+        "before", "near", "other", "second", "third",
     ];
     if RELATIVE
         .iter()
@@ -698,13 +712,21 @@ mod matching {
     fn one_obvious_control_skips_the_model_entirely() {
         let controls = [c("Send"), c("Cancel"), c("Attach file")];
         assert_eq!(obvious("click Send", &controls).unwrap().label, "Send");
-        assert_eq!(obvious("Click the Send button", &controls).unwrap().label, "Send");
-        assert_eq!(obvious("press attach file", &controls).unwrap().label, "Attach file");
+        assert_eq!(
+            obvious("Click the Send button", &controls).unwrap().label,
+            "Send"
+        );
+        assert_eq!(
+            obvious("press attach file", &controls).unwrap().label,
+            "Attach file"
+        );
 
         // The decoration nobody says out loud.
         let shortcuts = [c("Search (⇧⌘F)"), c("Explorer (⇧⌘E)")];
         assert_eq!(
-            obvious("click the search icon in the sidebar", &shortcuts).unwrap().label,
+            obvious("click the search icon in the sidebar", &shortcuts)
+                .unwrap()
+                .label,
             "Search (⇧⌘F)"
         );
     }
@@ -718,8 +740,18 @@ mod matching {
     #[test]
     fn the_looser_verbs_mean_the_same_thing() {
         let menus = [
-            Control { role: "AXMenuBarItem".into(), label: "View".into(), at: (10.0, 10.0), size: (40.0, 30.0) },
-            Control { role: "AXMenuBarItem".into(), label: "Safari".into(), at: (60.0, 10.0), size: (50.0, 30.0) },
+            Control {
+                role: "AXMenuBarItem".into(),
+                label: "View".into(),
+                at: (10.0, 10.0),
+                size: (40.0, 30.0),
+            },
+            Control {
+                role: "AXMenuBarItem".into(),
+                label: "Safari".into(),
+                at: (60.0, 10.0),
+                size: (50.0, 30.0),
+            },
         ];
         for said in [
             "open the View menu",
@@ -738,12 +770,20 @@ mod matching {
             "\"open Safari\" is a request to launch an application"
         );
         // Saying menu settles it.
-        assert_eq!(obvious("open the Safari menu", &menus).unwrap().label, "Safari");
+        assert_eq!(
+            obvious("open the Safari menu", &menus).unwrap().label,
+            "Safari"
+        );
         // And the plain verbs were never ambiguous: nobody clicks an application.
         assert_eq!(obvious("click Safari", &menus).unwrap().label, "Safari");
 
         // The condition is about menu bars, not about everything.
-        let button = [Control { role: "AXButton".into(), label: "Safari".into(), at: (10.0, 10.0), size: (40.0, 30.0) }];
+        let button = [Control {
+            role: "AXButton".into(),
+            label: "Safari".into(),
+            at: (10.0, 10.0),
+            size: (40.0, 30.0),
+        }];
         assert_eq!(obvious("open Safari", &button).unwrap().label, "Safari");
     }
 
@@ -756,18 +796,36 @@ mod matching {
         assert_eq!(obvious("click send", &controls).unwrap().label, "Send");
         // Being more precise must not be punished: "Send" is inside "Send Later",
         // so they are the same control named more fully, not two candidates.
-        assert_eq!(obvious("click send later", &controls).unwrap().label, "Send Later");
+        assert_eq!(
+            obvious("click send later", &controls).unwrap().label,
+            "Send Later"
+        );
         // Whereas two unrelated labels genuinely leave us not knowing.
         assert!(obvious("click send or cancel", &[c("Send"), c("Cancel")]).is_none());
         // Short labels are real buttons and must work.
-        assert_eq!(obvious("click OK", &[c("OK"), c("Cancel")]).unwrap().label, "OK");
+        assert_eq!(
+            obvious("click OK", &[c("OK"), c("Cancel")]).unwrap().label,
+            "OK"
+        );
         // But two controls with the same name is the case nothing can resolve --
         // which is what a list of rows looks like.
         assert!(obvious("click ok", &[c("OK"), c("OK")]).is_none());
-        assert!(obvious("how do I send this", &controls).is_none(), "a question, not an instruction");
-        assert!(obvious("the send button is greyed out", &controls).is_none(), "a description");
-        assert!(obvious("open the file menu and send", &controls).is_none(), "does not open with a click");
-        assert!(obvious("click something else entirely", &controls).is_none(), "nothing matches");
+        assert!(
+            obvious("how do I send this", &controls).is_none(),
+            "a question, not an instruction"
+        );
+        assert!(
+            obvious("the send button is greyed out", &controls).is_none(),
+            "a description"
+        );
+        assert!(
+            obvious("open the file menu and send", &controls).is_none(),
+            "does not open with a click"
+        );
+        assert!(
+            obvious("click something else entirely", &controls).is_none(),
+            "nothing matches"
+        );
 
         // Naming a control in order to point somewhere else. Each of these
         // matched a real control and would have clicked it.
@@ -780,13 +838,24 @@ mod matching {
             "click the other View",
             "click the one after View",
         ] {
-            assert!(obvious(said, &menus).is_none(), "{said:?} should have gone to the model");
+            assert!(
+                obvious(said, &menus).is_none(),
+                "{said:?} should have gone to the model"
+            );
         }
         assert!(obvious("click ok", &[]).is_none(), "nothing exposed at all");
 
         // Word boundaries. "ok" inside "bookmark" is not a button called OK.
-        assert!(obvious("click bookmarks", &[c("OK"), c("Bookmarks")]).unwrap().label == "Bookmarks");
-        assert!(obvious("click tables", &[c("Tab")]).is_none(), "tab is not inside tables");
+        assert!(
+            obvious("click bookmarks", &[c("OK"), c("Bookmarks")])
+                .unwrap()
+                .label
+                == "Bookmarks"
+        );
+        assert!(
+            obvious("click tables", &[c("Tab")]).is_none(),
+            "tab is not inside tables"
+        );
 
         // Too short to mean anything on its own.
         assert!(obvious("click a", &[c("A")]).is_none());
@@ -805,14 +874,28 @@ mod tests {
     fn a_control_without_a_name_or_a_place_is_not_a_control() {
         let frame = Some(((10.0, 20.0), (40.0, 30.0)));
 
-        assert!(usable("AXButton".into(), String::new(), frame).is_none(), "no name");
-        assert!(usable("AXButton".into(), "   ".into(), frame).is_none(), "blank name");
-        assert!(usable("AXButton".into(), "Send".into(), None).is_none(), "nowhere");
+        assert!(
+            usable("AXButton".into(), String::new(), frame).is_none(),
+            "no name"
+        );
+        assert!(
+            usable("AXButton".into(), "   ".into(), frame).is_none(),
+            "blank name"
+        );
+        assert!(
+            usable("AXButton".into(), "Send".into(), None).is_none(),
+            "nowhere"
+        );
 
         // A closed menu's items report a zero sized rectangle. Clicking the
         // centre of one is clicking somewhere else entirely, with confidence.
         assert!(
-            usable("AXMenuItem".into(), "New Window".into(), Some(((0.0, 982.0), (0.0, 0.0)))).is_none(),
+            usable(
+                "AXMenuItem".into(),
+                "New Window".into(),
+                Some(((0.0, 982.0), (0.0, 0.0)))
+            )
+            .is_none(),
             "a closed menu has nowhere to click"
         );
     }
@@ -825,7 +908,14 @@ mod tests {
             Some(((10.0, 20.0), (40.0, 30.0))),
         )
         .expect("a real button");
-        assert_eq!(c.at, (30.0, 35.0), "clicks land in the middle, not the corner");
-        assert_eq!(c.label, "Send Message", "labels are one line of ordinary spacing");
+        assert_eq!(
+            c.at,
+            (30.0, 35.0),
+            "clicks land in the middle, not the corner"
+        );
+        assert_eq!(
+            c.label, "Send Message",
+            "labels are one line of ordinary spacing"
+        );
     }
 }

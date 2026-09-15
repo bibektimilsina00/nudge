@@ -1,0 +1,48 @@
+# Nudge on the shared box.
+#
+# Not the same file as the docker-compose.yml at the root, and that is the whole
+# point of it living here. The root one is for running this on a laptop: it
+# publishes ports and makes its own network. This one publishes nothing and joins
+# the `web` network that the Caddy already fronting riocut and edumlt uses, so
+# the proxy can reach these containers by name.
+#
+# They were the same file once. A deploy copied the laptop version over this one,
+# the containers came back on the wrong network, Caddy could not see them, and
+# the site served 502 until it was put back.
+services:
+  api:
+    build: ./server
+    environment:
+      NUDGE_DATABASE_URL: sqlite:////srv/data/nudge.db
+      # Same origin in production: Caddy sends /api here and everything else to
+      # the site, so the browser makes no cross-origin request at all.
+      NUDGE_WEB_ORIGIN: https://nudge.runmycrew.com
+      NUDGE_RELEASES_DIR: /srv/releases
+    volumes:
+      # Builds and the database outlive any deploy, so neither lives in the
+      # image. A 20MB binary in a layer is a 20MB rebuild every time a line of
+      # Python changes.
+      - releases:/srv/releases
+      - data:/srv/data
+    networks: [web]
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Empty, so the bundle asks the origin it was served from. Baked in at
+        # build time -- Next substitutes NEXT_PUBLIC_* during the build, so
+        # setting it at runtime does nothing.
+        NEXT_PUBLIC_API: ""
+    networks: [web]
+    depends_on: [api]
+    restart: unless-stopped
+
+networks:
+  web:
+    external: true
+
+volumes:
+  releases:
+  data:
