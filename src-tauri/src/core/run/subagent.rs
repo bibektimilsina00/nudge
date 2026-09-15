@@ -153,6 +153,7 @@ where
             controls: &[],
             tools: &[],
             reach: String::new(),
+            memory: String::new(),
             shell: false,
             workspace: String::new(),
         };
@@ -258,6 +259,7 @@ where
             controls: &[],
             tools,
             reach: reach.to_string(),
+            memory: String::new(),
             shell,
             workspace: workspace.display().to_string(),
         };

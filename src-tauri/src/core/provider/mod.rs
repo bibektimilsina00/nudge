@@ -173,6 +173,15 @@ pub enum Step {
     /// Just talking. Not every hotkey press is a task -- sometimes it is a
     /// question, a greeting, or someone bored at 2am.
     Reply { say: String },
+    /// Keep a note about an application, for next time.
+    ///
+    /// `about` is the application the note concerns -- normally the one in front,
+    /// which is the only one it will ever be shown for.
+    Remember {
+        about: String,
+        note: String,
+        say: String,
+    },
     /// Hand a whole coding job to a coding agent.
     ///
     /// Which agent is Nudge's business, not the model's and not the user's --
@@ -291,6 +300,9 @@ impl Step {
             | Step::Mcp { .. }
             | Step::Request { .. }
             | Step::Delegate { .. } => true,
+            // Learns nothing from outside; it writes down what was already
+            // learned from something that did.
+            Step::Remember { .. } => false,
             // Changes the world or says something about it, and learns nothing.
             Step::Point { .. }
             | Step::Done { .. }
@@ -339,6 +351,7 @@ impl Step {
             | Step::Mcp { say, .. }
             | Step::Request { say, .. }
             | Step::Delegate { say, .. }
+            | Step::Remember { say, .. }
             | Step::Reply { say } => say,
         }
     }
@@ -432,6 +445,7 @@ impl Step {
             Step::Request { method, url, .. } => format!("{method} {url}"),
             // Named by the work, never by who did it.
             Step::Delegate { task, .. } => format!("Handed over: {}", short(task)),
+            Step::Remember { about, note, .. } => format!("Noted about {about}: {}", short(note)),
             Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
             Step::Show { path, .. } => format!("Showed {path}"),
             Step::Workspace { path, .. } => format!("Working in {path} now"),
@@ -502,6 +516,10 @@ pub struct Ask<'a> {
     /// What has been allowed beyond the defaults, already written out. Empty in
     /// the ordinary case, which is every case until somebody decides otherwise.
     pub reach: String,
+    /// What was learned about the application in front, already written out.
+    /// Empty for an application nothing has been learned about, which is nearly
+    /// all of them.
+    pub memory: String,
     /// Whether the shell may run anything, which decides which installed tools
     /// are worth naming -- see [`crate::core::tools::present`].
     pub shell: bool,
@@ -574,6 +592,7 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
     let reach = &ask.reach;
+    let memory = &ask.memory;
     // What this machine actually has, which is the difference between reaching
     // for `gh` and finding out it is not there.
     let here = crate::core::tools::present::line(ask.shell);
@@ -669,7 +688,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Paths are relative to it. If you need to know what is in there, look \
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
-         {facts}{here}{controls}{tools}{reach}\
+         {facts}{here}{memory}{controls}{tools}{reach}\
          Steps already completed:\n{history}{stalled}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
@@ -701,6 +720,16 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Anything other than GET or HEAD needs to have been allowed, and if it \
          has not been you will be told so plainly -- say what you would have done \
          and that it needs allowing, rather than trying it another way.\n\n\
+         ## Keeping what you find out\n\n\
+         Applications are strange in their own particular ways, and you find that \
+         out by getting it wrong once. When a step fails and you work out why, \
+         answer `remember` with the application and one sentence of what would \
+         have saved you -- it is put in front of you next time that application is \
+         open, and never otherwise.\n\
+         Only from failure. \u{201c}It worked\u{201d} teaches nothing, because next time \
+         would have done that anyway. Write what was surprising, not what was \
+         obvious, and write it as a fact about the application rather than as a \
+         story about this turn.\n\n\
          ## When something underneath breaks\n\n\
          Errors you are shown are about programs the person does not know are \
          running. A stack trace, a crate name, an exit code -- passing any of that \
@@ -1127,6 +1156,11 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
         }),
         "unsure" => Some(Step::Unsure { say }),
         "reply" => Some(Step::Reply { say }),
+        "remember" => Some(Step::Remember {
+            about: v["about"].as_str().unwrap_or_default().to_string(),
+            note: v["note"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
         "delegate" => Some(Step::Delegate {
             task: v["task"].as_str().unwrap_or_default().to_string(),
             named: v["named"]
@@ -1394,6 +1428,7 @@ mod tests {
             tools: &[],
             reach: String::new(),
             shell: false,
+            memory: String::new(),
             workspace: "/tmp/workspace".into(),
         }
     }

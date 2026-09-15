@@ -91,6 +91,9 @@ pub struct Nudge {
     /// enforcing another, which is the worst possible failure for a thing whose
     /// entire job is being visible.
     pub reach: crate::core::reach::Reach,
+    /// What this Mac's applications turned out to be like. See
+    /// [`crate::core::memory`].
+    pub memory: crate::core::memory::Memory,
 }
 
 impl Nudge {
@@ -99,6 +102,7 @@ impl Nudge {
         let reach = crate::core::reach::Reach::from_config(&cfg.reach);
         Ok(Self {
             reach,
+            memory: crate::core::memory::Memory::load(),
             cfg,
             provider,
             session: Mutex::new(None),
@@ -510,6 +514,9 @@ impl Nudge {
         let now = shot.fingerprint();
         // Only meaningful once something has been tried.
         let stalled = !done.is_empty() && capture::unchanged(&seen, &now);
+        // Before `facts` is moved into the Ask, and the only place the frontmost
+        // application is known -- which is the whole scoping rule.
+        let memory = self.memory.prompt(facts.app.as_deref());
         let ask = Ask {
             goal: &goal,
             done: &done,
@@ -520,6 +527,7 @@ impl Nudge {
             tools: &self.tools(),
             reach: self.reach.prompt(),
             shell: self.reach.has(crate::core::reach::Grant::Shell),
+            memory,
             workspace: self.workspace().display().to_string(),
         };
         // When the system has already named exactly the control that was asked

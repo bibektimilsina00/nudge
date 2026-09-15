@@ -834,17 +834,50 @@ their names, and there is a test holding that.**
 
 ### Phase 4 — Learning
 
-**4.1 Memory.**
+**4.1 Memory.** *Built.*
 
-Per-app notes, written from failure, injected only when that application is in
-front: *"CapCut: the timeline view means a project is open."* Earned once the loop
-is known to work -- memory that records a broken loop's habits is worse than none.
+`core/memory.rs`, plus a `remember` outcome. Notes are kept per application in
+`~/.config/nudge/memory.toml` and put back in front of the model **only when that
+application is in front**.
 
-**4.2 Skills, if memory proves out.**
+The scoping is the whole design. A general pile of advice is paid for on every
+turn and is about the wrong program almost always; thirty words about CapCut cost
+nothing on the other three hundred and sixty-four days.
 
-A remembered sequence that worked, replayable by name. The natural extension, and
-the thing every competitor advertises. Deliberately after memory, because a skill
-is a memory that has been promoted.
+**Written from failure, not success.** The prompt says so explicitly: *"it worked"*
+teaches nothing, because next time would have done that anyway. Write what was
+surprising, as a fact about the application rather than a story about this turn.
+
+Bounded and deduplicated -- eight notes per application, 200 characters each, and
+a note that repeats one already held is dropped. Beyond that it stops being a hint
+and becomes a second set of instructions competing with the real ones.
+
+**Visible and forgettable**, by the rule everything that changes behaviour follows
+here: a **Learned** submenu in the menu bar shows each application with a count,
+and one click forgets it. Plain items rather than checkboxes, because a tick would
+imply it can be switched back on. Something that silently learns is something you
+cannot reason about when it starts behaving oddly.
+
+*Verified:* the file loads at startup (`memory: 2 notes about 2 applications`), and
+`prompt()` is unit-tested to return a note for its own application and nothing for
+any other.
+
+*Not verified:* a note being written by the model from a real failure. Asked
+directly to *"remember that Ghostty has no window open"*, it launched Ghostty --
+correctly, since that is what the sentence asks for. Provoking a genuine
+learn-from-failure on demand is harder than it sounds, and the honest position is
+that the write path is unit-tested and unobserved.
+
+**4.2 waits on that.** The plan's own condition is *"if memory proves out"*, and it
+has not yet -- nothing has been learned in anger. Promoting a remembered sequence
+into a named skill while the thing it is promoted from is unproven would be
+building the second floor first.
+
+**4.2 Skills, if memory proves out.** *Waiting, on purpose.*
+
+A remembered sequence that worked, replayable by name. Deliberately after memory,
+because a skill is a memory that has been promoted -- and nothing has been
+remembered in anger yet. See 4.1.
 
 ### Phase 5 — Being usable by anyone else
 

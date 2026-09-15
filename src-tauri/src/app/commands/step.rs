@@ -281,6 +281,10 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
             .record_run(format!("search {query:?}"), found);
         crate::app::agent::publish(app);
     }
+    if let Step::Remember { about, note, .. } = step {
+        let said = app.state::<Nudge>().memory.learn(about, note);
+        app.state::<Nudge>().note(said);
+    }
     if let Step::Delegate { task, named, .. } = step {
         let (_, _, form) = crate::core::tools::running::choose(named.as_deref())?;
         let command = crate::core::tools::running::command_for(form, task);

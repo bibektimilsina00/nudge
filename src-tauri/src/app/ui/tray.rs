@@ -99,19 +99,57 @@ fn build(app: &AppHandle, hotkey: &str) -> tauri::Result<Menu<Wry>> {
         })
         .collect::<tauri::Result<_>>()?;
 
+    // What it has learned, and how to make it forget.
+    //
+    // Memory changes what Nudge does, so it gets the same treatment as everything
+    // else that does: visible, with a count, and undoable in one click. Something
+    // that silently learns is something you cannot reason about when it starts
+    // behaving oddly.
+    //
+    // Plain items rather than checkboxes: a tick would imply the note can be
+    // switched off and back on, and forgetting is not reversible.
+    let learned = nudge.memory.everything();
+    let notes: Vec<MenuItem<_>> = learned
+        .iter()
+        .map(|(about, count)| {
+            MenuItem::with_id(
+                app,
+                format!("forget:{about}"),
+                match count {
+                    1 => format!("Forget 1 note about {about}"),
+                    n => format!("Forget {n} notes about {about}"),
+                },
+                true,
+                None::<&str>,
+            )
+        })
+        .collect::<tauri::Result<_>>()?;
+
     let quit = MenuItem::with_id(app, "quit", "Quit Nudge", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
 
     // The submenu is left out entirely when nothing is configured, rather than
     // shown empty. An empty "Tools" reads as something broken; its absence reads
     // as a feature not in use, which is what it is.
-    match tools.is_empty() {
-        true => Menu::with_items(app, &[&ask, &voice, &reach, &sep, &quit]),
-        false => {
-            let servers = Submenu::with_items(app, "Tools", true, &as_items(&tools))?;
-            Menu::with_items(app, &[&ask, &voice, &reach, &servers, &sep, &quit])
-        }
+    let mut items: Vec<&dyn tauri::menu::IsMenuItem<Wry>> = vec![&ask, &voice, &reach];
+    // Built here so the borrows outlive the vector that points at them.
+    let servers = match tools.is_empty() {
+        true => None,
+        false => Some(Submenu::with_items(app, "Tools", true, &as_items(&tools))?),
+    };
+    if let Some(servers) = &servers {
+        items.push(servers);
     }
+    let remembered = match notes.is_empty() {
+        true => None,
+        false => Some(Submenu::with_items(app, "Learned", true, &as_items(&notes))?),
+    };
+    if let Some(remembered) = &remembered {
+        items.push(remembered);
+    }
+    items.push(&sep);
+    items.push(&quit);
+    Menu::with_items(app, &items)
 }
 
 fn as_items<T: tauri::menu::IsMenuItem<Wry>>(items: &[T]) -> Vec<&dyn tauri::menu::IsMenuItem<Wry>> {
@@ -171,6 +209,9 @@ pub fn install(app: &AppHandle, hotkey: &str) -> tauri::Result<()> {
                         let nudge = app.state::<Nudge>();
                         nudge.reach.set(*g, !nudge.reach.has(*g));
                     }
+                }
+                _ if id.starts_with("forget:") => {
+                    app.state::<Nudge>().memory.forget(&id["forget:".len()..]);
                 }
                 _ if id.starts_with("server:") => {
                     let name = &id["server:".len()..];

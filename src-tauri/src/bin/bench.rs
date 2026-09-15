@@ -353,6 +353,7 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
             tools: &[],
             reach: String::new(),
             shell: false,
+            memory: String::new(),
             goal: &c.goal,
             done: &[],
             stalled: false,
