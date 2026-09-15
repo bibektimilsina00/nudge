@@ -964,7 +964,30 @@ The precedent is already in the codebase and was written for exactly this reason
 foreground search found an answer, the handover wiped it, and the agent searched
 again for the same thing.
 
-*Done when:* "what did that print?" is answerable one turn later.
+*Done when:* "what did that print?" is answerable one turn later. **Done:**
+
+    turn 1: "run ls in my workspace and tell me what is there"
+            → files/list_directory → hello.py, index.html, otters.txt, shopping.txt
+
+    turn 2: "how many of those were text files?"
+      saw: "The active directory listing from earlier shows two text files…"
+            → Done in 3.3s, one turn, nothing re-run
+
+*Built as:* `Nudge::end` keeps the finished session's goal and tail for five
+minutes; `open` picks it up if the thread is still warm. Bounded twice over,
+because this is paid on every turn that follows another closely -- six entries and
+2,000 characters, newest first, so a command's output survives and a file dump from
+four turns ago does not.
+
+**Kept apart from `done`, and that is the part that matters.** `done` is *what I
+have done towards this goal*; the carried tail is *what was going on a moment ago*.
+Handed the two as one list, a model believes it has already made progress on
+something it has not started -- so the prompt gives it its own heading and says
+plainly that none of it counts towards the goal, and to ignore it if the subject
+has plainly changed.
+
+Not persisted. A conversation does not survive quitting the application, any more
+than one survives the other person leaving the room.
 
 *Order:* **4.5, then 4.3, then 4.4, then 4.2.** 4.5 is the smallest and the most
 felt -- it is the difference between an assistant and a command line. 4.3 is next

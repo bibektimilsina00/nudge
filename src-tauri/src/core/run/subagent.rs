@@ -154,6 +154,7 @@ where
             tools: &[],
             reach: String::new(),
             memory: String::new(),
+            earlier: &[],
             shell: false,
             workspace: String::new(),
         };
@@ -260,6 +261,7 @@ where
             tools,
             reach: reach.to_string(),
             memory: String::new(),
+            earlier: &[],
             shell,
             workspace: workspace.display().to_string(),
         };

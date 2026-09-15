@@ -38,6 +38,14 @@ const EARLY_MAX: std::time::Duration = std::time::Duration::from_secs(3);
 
 pub struct Session {
     pub goal: String,
+    /// What happened in the turns just before this one, if the thread is still
+    /// warm. See [`Nudge::end`].
+    ///
+    /// Kept apart from `done` rather than folded into it, because they answer
+    /// different questions. `done` is *what I have done towards this goal*; this
+    /// is *what was going on a moment ago*. Mixing them made the model believe it
+    /// had already made progress on a goal it had not started.
+    pub earlier: Vec<String>,
     /// What we have already told the user, fed back so the model advances.
     pub done: Vec<String>,
     /// The screen as it looked after the previous step.
@@ -94,6 +102,11 @@ pub struct Nudge {
     /// What this Mac's applications turned out to be like. See
     /// [`crate::core::memory`].
     pub memory: crate::core::memory::Memory,
+    /// The last finished session: when it ended, what it was for, and what
+    /// happened. Read by [`Nudge::still_warm`] and never persisted -- a
+    /// conversation does not survive quitting the application, any more than one
+    /// survives the other person leaving the room.
+    last: Mutex<Option<(std::time::Instant, String, Vec<String>)>>,
 }
 
 impl Nudge {
@@ -103,6 +116,7 @@ impl Nudge {
         Ok(Self {
             reach,
             memory: crate::core::memory::Memory::load(),
+            last: Mutex::new(None),
             cfg,
             provider,
             session: Mutex::new(None),
@@ -257,12 +271,56 @@ impl Nudge {
     }
 
     fn open(&self, goal: String, agent: bool) {
+        let earlier = self.still_warm();
         *self.session.lock().unwrap() = Some(Session {
             goal,
+            earlier,
             done: Vec::new(),
             seen: Vec::new(),
             agent,
         });
+    }
+
+    /// The tail of the last conversation, if it was recent enough to still be
+    /// the same one.
+    ///
+    /// Bounded twice over, because this is paid on every turn that follows
+    /// another closely: the last few entries, and a total size. Most recent
+    /// first, so a command's output survives and a file dump from four turns ago
+    /// does not.
+    fn still_warm(&self) -> Vec<String> {
+        /// How long a thread stays warm. Long enough for someone to look at what
+        /// happened and ask about it; short enough that what you say after lunch
+        /// is a new subject.
+        const WARM: std::time::Duration = std::time::Duration::from_secs(300);
+        /// Entries, newest first.
+        const CARRY: usize = 6;
+        /// And a ceiling on all of them together.
+        const CARRY_CHARS: usize = 2000;
+
+        let last = self.last.lock().unwrap();
+        let Some((ended, goal, done)) = last.as_ref() else {
+            return Vec::new();
+        };
+        if ended.elapsed() > WARM {
+            return Vec::new();
+        }
+
+        let mut out = Vec::new();
+        let mut spent = 0usize;
+        for line in done.iter().rev().take(CARRY) {
+            let room = CARRY_CHARS.saturating_sub(spent);
+            if room < 40 {
+                break;
+            }
+            let kept: String = line.chars().take(room).collect();
+            spent += kept.chars().count();
+            out.push(kept);
+        }
+        out.reverse();
+        // The goal itself first, because it is what makes "that" and "it" resolve.
+        out.insert(0, format!("They had asked: {goal}"));
+        out
     }
 
     /// Ask the provider to search. Here rather than in the app layer because the
@@ -318,8 +376,29 @@ impl Nudge {
             .unwrap_or_default()
     }
 
+    /// Finish the session, and keep its tail for a few minutes.
+    ///
+    /// **This is the whole of 4.5.** Every hotkey press used to start `done`
+    /// empty, so "open Safari" and then "now go to Wikipedia" were two turns
+    /// sharing nothing but the screen. That survives while the answer is visual
+    /// and stops the moment it is not: what a command printed, what a search
+    /// returned, what was decided, all existed nowhere once the turn ended.
     pub fn end(&self) {
-        *self.session.lock().unwrap() = None;
+        let finished = self.session.lock().unwrap().take();
+        if let Some(s) = finished {
+            // An empty one carries nothing worth keeping and would only push a
+            // real conversation out of the slot.
+            if !s.done.is_empty() {
+                *self.last.lock().unwrap() =
+                    Some((std::time::Instant::now(), s.goal, s.done));
+            }
+        }
+    }
+
+    /// Forget the thread deliberately -- for a subject change nobody has to wait
+    /// five minutes for.
+    pub fn forget_thread(&self) {
+        *self.last.lock().unwrap() = None;
     }
 
     /// What the current session is working towards, if anything. The agent
@@ -403,12 +482,20 @@ impl Nudge {
 
         // Snapshot and release: the lock must not be held across the await, and a
         // tokio Mutex would be a heavier fix than simply not needing one.
-        let Some((goal, done, seen, agent)) = self
+        let Some((goal, done, seen, agent, earlier)) = self
             .session
             .lock()
             .unwrap()
             .as_ref()
-            .map(|s| (s.goal.clone(), s.done.clone(), s.seen.clone(), s.agent))
+            .map(|s| {
+                (
+                    s.goal.clone(),
+                    s.done.clone(),
+                    s.seen.clone(),
+                    s.agent,
+                    s.earlier.clone(),
+                )
+            })
         else {
             return Ok(None);
         };
@@ -528,6 +615,7 @@ impl Nudge {
             reach: self.reach.prompt(),
             shell: self.reach.has(crate::core::reach::Grant::Shell),
             memory,
+            earlier: &earlier,
             workspace: self.workspace().display().to_string(),
         };
         // When the system has already named exactly the control that was asked
@@ -579,6 +667,66 @@ impl Nudge {
 
 #[cfg(test)]
 mod tests {
+    /// The thread survives one turn ending and is gone once it goes cold.
+    #[test]
+    fn a_finished_turn_is_carried_into_the_next_one() {
+        let n = nudge();
+        n.begin("open safari".into());
+        n.note("Opened Safari".into());
+        n.end();
+
+        n.begin("now go to wikipedia".into());
+        let carried = n.session.lock().unwrap().as_ref().unwrap().earlier.clone();
+        assert!(carried.iter().any(|l| l.contains("Opened Safari")));
+        // The goal comes first, because it is what makes "that" resolve.
+        assert!(carried[0].contains("open safari"));
+    }
+
+    /// A turn that did nothing must not push a real conversation out of the slot.
+    #[test]
+    fn an_empty_turn_is_not_worth_carrying() {
+        let n = nudge();
+        n.begin("open safari".into());
+        n.note("Opened Safari".into());
+        n.end();
+        n.begin("hello".into());
+        n.end();
+
+        n.begin("now go to wikipedia".into());
+        let carried = n.session.lock().unwrap().as_ref().unwrap().earlier.clone();
+        assert!(carried.iter().any(|l| l.contains("Opened Safari")), "{carried:?}");
+    }
+
+    #[test]
+    fn a_thread_can_be_dropped_on_purpose() {
+        let n = nudge();
+        n.begin("open safari".into());
+        n.note("Opened Safari".into());
+        n.end();
+        n.forget_thread();
+        n.begin("something else".into());
+        assert!(n.session.lock().unwrap().as_ref().unwrap().earlier.is_empty());
+    }
+
+    /// Paid on every turn that follows another closely, so it is bounded twice.
+    #[test]
+    fn what_is_carried_is_bounded() {
+        let n = nudge();
+        n.begin("a long one".into());
+        for i in 0..40 {
+            n.note(format!("line {i} {}", "x".repeat(500)));
+        }
+        n.end();
+        n.begin("next".into());
+        let carried = n.session.lock().unwrap().as_ref().unwrap().earlier.clone();
+        let total: usize = carried.iter().map(|l| l.chars().count()).sum();
+        assert!(carried.len() <= 7, "too many entries: {}", carried.len());
+        assert!(total <= 2200, "too much text: {total}");
+        // Newest survives; oldest does not.
+        assert!(carried.iter().any(|l| l.contains("line 39")));
+        assert!(!carried.iter().any(|l| l.contains("line 0 ")));
+    }
+
     use super::*;
 
     fn nudge() -> Nudge {

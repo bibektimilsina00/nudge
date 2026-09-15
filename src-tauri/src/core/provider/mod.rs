@@ -520,6 +520,13 @@ pub struct Ask<'a> {
     /// Empty for an application nothing has been learned about, which is nearly
     /// all of them.
     pub memory: String,
+    /// What happened in the turns just before this one, while the thread is warm.
+    ///
+    /// Deliberately not merged into `done`. That is *what I have done towards
+    /// this goal*; this is *what was going on a moment ago*, and a model handed
+    /// the two as one list believes it has already made progress on something it
+    /// has not started.
+    pub earlier: &'a [String],
     /// Whether the shell may run anything, which decides which installed tools
     /// are worth naming -- see [`crate::core::tools::present`].
     pub shell: bool,
@@ -593,6 +600,24 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
     let reach = &ask.reach;
     let memory = &ask.memory;
+    // Labelled as over, so "that" and "it" resolve without any of it reading as
+    // work already done towards the goal above.
+    let earlier = match ask.earlier.is_empty() {
+        true => String::new(),
+        false => format!(
+            "## A moment ago\n\n\
+             They were talking to you just before this, and may be carrying on \
+             from it -- \u{201c}that\u{201d}, \u{201c}it\u{201d} and \u{201c}the same one\u{201d} probably \
+             mean something here. It is finished business: none of it counts \
+             towards the goal above, and if this request is plainly a new subject, \
+             ignore it.\n{}\n\n",
+            ask.earlier
+                .iter()
+                .map(|l| format!("- {l}"))
+                .collect::<Vec<_>>()
+                .join("\n")
+        ),
+    };
     // What this machine actually has, which is the difference between reaching
     // for `gh` and finding out it is not there.
     let here = crate::core::tools::present::line(ask.shell);
@@ -688,7 +713,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Paths are relative to it. If you need to know what is in there, look \
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
-         {facts}{here}{memory}{controls}{tools}{reach}\
+         {facts}{here}{memory}{earlier}{controls}{tools}{reach}\
          Steps already completed:\n{history}{stalled}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
@@ -1429,6 +1454,7 @@ mod tests {
             reach: String::new(),
             shell: false,
             memory: String::new(),
+            earlier: &[],
             workspace: "/tmp/workspace".into(),
         }
     }
@@ -1717,6 +1743,29 @@ mod tests {
         let loud = prompt(&a);
         assert!(loud.contains("files/read_text_file(path*)"));
         assert!(loud.contains("Tools on connected servers"));
+    }
+
+    /// 4.5, and the distinction the whole thing turns on: what happened a moment
+    /// ago must not read as progress towards what was just asked.
+    #[test]
+    fn a_warm_thread_is_kept_apart_from_work_on_this_goal() {
+        let quiet = prompt(&ask("open safari", &[], false));
+        assert!(!quiet.contains("A moment ago"), "said with nothing to say");
+
+        let mut a = ask("now go to wikipedia", &[], false);
+        let before = [
+            "They had asked: open safari".to_string(),
+            "Opened Safari".to_string(),
+        ];
+        a.earlier = &before;
+        let p = prompt(&a);
+        assert!(p.contains("A moment ago"));
+        assert!(p.contains("Opened Safari"));
+        // Said plainly, because a model that reads this as work done will report
+        // a goal finished that it never started.
+        assert!(p.contains("none of it counts towards the goal"));
+        // And the goal is still the new one.
+        assert!(p.contains("now go to wikipedia"));
     }
 
     #[test]
