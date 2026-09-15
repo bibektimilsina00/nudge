@@ -285,10 +285,6 @@ export default function Panel() {
  * Cursor" -- you can see where it went. The socket stays either way, because an
  * empty spot that something belongs in is the half that carries the meaning.
  *
- * What sits in it is a dot rather than a miniature companion. Drawn properly it
- * was a second companion one row under the one in the notch, which read as two
- * of them rather than one in two states.
- *
  * The companion cannot literally fly between two windows, so the illusion is
  * scale: releasing it grows and fades it out of the socket, calling it back drops
  * it in from larger with a small overshoot, like something landing.
@@ -310,13 +306,14 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
       >
         <span
           className={[
-            "block size-[10px] rounded-full bg-gradient-to-br from-[#6b5bff] to-[#3f8cff]",
-            "transition-[transform,opacity] duration-300",
+            "block transition-[transform,opacity] duration-300",
             docked
-              ? "scale-100 opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
-              : "scale-[1.7] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
+              ? "scale-[0.42] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
+              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
           ].join(" ")}
-        />
+        >
+          <Companion mode="idle" anchored />
+        </span>
       </span>
       {docked ? "Release" : "Call back"}
     </button>
