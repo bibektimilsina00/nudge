@@ -834,7 +834,38 @@ their names, and there is a test holding that.**
 
 ### Phase 4 — Learning
 
-**4.1 Memory.** *Built.*
+Memory is four different things, and only one of them is built. Naming them apart
+matters because they have different lifetimes, different writers, and different
+costs.
+
+|  | Scope | Written by | Loaded |
+|---|---|---|---|
+| 4.1 | One application | the model, from failure | when that app is in front |
+| 4.3 | This person | both | every turn |
+| 4.4 | This workspace | both | when working there |
+| 4.5 | The last few minutes | the loop | while the thread is warm |
+
+**The shape is taken from Claude Code, deliberately**, because it is the design
+that has survived contact with the most users: memory is **plain Markdown a person
+can open and edit**, it is **loaded into the request rather than retrieved**, it is
+**hierarchical and merged**, and **both the person and the agent write to it**. A
+database would be better at searching and worse at everything that matters here --
+being readable, being editable, being deletable with one line, and being obviously
+yours.
+
+Two places Nudge must differ, and both are about its own shape rather than
+preference:
+
+- **It pays per turn, out loud.** Claude Code loads its memory into a session that
+  then runs for an hour. Nudge starts fresh on every hotkey press, so every
+  kilobyte of always-loaded memory is paid again each time somebody speaks. Sizes
+  are capped here in a way they are not there, and the per-application tier exists
+  precisely so that most of what is known costs nothing most of the time.
+- **It has a screen.** The per-application tier has no analogue in a terminal
+  agent, because a terminal agent never has to know that CapCut's timeline view
+  means a project is open.
+
+**4.1 Per-application notes.** *Built.*
 
 `core/memory.rs`, plus a `remember` outcome. Notes are kept per application in
 `~/.config/nudge/memory.toml` and put back in front of the model **only when that
@@ -878,6 +909,68 @@ building the second floor first.
 A remembered sequence that worked, replayable by name. Deliberately after memory,
 because a skill is a memory that has been promoted -- and nothing has been
 remembered in anger yet. See 4.1.
+
+**4.3 What it knows about you.**
+
+`~/.config/nudge/NUDGE.md`, in front of the model on every turn. The Claude Code
+`CLAUDE.md` idea, at the user level: who you are, what you are working on, which
+Sara you mean, where your shopping list lives, that you prefer short answers.
+
+Both write to it. You edit the file; the model appends a bullet when it learns
+something durable about **you** rather than about an application. Appended under a
+heading it owns, never rewriting what a person put there -- an agent that reformats
+your notes is one you stop keeping notes in.
+
+**Capped, and the cap is the interesting part.** This is read on every hotkey
+press, so it is the one piece of memory whose size is a latency and a billing
+decision rather than a taste one. Something like 2KB, with what happens at the
+limit stated rather than discovered: the oldest agent-written line goes, and
+anything a person wrote stays.
+
+*Done when:* it knows your name without being told twice, and you can open the file
+and see exactly why it thinks so.
+
+**4.4 What it knows about this workspace.**
+
+`NUDGE.md` in the workspace, loaded only while working there. The project tier,
+and the same file convention, so moving a folder between machines carries what was
+learned about it.
+
+Merged with 4.3 rather than replacing it, nearest scope last, so a workspace can
+contradict a general preference. When two scopes disagree the narrower one wins,
+and that rule is written down because it is the thing nobody can guess.
+
+*Done when:* the same question in two different workspaces gets two different
+right answers.
+
+**4.5 The thread of a conversation.**
+
+**Nudge has no conversational memory at all**, and this is the gap that most
+contradicts the vision. Every hotkey press calls `begin`, which starts `done`
+empty. *"Open Safari"* then *"now go to Wikipedia"* -- the second turn has no idea
+what the first did, except what it can see on the screen.
+
+It survives today because the screen carries the context. It stops surviving the
+moment the answer was not visual: what a command printed, what a search returned,
+what was decided. Those exist nowhere after the turn ends.
+
+The fix is small: carry the last few turns forward while the thread is warm --
+a handful of exchanges, expiring after a few minutes of silence, and cleared by
+anything that is plainly a new subject. Not a transcript, not a database; the same
+`done` list that already exists, not thrown away quite so eagerly.
+
+The precedent is already in the codebase and was written for exactly this reason:
+`begin_agent` carries `done` into a handover, because throwing it away meant a
+foreground search found an answer, the handover wiped it, and the agent searched
+again for the same thing.
+
+*Done when:* "what did that print?" is answerable one turn later.
+
+*Order:* **4.5, then 4.3, then 4.4, then 4.2.** 4.5 is the smallest and the most
+felt -- it is the difference between an assistant and a command line. 4.3 is next
+because most of what a person wants remembered is about themselves. 4.4 only earns
+its keep once there is more than one workspace. 4.2 stays gated on 4.1 proving
+out.
 
 ### Phase 5 — Being usable by anyone else
 
