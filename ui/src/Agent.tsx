@@ -252,6 +252,19 @@ export default function AgentCard() {
     return () => void sub.then((un) => un());
   }, []);
 
+  // Clicking anywhere else closes an open card, the way every panel and popover
+  // on this machine does.
+  //
+  // It has to come from outside: a click that lands somewhere else goes to
+  // whatever is there and this window hears nothing at all. The pointer loop
+  // watches for it and says so; the decision is here, because this is the only
+  // thing that knows whether a card is open -- clicking away from a column of
+  // tiles should do nothing, and does.
+  useEffect(() => {
+    const sub = listen("away", () => setOpened(null));
+    return () => void sub.then((un) => un());
+  }, []);
+
   // A question is a reason to come out -- but only the agent that asked it.
   const asking = agents.find((a) => a.state === "waiting")?.id ?? null;
   useEffect(() => {

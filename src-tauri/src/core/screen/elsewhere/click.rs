@@ -90,7 +90,30 @@ pub fn move_to(at: Point) -> Result<()> {
         .map_err(|e| Error::Click(format!("could not move the pointer: {e}")))
 }
 
+/// When Nudge last clicked something itself. See the macOS side for why.
+static OUR_CLICK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn since_start_ms() -> u64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_millis() as u64
+}
+
+/// Was the click that just landed one of ours?
+///
+/// Nothing platform-specific in this: the whole thing is a timestamp and a
+/// comparison, and it lives on both sides because the seam is a list of
+/// functions rather than a list of the ones that happened to need porting.
+pub fn we_clicked() -> bool {
+    const WINDOW_MS: u64 = 400;
+    let last = OUR_CLICK.load(std::sync::atomic::Ordering::Relaxed);
+    last != 0 && since_start_ms().saturating_sub(last) < WINDOW_MS
+}
+
 pub fn click(at: Point, times: u8) -> Result<()> {
+    OUR_CLICK.store(since_start_ms().max(1), std::sync::atomic::Ordering::Relaxed);
     let mut enigo = enigo()?;
     enigo
         .move_mouse(at.x as i32, at.y as i32, Coordinate::Abs)

@@ -175,7 +175,37 @@ pub fn show_the_pointer() {
     }
 }
 
+/// When Nudge last clicked something itself.
+///
+/// The same problem as `OUR_ESCAPE` one file over, and the same fix. A click
+/// anywhere outside the agent card closes it -- and an agent spends its whole
+/// life clicking things outside the agent card, so its own work closed its own
+/// card, over and over, while somebody was reading it.
+///
+/// Zero means never.
+static OUR_CLICK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+fn since_start_ms() -> u64 {
+    static START: std::sync::OnceLock<std::time::Instant> = std::sync::OnceLock::new();
+    START
+        .get_or_init(std::time::Instant::now)
+        .elapsed()
+        .as_millis() as u64
+}
+
+/// Was the click that just landed one of ours?
+///
+/// Shorter than the Escape window: clicks come in streams and a long window
+/// would swallow a real one arriving straight after. Long enough that a poll at
+/// sixty hertz cannot miss the one we made.
+pub fn we_clicked() -> bool {
+    const WINDOW_MS: u64 = 400;
+    let last = OUR_CLICK.load(std::sync::atomic::Ordering::Relaxed);
+    last != 0 && since_start_ms().saturating_sub(last) < WINDOW_MS
+}
+
 pub fn click(at: Point, times: u8) -> Result<()> {
+    OUR_CLICK.store(since_start_ms().max(1), std::sync::atomic::Ordering::Relaxed);
     // Out of sight for the trip. Dropped at the end of this function, whatever
     // happens in the middle.
     let _hidden = Hidden::now();

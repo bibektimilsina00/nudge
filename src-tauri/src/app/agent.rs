@@ -120,6 +120,38 @@ pub fn fit(app: &AppHandle, w: f64, h: f64) {
     let _ = win.set_position(tauri::LogicalPosition::new(screen.w - w - 16.0, 34.0));
 }
 
+/// Is this point outside the agent window?
+///
+/// Asked on every click, so that an open card can be dismissed by clicking away
+/// from it -- which is what every panel, popover and menu on this machine does,
+/// and the first thing anybody tries.
+///
+/// It has to be asked from outside the window because the click never arrives:
+/// a click that lands somewhere else goes to whatever is there, and the window
+/// hears nothing at all. The pointer loop is already watching the screen sixty
+/// times a second for exactly this class of thing.
+///
+/// `false` when there is no window or its geometry cannot be read -- a card that
+/// will not close is a nuisance, and a card that closes at random is worse.
+pub fn away_from_card(app: &AppHandle, at: crate::core::screen::capture::Point) -> bool {
+    let Some(win) = app.get_webview_window("agents") else {
+        return false;
+    };
+    if !win.is_visible().unwrap_or(false) {
+        return false;
+    }
+    let (Ok(pos), Ok(size), Ok(scale)) = (win.outer_position(), win.outer_size(), win.scale_factor())
+    else {
+        return false;
+    };
+    // Physical pixels from the window, logical points from the pointer. On a
+    // Retina display those differ by two, which is the kind of mistake that only
+    // shows up on the machine that does not have one.
+    let (x, y) = (pos.x as f64 / scale, pos.y as f64 / scale);
+    let (w, h) = (size.width as f64 / scale, size.height as f64 / scale);
+    !(at.x >= x && at.x <= x + w && at.y >= y && at.y <= y + h)
+}
+
 fn show_window(app: &AppHandle, visible: bool) {
     let Some(win) = app.get_webview_window("agents") else {
         eprintln!("agents: no window to show");

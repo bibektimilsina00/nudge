@@ -20,6 +20,7 @@ pub fn follow(app: &AppHandle) {
         let mut at_notch = false;
         let bare = crate::app::input::hotkey::is_bare_modifier(&app.state::<Nudge>().cfg.hotkey);
         let mut ctrl_was = false;
+        let mut click_was = false;
         let mut tick: u32 = 0;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(16));
@@ -54,6 +55,29 @@ pub fn follow(app: &AppHandle) {
                     app.emit("level", rec.level()).ok();
                 }
             }
+
+            // A click anywhere else closes an open agent card.
+            //
+            // Edge-triggered: the press, not the holding of it, or a drag across
+            // the desktop would fire this sixty times. The interface decides what
+            // to do with it -- it is the only thing that knows whether a card is
+            // open, and a window being clicked away from means nothing when all it
+            // is showing is tiles.
+            //
+            // And not our own clicks. An agent spends its whole life clicking
+            // things outside the agent card, so without this its own work closed
+            // its own card while somebody was reading it -- the same failure as
+            // Nudge pressing Escape and stopping itself, which is guarded one file
+            // over for the same reason.
+            let down = click::left_button_down();
+            if down && !click_was && !click::we_clicked() {
+                if let Some(at) = click::cursor() {
+                    if crate::app::agent::away_from_card(&app, at) {
+                        app.emit("away", ()).ok();
+                    }
+                }
+            }
+            click_was = down;
 
             // Escape stops whatever Nudge is doing to your machine.
             //
