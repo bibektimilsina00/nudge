@@ -684,6 +684,16 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Anything other than GET or HEAD needs to have been allowed, and if it \
          has not been you will be told so plainly -- say what you would have done \
          and that it needs allowing, rather than trying it another way.\n\n\
+         ## Changing a file you did not read\n\n\
+         A tool called `write_file` on somebody else's server almost always \
+         REPLACES the file, whatever its name suggests. Adding a line means \
+         reading what is there, then writing the whole thing back with the line \
+         added -- never writing the one new line on its own.\n\
+         If you are about to change a file whose contents you have not seen this \
+         turn, read it first. It costs one step. Getting it wrong costs everything \
+         that was in the file, and reading it back afterwards will not tell you \
+         what you destroyed -- it will show you exactly what you wrote and look \
+         like success.\n\n\
          ## When the machine does not have it\n\n\
          If something is not installed you will be told so, by name, at the \
          moment you reach for it -- often with the one command that would fix it. \

@@ -140,6 +140,7 @@ pub fn run() {
             ui::panel::dock_to_notch(handle);
             agent::place_window(handle);
             ui::tray::install(handle, &hotkey)?;
+            input::inject::start(handle);
             input::cursor::follow(handle);
             input::hotkey::register(handle, &hotkey)?;
             Ok(())

@@ -214,6 +214,16 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
     if let Ok(Ok(look)) = early.await {
         app.state::<Nudge>().stash(look);
     }
+    ask(app, heard).await
+}
+
+/// Everything a turn does once the words exist.
+///
+/// Split from the listening above it so that words can arrive another way. Speech
+/// is how a person uses this; it is a poor way to *test* it, because every check
+/// costs somebody saying a sentence out loud and the thing being checked is never
+/// the microphone. See [`super::inject`].
+pub(crate) async fn ask(app: AppHandle, heard: String) -> Result<()> {
     app.emit("heard", &heard).ok();
 
     // Answer before thinking.

@@ -6,3 +6,4 @@
 //! mousemove, so the OS has to be asked sixty times a second instead.
 pub mod cursor;
 pub mod hotkey;
+pub mod inject;

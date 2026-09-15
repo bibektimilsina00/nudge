@@ -166,7 +166,23 @@ impl Nudge {
                 "the {server:?} tools have been switched off in the menu bar"
             )));
         }
-        servers.call(server, name, args.clone()).await
+        // Before it runs, not after. A tool that replaces a file gives nothing
+        // back to put there again.
+        let kept = crate::core::tools::files::guard(&self.workspace(), args);
+        let said = servers.call(server, name, args.clone()).await?;
+        match kept.is_empty() {
+            true => Ok(said),
+            // Said out loud rather than kept quiet: the model should know a copy
+            // exists so it can offer it, and a person should know their file was
+            // touched even when the tool says nothing about it.
+            false => Ok(format!(
+                "{said}\n\n(Before this ran, a copy of {} was kept.)",
+                kept.iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )),
+        }
     }
 
     /// Where commands run and files are written.

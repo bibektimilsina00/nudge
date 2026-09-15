@@ -580,6 +580,41 @@ second copy was written before that was found, and deleted after. **`tail -f
 /tmp/nudge.log` is how you watch Nudge**, and it is written here because it was
 not written anywhere a reader would look.
 
+**3.0 Say something without saying it out loud.** *Built, and it paid for itself
+immediately.*
+
+`app/input/inject.rs`. Every end-to-end check used to cost a person holding a key
+and speaking a sentence, which made checking rare, made it manual, and meant the
+part being exercised was never the part under test -- a tool call, a refusal, a
+routing decision -- but always the microphone in front of it.
+
+A line of text arrives instead and everything after transcription runs exactly as
+it does for speech. Off unless the run was started with `NUDGE_SAY=/path`: this is
+a way to make Nudge do things, `/tmp` is writable by everyone, and an environment
+variable lasts exactly as long as the process somebody started on purpose, where a
+config setting is turned on once and forgotten.
+
+**It found a data-loss bug on its first use.** Asked to add bread to a shopping
+list, Nudge called `files/write_file` with the single word `bread`, replacing
+three lines with one -- then read the file back, saw what it had just written, and
+reported *"I have added bread to your shopping list."*
+
+Two fixes, structural and prompted, in that order:
+
+- **`files::guard`.** Every existing file named anywhere in a tool call's
+  arguments is copied aside before the call, exactly as Nudge's own writes are.
+  A tool on somebody else's server is opaque -- there is no way to know whether
+  `write_file` appends or replaces, and no way to make it ask -- so what cannot be
+  prevented is made survivable. Absolute paths only; a relative one belongs to the
+  server's root, which is its business.
+- **The prompt says what `write_file` actually does**: it replaces. Adding a line
+  means reading first and writing the whole thing back. And the sting -- *reading
+  it back afterwards will not tell you what you destroyed, it will show you exactly
+  what you wrote and look like success.*
+
+Verified by re-running the same sentence: read, then a surgical edit, then a true
+report. Three turns instead of five, nothing lost.
+
 ### Phase 3 — Invisibility
 
 Everything here exists because of §1's end state. None of it is needed while the

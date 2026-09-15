@@ -126,12 +126,56 @@ pub fn write(
     Ok(Wrote::Done { path, backup })
 }
 
+/// Copy aside every existing file a tool call names, before it runs.
+///
+/// A tool on somebody else's server is opaque: there is no way to know whether
+/// `write_file` appends or replaces, and no way to make it ask first. Found the
+/// hard way -- asked to add bread to a shopping list, it called `write_file` with
+/// the single word `bread`, replaced three lines with one, read the file back,
+/// and reported success.
+///
+/// So what cannot be prevented is made survivable. Every string in the arguments
+/// that names a file which exists is copied aside first, exactly as Nudge's own
+/// writes are. It does not matter which argument it was or what the tool intends;
+/// if a real file is named, it is worth a copy.
+///
+/// **Only absolute paths.** A relative one is relative to the server's own root,
+/// which is its business and not visible from here.
+pub fn guard(workspace: &Path, args: &serde_json::Value) -> Vec<PathBuf> {
+    /// Longer than any path, and short enough that a file's *contents* -- which
+    /// arrive in these arguments too -- are never handed to the filesystem.
+    const LONGEST: usize = 1024;
+
+    let mut kept = Vec::new();
+    let mut look = vec![args];
+    while let Some(value) = look.pop() {
+        match value {
+            serde_json::Value::String(s) => {
+                if s.len() > LONGEST || !Path::new(s).is_absolute() {
+                    continue;
+                }
+                let path = Path::new(s);
+                if path.is_file() {
+                    if let Ok(Some(copy)) = keep_a_copy(workspace, path) {
+                        eprintln!("kept a copy of {} at {}", path.display(), copy.display());
+                        kept.push(copy);
+                    }
+                }
+            }
+            serde_json::Value::Array(items) => look.extend(items),
+            serde_json::Value::Object(fields) => look.extend(fields.values()),
+            _ => {}
+        }
+    }
+    kept
+}
+
 /// Copy a file aside before changing it.
 ///
 /// Counted rather than timestamped: `SystemTime` in a file name is a clock
 /// dependency in something that otherwise has none, and the count reads better
 /// anyway -- index.html.2 is the second time this was replaced.
-fn keep_a_copy(workspace: &Path, path: &Path) -> Result<Option<PathBuf>> {
+pub fn keep_a_copy(workspace: &Path, path: &Path) -> Result<Option<PathBuf>> {
     let dir = workspace.join(BACKUPS);
     std::fs::create_dir_all(&dir)?;
     let name = path
@@ -348,6 +392,42 @@ mod tests {
             resolve(w, "/tmp/a/../b/c.txt", true).unwrap(),
             std::path::Path::new("/tmp/b/c.txt")
         );
+    }
+
+    /// The bug this is for: a tool call that replaced a file, with nothing
+    /// anywhere able to put it back.
+    #[test]
+    fn a_tool_call_copies_aside_whatever_it_names() {
+        let dir = std::env::temp_dir().join("nudge-guard-test");
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("shopping.txt");
+        std::fs::write(&file, "Milk\nCoffee beans\n").unwrap();
+
+        let args = serde_json::json!({
+            "path": file.to_str().unwrap(),
+            "content": "bread\n",
+        });
+        let kept = guard(&dir, &args);
+        assert_eq!(kept.len(), 1, "the named file was not copied aside");
+        assert_eq!(
+            std::fs::read_to_string(&kept[0]).unwrap(),
+            "Milk\nCoffee beans\n"
+        );
+    }
+
+    /// Nothing named, nothing kept -- and content that happens to be long is
+    /// never handed to the filesystem as if it were a path.
+    #[test]
+    fn a_tool_call_naming_nothing_real_copies_nothing() {
+        let dir = std::env::temp_dir().join("nudge-guard-test-2");
+        std::fs::create_dir_all(&dir).unwrap();
+        let args = serde_json::json!({
+            "query": "shopping",
+            "path": "relative/thing.txt",
+            "content": "x".repeat(4000),
+        });
+        assert!(guard(&dir, &args).is_empty());
     }
 
     /// Same line as the shell: capability, not credentials.
