@@ -11,6 +11,7 @@
 //! me" means, and it is why `stop` is checked between every step rather than at
 //! the end: a stop that waits for the current model call is not a stop.
 use crate::core::provider::Step;
+use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
@@ -20,7 +21,7 @@ use std::sync::{Arc, Mutex};
 /// agent needs more room because nobody is watching it.
 pub const MAX_STEPS: usize = 40;
 
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum State {
     Running,
@@ -41,7 +42,7 @@ pub enum State {
 /// no record of what it ran is not one anybody should install -- and the record
 /// has to survive the run, because the moment you want it is after something
 /// surprising happened.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Ran {
     pub command: String,
     pub output: String,
@@ -52,18 +53,26 @@ pub struct Ran {
 /// Written by the agent and replaced wholesale each time, so there are no ids to
 /// get wrong and no way for the list the model believes in to drift from the one
 /// on screen.
-#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub struct Todo {
     pub text: String,
     pub status: Doing,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub enum Doing {
     Pending,
     Active,
     Done,
+}
+
+/// Milliseconds since the epoch. A wall clock, because these outlive the process.
+fn now_ms() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .unwrap_or(0)
 }
 
 /// Most a plan may hold. Past this it is not a plan, it is a model narrating.
@@ -75,15 +84,22 @@ pub const MAX_TODOS: usize = 20;
 /// log is what happened, an artifact is what you have now. Asked to make a
 /// landing page, what you want afterwards is the page -- not a transcript of the
 /// making of it.
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Made {
     /// Absolute, so it can be opened. The UI shows only the last component.
     pub path: String,
 }
 
-#[derive(Debug, Clone, serde::Serialize)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct Agent {
     pub id: u64,
+    /// When it started, as milliseconds since the epoch.
+    ///
+    /// Needed to say *when* rather than only *what*: a list of past runs with no
+    /// dates on it is a list nobody can find anything in. A wall clock rather
+    /// than an `Instant`, because this outlives the process that made it.
+    #[serde(default)]
+    pub started: u64,
     pub goal: String,
     pub title: String,
     /// The latest step's sentence -- what the card shows while it works.
@@ -133,12 +149,29 @@ impl Agent {
 }
 
 /// Every agent this session has seen, running or not.
-#[derive(Default)]
 pub struct Agents {
     items: Mutex<Vec<Agent>>,
     next_id: AtomicU64,
     /// Set to stop whichever agent is running. One at a time, so one flag.
     abort: AtomicBool,
+    /// Where finished runs are written, or nowhere.
+    ///
+    /// `None` in tests, and that is the whole reason it exists: the tests below
+    /// finish agents, finishing an agent writes the history, and for one build
+    /// they wrote runs called "t" into the real file in somebody's home
+    /// directory. A test that can reach a person's data is a test that will.
+    ledger: Option<PathBuf>,
+}
+
+impl Default for Agents {
+    fn default() -> Self {
+        Agents {
+            items: Mutex::default(),
+            next_id: AtomicU64::default(),
+            abort: AtomicBool::default(),
+            ledger: dirs::home_dir().map(|d| d.join(".config/nudge/history.json")),
+        }
+    }
 }
 
 impl Agents {
@@ -279,6 +312,7 @@ impl Agents {
         self.abort.store(false, Ordering::Relaxed);
         self.items.lock().unwrap().push(Agent {
             id,
+            started: now_ms(),
             goal,
             title,
             status,
@@ -327,6 +361,57 @@ impl Agents {
         });
     }
 
+    /// Read the past back in. Finished runs only -- anything that was mid-flight
+    /// when the process ended did not finish, and saying it is still running
+    /// would be a lie about a thing that cannot possibly still be true.
+    pub fn remember(&self) {
+        let Some(path) = &self.ledger else { return };
+        let Ok(text) = std::fs::read_to_string(path) else {
+            return;
+        };
+        let Ok(past): Result<Vec<Agent>, _> = serde_json::from_str(&text) else {
+            eprintln!("agents: could not read the history at {}", path.display());
+            return;
+        };
+        let kept: Vec<Agent> = past.into_iter().filter(|a| a.finished()).collect();
+        if kept.is_empty() {
+            return;
+        }
+        // Ids continue past the highest one seen, so a remembered run and a new
+        // one can never collide -- which would show one card and lose the other.
+        let highest = kept.iter().map(|a| a.id).max().unwrap_or(0);
+        self.next_id.fetch_max(highest, Ordering::Relaxed);
+        eprintln!("agents: {} runs remembered", kept.len());
+        self.items.lock().unwrap().extend(kept);
+    }
+
+    /// Write the finished ones down.
+    ///
+    /// Bounded, newest kept: this is a record somebody scrolls, not an archive,
+    /// and a file that grows for the life of a machine is a bug with a slow fuse.
+    fn write_down(&self) {
+        /// Past this, the oldest go.
+        const KEEP: usize = 60;
+        let Some(path) = &self.ledger else { return };
+        let past: Vec<Agent> = {
+            let items = self.items.lock().unwrap();
+            let mut done: Vec<Agent> = items.iter().filter(|a| a.finished()).cloned().collect();
+            if done.len() > KEEP {
+                done.drain(..done.len() - KEEP);
+            }
+            done
+        };
+        let Ok(text) = serde_json::to_string(&past) else {
+            return;
+        };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::write(path, text) {
+            eprintln!("agents: could not write the history: {e}");
+        }
+    }
+
     /// Stopped is final. Nothing moves an agent out of it.
     ///
     /// The failure this is for: Escape marked an agent stopped while a model call
@@ -341,6 +426,13 @@ impl Agents {
                 a.state = state;
             }
         });
+        // Written at the moment a run ends rather than on the way out. There is
+        // no on-the-way-out to rely on: quitting from the menu bar, a crash and a
+        // reboot all end the process without asking, and a history that only
+        // survives a polite exit is a history that is missing the interesting runs.
+        if self.items.lock().unwrap().iter().any(|a| a.id == id && a.finished()) {
+            self.write_down();
+        }
     }
 
     /// Answer a question and let the loop continue.
@@ -549,8 +641,12 @@ pub type Shared = Arc<Agents>;
 mod tests {
     use super::*;
 
+    /// Nothing here touches the real history file. See `Agents::ledger`.
     fn agents() -> Agents {
-        Agents::default()
+        Agents {
+            ledger: None,
+            ..Default::default()
+        }
     }
 
     /// The card is for background work only. Ordinary tasks are over in seconds

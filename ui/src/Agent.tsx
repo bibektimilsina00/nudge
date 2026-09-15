@@ -19,6 +19,8 @@ export type Todo = { text: string; status: "pending" | "active" | "done" };
 
 export type Agent = {
   id: number;
+  /** Milliseconds since the epoch. Zero for a run from before this was kept. */
+  started: number;
   goal: string;
   title: string;
   status: string;
@@ -422,7 +424,7 @@ function Dot({
  * Spread wide after that, because two agents a few degrees apart are two agents
  * nobody can tell apart.
  */
-function hue(id: number) {
+export function hue(id: number) {
   const turns = [0, 150, 70, 220, 300, 40];
   // Ids start at one, so the first agent has to land on the first turn -- which
   // is none. Indexing by the id itself gave the very first agent anybody ever

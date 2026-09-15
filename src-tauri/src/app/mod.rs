@@ -114,7 +114,10 @@ pub fn run() {
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));
-            app.manage(crate::core::run::agent::Agents::default());
+            let agents = crate::core::run::agent::Agents::default();
+            // Before it is managed, so nothing can look at an empty list first.
+            agents.remember();
+            app.manage(agents);
 
             // Off the startup path on purpose. `npx` may spend a minute fetching
             // a server it has never run, and the hotkey has to work during that

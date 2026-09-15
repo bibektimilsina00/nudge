@@ -218,7 +218,18 @@ pub fn spawn(
         // port 3000 tomorrow is Nudge's fault, not the user's -- and a process
         // nobody is watching is the whole risk of being able to start one.
         app.state::<crate::app::state::Background>().stop_all();
-        eprintln!("agent#{id} ended: {end:?}");
+        // What was recorded, not what was returned. `set_state` refuses to move
+        // an agent out of `Stopped`, so a late `Done` arriving after Escape is
+        // already ignored -- but the log printed the return value and cheerfully
+        // said `ended: Done` about a run that was recorded as stopped. A log that
+        // disagrees with the record is worse than no log.
+        let recorded = app
+            .state::<Agents>()
+            .list()
+            .into_iter()
+            .find(|a| a.id == id)
+            .map(|a| a.state);
+        eprintln!("agent#{id} ended: {:?}", recorded.unwrap_or(end.clone()));
         app.state::<Agents>().set_state(id, end);
         app.state::<Nudge>().end();
         publish(&app);
@@ -319,8 +330,22 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             }
             // The session ended under us -- cancelled, or the privacy guard shut
             // it down mid-task.
+            //
+            // It said `Done` for every one of those, which is how `ended: Done`
+            // came to sit one line under `stopped by Escape` in a real log.
+            //
+            // But it is not `Stopped` for all of them either -- that was the next
+            // thing tried, and it marked a run that had genuinely finished as
+            // stopped, because the ordinary reason a session ends under an agent
+            // is the foreground turn completing the work first.
+            //
+            // The signal that separates them is whether anybody asked it to stop.
+            Ok(None) if app.state::<Agents>().stopping() => {
+                eprintln!("agent#{id} turn {turn}: stopped, and the session went with it");
+                return State::Stopped;
+            }
             Ok(None) => {
-                eprintln!("agent#{id} turn {turn}: session ended");
+                eprintln!("agent#{id} turn {turn}: session ended -- nothing left to do");
                 return State::Done;
             }
             Err(e) => {
