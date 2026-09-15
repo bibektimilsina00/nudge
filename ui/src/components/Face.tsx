@@ -102,18 +102,23 @@ export function Face({
       style={{
         width: size,
         height: size,
-        // Softened as well as turned. Rotating a hue keeps whatever saturation
-        // the artwork had, and the artwork is a saturated purple -- so the turns
-        // came out as a fairground: a pink that was almost magenta, a green that
-        // was almost neon. Taking a third of the saturation out and a little
-        // light in gives colours that sit on a desktop instead of shouting at it.
+        // Softened as well as turned. Rotating a hue keeps whatever saturation the
+        // artwork had, and the artwork is a saturated purple -- so the turns came
+        // out as a fairground: a pink that was almost magenta, a green nearly neon.
+        //
+        // Saturation down, and brightness barely touched. Brightness was the wrong
+        // lever and overshot badly: the ball carries a painted-on white highlight,
+        // and turning the light up spreads that towards the edges until the whole
+        // face looks washed rather than soft. A little contrast holds the body of
+        // the colour instead. The highlight itself is in the artwork and no filter
+        // can reach it alone -- removing it means the Rive file.
         //
         // `hue !== undefined` rather than a truthiness test, because the first
         // agent's turn is zero degrees and still wants softening -- otherwise it
         // is the one face that does not match the others.
         filter:
           hue !== undefined
-            ? `hue-rotate(${hue}deg) saturate(0.45) brightness(1.3)`
+            ? `hue-rotate(${hue}deg) saturate(0.6) brightness(1.04) contrast(1.06)`
             : undefined,
       }}
       className={`shrink-0 ${state === "running" ? "motion-safe:animate-breath" : ""}`}
