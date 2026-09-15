@@ -16,6 +16,9 @@
 
   --animate-ring: ring 1.6s ease-out infinite;
   --animate-halo: halo 2.4s cubic-bezier(0.23, 1, 0.32, 1) infinite;
+  /* Working. Slow enough to read as breathing rather than as a warning, and
+     scale only -- see the note in Face.tsx about why nothing here flashes. */
+  --animate-breath: breath 2s ease-in-out infinite;
   --animate-think: think 1.15s ease-in-out infinite;
   --animate-breathe: breathe 5s ease-in-out infinite;
 
@@ -23,6 +26,11 @@
      control it is pointing at. */
   /* A working agent, at a glance. Expands and fades rather than spinning: a
      spinner reads as "waiting for something", and an agent is not waiting. */
+  @keyframes breath {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.12); }
+  }
+
   @keyframes halo {
     0% {
       transform: scale(1);

@@ -68,8 +68,28 @@ export function Face({
     }
   }, [step, press]);
 
+  // Working has to look like working, and this file cannot say it.
+  //
+  // What movement it has is on a pointer listener inside the state machine, so it
+  // played when the tile was clicked and at no other time -- an agent that looks
+  // alive only while you poke it is worse than one that never moves, because the
+  // one time nobody is touching it is the whole time it is working.
+  //
+  // Firing `press` on a beat was tried first and measured: the ball's size varied
+  // by one percent across a full cycle, which is nothing. `zoom` is what draws the
+  // face at all, and turning it off to make a pulse makes the face vanish.
+  //
+  // So it is driven from outside, which is how the companion cat is driven for the
+  // same reason -- that file has no inputs whatsoever. A slow breath, not a flash:
+  // scale only, no glow and no opacity, because a thing blinking in the corner of
+  // a screen all day is the behaviour that got the halo removed.
+
   return (
-    <div style={{ width: size, height: size }} className="shrink-0" aria-hidden>
+    <div
+      style={{ width: size, height: size }}
+      className={`shrink-0 ${state === "running" ? "motion-safe:animate-breath" : ""}`}
+      aria-hidden
+    >
       <RiveComponent />
     </div>
   );
