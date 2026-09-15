@@ -297,3 +297,106 @@ fn os_line() -> String {
         std::env::consts::OS.to_string()
     }
 }
+
+/// One of the things Nudge may or may not be allowed to do.
+#[derive(serde::Serialize)]
+pub struct Allowed {
+    pub key: String,
+    pub label: String,
+    pub about: String,
+    pub on: bool,
+}
+
+/// What Nudge is allowed to do right now.
+///
+/// The same three grants the menu bar shows, from the same state, so the two
+/// cannot disagree. The panel is where somebody goes looking for a setting; the
+/// menu bar is where somebody flips one mid-run. Neither is the source of truth --
+/// `Nudge::reach` is.
+#[tauri::command]
+pub fn reach(app: AppHandle) -> Vec<Allowed> {
+    let nudge = app.state::<crate::core::run::session::Nudge>();
+    crate::core::reach::Grant::ALL
+        .iter()
+        .map(|g| Allowed {
+            key: g.key().into(),
+            label: g.menu().into(),
+            about: g.told().into(),
+            on: nudge.reach.has(*g),
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn set_reach(app: AppHandle, key: String, on: bool) {
+    let Some(g) = crate::core::reach::Grant::ALL.iter().find(|g| g.key() == key) else {
+        return;
+    };
+    app.state::<crate::core::run::session::Nudge>()
+        .reach
+        .set(*g, on);
+    // The menu bar shows the same three checkboxes and would otherwise keep
+    // showing the old answer until something else rebuilt it.
+    let hotkey = app
+        .state::<crate::core::run::session::Nudge>()
+        .cfg
+        .hotkey
+        .clone();
+    crate::app::ui::tray::refresh(&app, &hotkey);
+}
+
+/// Which model is answering, and how hard it is thinking.
+#[derive(serde::Serialize)]
+pub struct Brain {
+    pub provider: String,
+    pub model: String,
+    pub think: String,
+    pub workspace: String,
+}
+
+/// The "bring your own model" settings, read-only.
+///
+/// Shown rather than edited: the config file is the feature, and a panel that
+/// half-edits it would be a second place to look with a subset of the answers.
+/// Seeing which model is answering is the part people actually need at a glance --
+/// "why is this slow" and "why did that cost money" both start here.
+#[tauri::command]
+pub fn brain(app: AppHandle) -> Brain {
+    let cfg = &app.state::<crate::core::run::session::Nudge>().cfg;
+    Brain {
+        provider: cfg.provider.clone(),
+        model: cfg
+            .model
+            .clone()
+            .unwrap_or_else(|| "its default".to_string()),
+        think: cfg.think.clone().unwrap_or_else(|| "default".into()),
+        workspace: cfg
+            .workspace
+            .clone()
+            .unwrap_or_else(|| "~ (everything — set workspace)".into()),
+    }
+}
+
+/// The tool servers, and whether they arrived.
+///
+/// A count rather than a tick. A server described only by its name is something
+/// you have to trust; one that says it brought fourteen tools is something you can
+/// weigh -- the same reasoning as the menu bar, which says it the same way.
+#[tauri::command]
+pub fn servers(app: AppHandle) -> Vec<(String, String)> {
+    use crate::core::run::session::ServerState;
+    app.state::<crate::core::run::session::Nudge>()
+        .tool_servers()
+        .into_iter()
+        .map(|(name, state)| {
+            let said = match state {
+                ServerState::Starting => "starting…".to_string(),
+                ServerState::Ready(0) => "nothing offered".into(),
+                ServerState::Ready(1) => "1 tool".into(),
+                ServerState::Ready(n) => format!("{n} tools"),
+                ServerState::Failed(why) => format!("failed — {why}"),
+            };
+            (name, said)
+        })
+        .collect()
+}
