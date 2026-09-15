@@ -105,19 +105,30 @@ pub fn keep_everywhere(app: &AppHandle) {
     // No early-out on isOnActiveSpace() either: with CanJoinAllSpaces set, AppKit
     // answers `true` unconditionally, even while the window server has the window
     // out of the current Space.
-    // Nothing at all while Mission Control is up.
+    // Nothing to repair, nothing to do.
     //
-    // This is a repair, and there is nothing to repair while the overview is on
-    // screen -- but every call below re-sorts the window, including the two that
-    // look like plain setters: `setLevel` re-orders within its level even when the
-    // level is unchanged. Mission Control claims the top of the screen and keeps
-    // claiming it, so each of those exchanges was a flash, ten times a second.
-    // Recorded at 120fps the notch pill changed state a hundred times in ten
-    // seconds, which is the poll interval almost exactly.
+    // This is a repair, and it used to run whether or not anything was broken.
+    // Every call below re-sorts the window -- including the two that read as plain
+    // setters, because `setLevel` re-orders within its level even when the level is
+    // unchanged -- and the compositor draws each re-sort. Ten times a second, that
+    // is only invisible while nothing else is claiming the top of the screen.
     //
-    // Holding still costs nothing: the overview is transient, the Space cannot
-    // change underneath it, and the tick after it closes puts anything right that
-    // moved.
+    // Mission Control claims it and keeps claiming it, so every tick became an
+    // exchange. Recorded at 120fps, the pill changed state a hundred times in ten
+    // seconds: the poll interval, almost exactly.
+    //
+    // The failure being repaired is a real absence -- the window server drops the
+    // overlay from its on-screen list when a full-screen Space activates -- and
+    // absence is cheap to ask about. So ask first, and on the overwhelming majority
+    // of ticks, where the answer is "still there", touch nothing at all.
+    if crate::app::ui::native::on_screen(ns.windowNumber()) {
+        return;
+    }
+
+    // Belt and braces, for the case where the overview itself takes the window out
+    // of the list: the Space cannot change underneath Mission Control, so there is
+    // nothing this could usefully repair while it is up, and putting the window
+    // back is the exchange that shows as a flash.
     if crate::app::ui::native::mission_control() {
         return;
     }

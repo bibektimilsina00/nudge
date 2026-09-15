@@ -109,9 +109,12 @@ fn overlay() -> Option<&'static NSWindow> {
 /// So this is the signal to get out of the way rather than push harder.
 ///
 /// Measured rather than guessed, in and out of the overview: the Dock owns exactly
-/// one extra on-screen window while it is up, full-screen and at layer 20, and
-/// nothing of the sort while it is not. The size is half the test on purpose --
-/// the Dock's own strip is also its window and also layer 20, and it is a strip.
+/// one extra on-screen window while it is up, at layer 20, and nothing of the sort
+/// while it is not. Size is the other half of the test, because the Dock's own
+/// strip is also its window and also layer 20 -- but only loosely, at half the
+/// screen each way. A four-finger drag *scrubs* the overview rather than toggling
+/// it, so its backdrop spends the whole gesture mid-animation, and a test for the
+/// full size answers "no" for most of the flicker it is meant to prevent.
 #[cfg(target_os = "macos")]
 pub fn mission_control() -> bool {
     use core_foundation::base::{CFType, TCFType};
@@ -170,11 +173,42 @@ pub fn mission_control() -> bool {
                 .and_then(|n| n.to_f64())
                 .unwrap_or(0.0)
         };
-        if (num(&w_key) - screen.width).abs() < 4.0 && (num(&h_key) - screen.height).abs() < 4.0 {
+        if num(&w_key) > screen.width / 2.0 && num(&h_key) > screen.height / 2.0 {
             return true;
         }
     }
     false
+}
+
+/// Does the window server still have this window on screen?
+///
+/// AppKit is not a witness worth calling here. `isOnActiveSpace` answers `true`
+/// unconditionally once `CanJoinAllSpaces` is set -- even while the server has the
+/// window out of the Space entirely -- and that eviction is the whole reason the
+/// poll in `keep_everywhere` exists. The server's own on-screen list is what showed
+/// the eviction in the first place, so it is what gets asked about it.
+///
+/// Ids only, not descriptions: `CGWindowListCreate` hands back a flat array of
+/// numbers, which is no allocation per window. The dictionary form of the same
+/// query builds one CFDictionary per window on screen to answer a yes-or-no
+/// question.
+#[cfg(target_os = "macos")]
+pub fn on_screen(number: isize) -> bool {
+    use core_foundation::array::{CFArrayGetCount, CFArrayGetValueAtIndex};
+    use core_foundation::base::TCFType;
+    use core_graphics::window::{create_window_list, kCGWindowListOptionOnScreenOnly};
+
+    let Some(list) = create_window_list(kCGWindowListOptionOnScreenOnly, 0) else {
+        // No answer is not the same as "gone". Treating a failed query as an
+        // eviction would put the repair back on every tick, which is the flicker.
+        return true;
+    };
+    let want = number as u32;
+    let raw = list.as_concrete_TypeRef();
+    // The array holds ids cast to pointers rather than CFTypes, so it is read as
+    // raw values; the typed iterator would dereference them as if they were.
+    (0..unsafe { CFArrayGetCount(raw) })
+        .any(|i| unsafe { CFArrayGetValueAtIndex(raw, i) } as u32 == want)
 }
 
 /// Put it back in front, for whatever reason it fell behind.
