@@ -162,8 +162,17 @@ export default function Panel() {
            * gets opened to see what Nudge is doing or what it just did, so that
            * is what it opens onto. Configuration is a gear and a footer, which is
            * the weight it deserves in something used by voice. */}
-          <header className="flex items-center gap-2 px-3.5 pt-3 pb-1">
-            <h1 className="flex-1 text-[13px] font-semibold tracking-tight">Nudge</h1>
+          <header className="flex items-center gap-2 px-3 pt-2.5 pb-1">
+            {/* The companion's perch, which the old home page carried and which
+             * went out with it -- a deletion, not a decision. It belongs here
+             * rather than buried in a list: it is the one control that is about
+             * the thing living on your screen, and it says where that thing is by
+             * showing you whether the socket is full.
+             *
+             * It also gives the header something to do. A window titled with its
+             * own name is telling you what you already know. */}
+            <Perch docked={docked} onToggle={() => dock(!docked)} />
+            <span className="flex-1" />
             <span className="text-[10.5px] text-ink-3">hold ⌃ to ask</span>
             <button
               onClick={() => setView((v) => (v === "settings" ? "home" : "settings"))}
@@ -298,5 +307,46 @@ function Gear() {
       <circle cx="12" cy="12" r="3" />
       <path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-1.8-.3 1.6 1.6 0 0 0-1 1.5v.2a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-1-1.5 1.6 1.6 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0 .3-1.8 1.6 1.6 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.5-1 1.6 1.6 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3H9a1.6 1.6 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 1 1.5 1.6 1.6 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0-.3 1.8V9a1.6 1.6 0 0 0 1.5 1h.2a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1Z" />
     </svg>
+  );
+}
+
+/**
+ * The companion's perch: a socket it sits in when parked, and leaps out of when
+ * released.
+ *
+ * A button that *is* the thing's home reads better than one labelled "Undock
+ * Cursor" -- you can see where it went. The companion cannot literally fly between
+ * two windows, so the illusion is scale: releasing it grows and fades it out of the
+ * socket, calling it back drops it in from larger with a small overshoot, like
+ * something landing.
+ */
+function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) {
+  return (
+    <button
+      onClick={onToggle}
+      aria-pressed={docked}
+      className="flex h-[30px] items-center gap-2 rounded-full bg-raise pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-raise-hi hairline"
+    >
+      <span
+        className={[
+          "grid size-[24px] shrink-0 place-items-center rounded-full overflow-hidden",
+          "transition-colors duration-300",
+          // Empty, the socket still reads as a spot something belongs in.
+          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "block transition-[transform,opacity] duration-300",
+            docked
+              ? "scale-[0.42] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
+              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
+          ].join(" ")}
+        >
+          <Companion mode="idle" anchored />
+        </span>
+      </span>
+      {docked ? "Release" : "Call back"}
+    </button>
   );
 }
