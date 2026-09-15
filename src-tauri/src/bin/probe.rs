@@ -88,6 +88,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         facts: facts::gather(),
         controls: &controls,
         tools: &[],
+        reach: String::new(),
     };
     let t1 = std::time::Instant::now();
     let step = tauri::async_runtime::block_on(provider.next_step(&shot, &ask))?;

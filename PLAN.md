@@ -444,7 +444,48 @@ The general agents are unbounded because nobody has done this work, not because
 it is wrong.
 
 *Done when:* a person can grant full shell access on purpose, see that they have,
-and take it back.
+and take it back. **Done**, for the shell and for files.
+
+`core/reach.rs`. Two grants -- `shell` and `files` -- each starting closed, each
+readable from `reach = [...]` in the config and flippable from a new **Allowed
+to** submenu in the menu bar, with a tick beside anything granted. Clicking the
+tick takes it back, in the same place and with the same gesture that gave it.
+Nothing is written back to the config, so the widest Nudge has ever been is one
+restart from the narrowest.
+
+The grants are also in the **prompt**, so a widened Nudge appears in the
+transcript of every turn that had it -- which is the difference between something
+you can see and something you have to remember agreeing to. It costs nothing when
+nothing is granted: the section is empty rather than saying "you may not".
+
+Two decisions worth keeping:
+
+- **Secrets stay refused however wide the grant.** Anything matching `.ssh`,
+  `.env` or a keychain is refused with full shell access. Granting a shell is a
+  decision about *capability* -- somebody wants their assistant to move a file or
+  run a build -- and it is not the same thing as handing over their keys said
+  twice. A permission people would not have given if asked plainly is not one
+  they gave.
+- **The syntax rules fall with the allow-list, not separately.** `&&` and `;` are
+  refused because they smuggle a second command past a check on the first. With
+  no allow-list there is no check to get past, and refusing `npm ci && npm test`
+  would make the granted shell useless for the work it was granted for.
+
+One source of truth: `Reach` lives on `Nudge`, which both the menu and the prompt
+read. Two copies would drift the first time somebody clicked, leaving a tick
+saying one thing and a gate enforcing another -- the worst available failure for
+a thing whose whole job is being visible.
+
+*Deliberately not built:* there is **no `http` grant**, because the thing it would
+permit -- a request with a method, headers and a body -- does not exist until 2.3.
+A menu item that ticks and changes nothing teaches people that the ticks mean
+nothing.
+
+*Still open, and it is the gap 2.1 opened:* **MCP tools are not bounded by any of
+this.** A filesystem server pointed at `/` can write anywhere, and none of these
+rules reach inside somebody else's process. Configuring a server is already an
+explicit grant; what is missing is seeing what it can do and switching it off, and
+that wants the menu built *after* the servers connect rather than before.
 
 **2.3 Real HTTP.**
 

@@ -99,7 +99,7 @@ pub fn notch_height() -> f64 {
 #[tauri::command]
 pub fn open_artifact(app: AppHandle, path: String) -> Result<()> {
     let workspace = app.state::<Nudge>().cfg.workspace_dir();
-    let resolved = files::resolve(&workspace, &path)?;
+    let resolved = files::resolve(&workspace, &path, false)?;
     if !resolved.is_file() {
         return Err(crate::error::Error::Click(format!(
             "{} is not there any more",

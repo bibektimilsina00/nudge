@@ -58,6 +58,16 @@ pub struct Grants {
     pub asking: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
 }
 
+/// Whether a grant is currently given. Read at every gate.
+///
+/// A free function rather than a method so the call site reads as the question
+/// being asked -- `may(app, Grant::Files)` -- and so there is exactly one place
+/// that knows the state is managed by Tauri.
+pub fn may(app: &tauri::AppHandle, grant: crate::core::reach::Grant) -> bool {
+    use tauri::Manager;
+    app.state::<crate::core::run::session::Nudge>().reach.has(grant)
+}
+
 /// A setting the menu bar can flip at runtime. The config value is only ever the
 /// starting point -- these exist so testing does not mean editing a TOML file and
 /// restarting.

@@ -73,12 +73,22 @@ pub struct Nudge {
     /// the hotkey has to work during that minute. Until it is filled there are no
     /// tools, which the prompt handles by saying nothing about tools.
     mcp: std::sync::OnceLock<crate::core::tools::mcp::Servers>,
+    /// What has been allowed beyond the defaults.
+    ///
+    /// Owned here rather than managed separately by Tauri, because the menu bar
+    /// flips it and the prompt reads it, and two copies of that would drift the
+    /// first time somebody clicked -- leaving a tick saying one thing and a gate
+    /// enforcing another, which is the worst possible failure for a thing whose
+    /// entire job is being visible.
+    pub reach: crate::core::reach::Reach,
 }
 
 impl Nudge {
     pub fn new(cfg: Config) -> Result<Self> {
         let provider = provider::build(&cfg)?;
+        let reach = crate::core::reach::Reach::from_config(&cfg.reach);
         Ok(Self {
+            reach,
             cfg,
             provider,
             session: Mutex::new(None),
@@ -201,6 +211,7 @@ impl Nudge {
             &self.workspace(),
             task,
             self.tools(),
+            &self.reach.prompt(),
             self.cfg.verify,
             act,
         )
@@ -435,6 +446,7 @@ impl Nudge {
             facts,
             controls: &controls,
             tools: self.tools(),
+            reach: self.reach.prompt(),
             workspace: self.workspace().display().to_string(),
         };
         // When the system has already named exactly the control that was asked

@@ -40,6 +40,19 @@ pub struct Config {
     /// Erratic as well as dear -- those two medium numbers are the same request
     /// twice.
     pub think: Option<String>,
+    /// What Nudge may do beyond its defaults, at startup.
+    ///
+    /// Empty means today's Nudge: the shell reads and does not change, files
+    /// stay in the workspace, the web is fetched with GET. Each name here lifts
+    /// one of those on purpose, and the menu bar can lift or drop any of them
+    /// while it runs -- nothing is written back here, so a restart returns to
+    /// whatever this line says.
+    ///
+    /// ```text
+    /// reach = ["shell", "files", "http"]
+    /// ```
+    #[serde(default)]
+    pub reach: Vec<String>,
     /// Servers speaking the Model Context Protocol, started at launch.
     ///
     /// Each one is three lines and brings its own tools, which is the point:
@@ -113,6 +126,7 @@ impl Default for Config {
             think: None,
             verify: false,
             mcp: Vec::new(),
+            reach: Vec::new(),
             api_key: None,
             // A bare modifier: hold Control to talk, tap it for the next step.
             hotkey: "ctrl".into(),

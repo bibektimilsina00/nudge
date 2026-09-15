@@ -5,7 +5,8 @@
 //! which is what makes the shell allow-list, the workspace boundary and
 //! ask-before-replacing hold everywhere rather than in whichever caller
 //! remembered them.
-use crate::app::state::{Background, Grants, Screen, Settle, Voice};
+use crate::app::state::{may, Background, Grants, Screen, Settle, Voice};
+use crate::core::reach::Grant;
 use crate::core::provider::{Act, Step};
 use crate::core::run::agent::Agents;
 use crate::core::run::session::Nudge;
@@ -384,10 +385,10 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         Step::Write { path, content, .. } => {
             let workspace = app.state::<Nudge>().workspace();
             let grants = app.state::<Grants>();
-            let target = files::resolve(&workspace, path)?;
+            let target = files::resolve(&workspace, path, may(&app, Grant::Files))?;
             let permitted = grants.granted.lock().unwrap().contains(&target);
 
-            match files::write(&workspace, path, content, permitted)? {
+            match files::write(&workspace, path, content, permitted, may(&app, Grant::Files))? {
                 // Asked on the model's behalf; the task waits for the answer.
                 files::Wrote::NeedsPermission { path } => {
                     return ask_to_replace(app, &path, content.clone())
@@ -443,7 +444,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             // The same boundary as writing: a path from a model is a path that
             // has to be proven, and `open` on a file is a real action.
             let workspace = app.state::<Nudge>().workspace();
-            let target = files::resolve(&workspace, path)?;
+            let target = files::resolve(&workspace, path, may(&app, Grant::Files))?;
             if !target.is_file() {
                 return Err(crate::error::Error::Click(format!(
                     "{} is not there to show",
@@ -459,17 +460,23 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         Step::Read {
             path, from, lines, ..
         } => {
-            let text = files::read(&app.state::<Nudge>().workspace(), path, *from, *lines)?;
+            let text = files::read(
+                &app.state::<Nudge>().workspace(),
+                path,
+                *from,
+                *lines,
+                may(&app, Grant::Files),
+            )?;
             eprintln!("read {path} @{from} ({} chars)", text.len());
             app.state::<Nudge>().note(format!("Read {path}:\n{text}"));
         }
         Step::Edit { path, old, new, .. } => {
             let workspace = app.state::<Nudge>().workspace();
             let grants = app.state::<Grants>();
-            let target = files::resolve(&workspace, path)?;
+            let target = files::resolve(&workspace, path, may(&app, Grant::Files))?;
             let permitted = grants.granted.lock().unwrap().contains(&target);
 
-            match files::edit(&workspace, path, old, new, permitted)? {
+            match files::edit(&workspace, path, old, new, permitted, may(&app, Grant::Files))? {
                 files::Wrote::NeedsPermission { path } => {
                     return ask_to_replace(app, &path, String::new())
                 }
@@ -539,7 +546,11 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             // The output is the point, so it goes into the session's history
             // where the next turn reads it -- the same channel a screenshot uses
             // to report what happened.
-            let out = shell::run(&app.state::<Nudge>().workspace(), command)?;
+            let out = shell::run(
+                &app.state::<Nudge>().workspace(),
+                command,
+                may(&app, Grant::Shell),
+            )?;
             eprintln!("$ {command}\n{out}");
             app.state::<Nudge>()
                 .note(format!("Ran `{command}`, which printed:\n{out}"));

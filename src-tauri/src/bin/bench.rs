@@ -351,6 +351,7 @@ fn score(cfg: &Config) -> nudge_lib::error::Result<()> {
             // so a good score here and a good score live are different claims.
             controls: &[],
             tools: &[],
+            reach: String::new(),
             goal: &c.goal,
             done: &[],
             stalled: false,

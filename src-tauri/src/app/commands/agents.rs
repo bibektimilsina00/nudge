@@ -39,7 +39,7 @@ pub fn answer_agent(app: AppHandle, id: u64, text: String) {
             // the second.
             let workspace = app.state::<Nudge>().workspace();
             let written = (!content.is_empty())
-                .then(|| files::write(&workspace, &path.display().to_string(), &content, true));
+                .then(|| files::write(&workspace, &path.display().to_string(), &content, true, true));
 
             match written {
                 Some(Ok(_)) => {

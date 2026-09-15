@@ -83,6 +83,29 @@ think = "low"
 # does.
 verify = false
 
+# What Nudge may do beyond its defaults. Nothing, by default.
+#
+# Three limits sit between the model and your machine: the shell runs only
+# commands that read, files are written only inside the workspace, and the web is
+# fetched with GET. None of them is arbitrary -- the shell is read-only because a
+# model reached for `rm` to get around a refusal, and files are workspace-bound
+# because the first thing that ever wrote a file put it in a git repository's
+# root. They are scars.
+#
+# Each name here lifts one, on purpose:
+#
+#   "shell"  run any command, including ones that change things
+#   "files"  write outside the workspace, using absolute paths
+#
+# The menu bar shows what is granted with a tick beside it, and can grant or take
+# back either one while Nudge runs. Nothing is written back here, so a restart
+# returns to whatever this line says.
+#
+# Two things stay refused however wide the grant: anything that looks like a
+# secret (`.ssh`, `.env`, keychains), and an empty command. Granting a shell is a
+# decision about capability, not a decision to hand over your keys.
+reach = []
+
 # Servers speaking the Model Context Protocol. None by default.
 #
 # This is how Nudge reaches things that are not on your screen -- your email,

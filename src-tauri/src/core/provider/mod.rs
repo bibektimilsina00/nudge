@@ -466,6 +466,9 @@ pub struct Ask<'a> {
     /// says nothing about them at all -- a section headed "tools you do not have"
     /// is tokens spent to explain an absence.
     pub tools: &'a [crate::core::tools::mcp::Tool],
+    /// What has been allowed beyond the defaults, already written out. Empty in
+    /// the ordinary case, which is every case until somebody decides otherwise.
+    pub reach: String,
     /// Where commands run and files are written.
     ///
     /// Told, not guessed. Without it a subagent asked to search "this project"
@@ -534,6 +537,7 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 /// *model*, not three people's prompt-writing.
 pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
+    let reach = &ask.reach;
     // Named by what they do rather than by the protocol behind them. "You can
     // speak MCP" is a fact about us; "you can read this person's calendar" is a
     // fact about what is possible, and only one of those helps.
@@ -599,7 +603,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Paths are relative to it. If you need to know what is in there, look \
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
-         {facts}{controls}{tools}\
+         {facts}{controls}{tools}{reach}\
          Steps already completed:\n{history}{stalled}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
@@ -1243,6 +1247,7 @@ mod tests {
             facts: Default::default(),
             controls: &[],
             tools: &[],
+            reach: String::new(),
             workspace: "/tmp/workspace".into(),
         }
     }

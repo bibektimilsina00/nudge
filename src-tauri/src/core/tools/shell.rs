@@ -139,14 +139,35 @@ pub(crate) fn syntax_refusal(command: &str) -> Option<String> {
 /// Returns the reason it was refused, so the model is told what it did wrong and
 /// can try another way -- a silent refusal looks identical to a command that ran
 /// and printed nothing.
-pub fn refuse(command: &str) -> Option<String> {
+pub fn refuse(command: &str, anything: bool) -> Option<String> {
     let trimmed = command.trim();
-    if let Some(why) = syntax_refusal(trimmed) {
-        return Some(why);
+    if trimmed.is_empty() {
+        return Some("empty command".into());
     }
+
+    // Refused whatever has been granted, and this is the one line in the module
+    // worth arguing about.
+    //
+    // Full shell access is a decision about *capability* -- somebody wants their
+    // assistant to be able to move a file, install a package, run a build. It is
+    // not a decision to hand over their keys, and the two are not the same thing
+    // said twice. Nobody granting "run any command" is thinking about
+    // `~/.ssh/id_rsa`, and a permission people would not have given if asked
+    // plainly is not one they gave.
     let lower = trimmed.to_lowercase();
     if let Some(secret) = SECRETS.iter().find(|s| lower.contains(&s.to_lowercase())) {
         return Some(format!("that path looks like a secret ({secret})"));
+    }
+
+    // With the allow-list gone there is no check left to smuggle a second
+    // command past, so the syntax rules have nothing to protect and refusing a
+    // `&&` would only make the granted shell useless for the work it was granted
+    // for. Without the grant they stand exactly as they did.
+    if anything {
+        return None;
+    }
+    if let Some(why) = syntax_refusal(trimmed) {
+        return Some(why);
     }
 
     for stage in trimmed.split('|') {
@@ -177,8 +198,8 @@ pub fn refuse(command: &str) -> Option<String> {
 }
 
 /// Run a read-only command in `workspace` and return what it printed.
-pub fn run(workspace: &std::path::Path, command: &str) -> Result<String> {
-    if let Some(why) = refuse(command) {
+pub fn run(workspace: &std::path::Path, command: &str, anything: bool) -> Result<String> {
+    if let Some(why) = refuse(command, anything) {
         return Err(Error::Click(why));
     }
     let mut child = std::process::Command::new("/bin/sh")
@@ -236,7 +257,7 @@ mod tests {
             "node --version",
             "grep -r TODO src | wc -l",
         ] {
-            assert_eq!(refuse(ok), None, "{ok} should be allowed");
+            assert_eq!(refuse(ok, false), None, "{ok} should be allowed");
         }
     }
 
@@ -257,7 +278,7 @@ mod tests {
             "/bin/rm file",
             "python3 -c 'import os; os.remove(\"x\")'",
         ] {
-            assert!(refuse(bad).is_some(), "{bad} should be refused");
+            assert!(refuse(bad, false).is_some(), "{bad} should be refused");
         }
     }
 
@@ -265,9 +286,9 @@ mod tests {
     /// command in a pipe would carry anything after it.
     #[test]
     fn every_stage_of_a_pipeline_is_checked() {
-        assert!(refuse("ls | rm -rf .").is_some(), "second stage ignored");
-        assert!(refuse("cat x | sudo tee /etc/hosts").is_some());
-        assert_eq!(refuse("ls | grep src | wc -l"), None);
+        assert!(refuse("ls | rm -rf .", false).is_some(), "second stage ignored");
+        assert!(refuse("cat x | sudo tee /etc/hosts", false).is_some());
+        assert_eq!(refuse("ls | grep src | wc -l", false), None);
     }
 
     /// Shell syntax is how a single-command check gets bypassed, so the syntax
@@ -282,7 +303,7 @@ mod tests {
             "echo $(rm x)",
             "ls\nrm x",
         ] {
-            assert!(refuse(bad).is_some(), "{bad:?} should be refused");
+            assert!(refuse(bad, false).is_some(), "{bad:?} should be refused");
         }
     }
 
@@ -297,27 +318,57 @@ mod tests {
             "find ~ -name '*.pem' | head",
             "cat ~/Library/Keychains/login.keychain-db",
         ] {
-            assert!(refuse(bad).is_some(), "{bad} should be refused");
+            assert!(refuse(bad, false).is_some(), "{bad} should be refused");
         }
     }
 
     #[test]
     fn a_program_that_both_reads_and_writes_is_judged_by_its_verb() {
-        assert_eq!(refuse("git diff"), None);
-        assert!(refuse("git commit -m x").is_some());
-        assert!(refuse("git push origin main").is_some());
-        assert_eq!(refuse("npm ls"), None);
-        assert!(refuse("npm publish").is_some());
+        assert_eq!(refuse("git diff", false), None);
+        assert!(refuse("git commit -m x", false).is_some());
+        assert!(refuse("git push origin main", false).is_some());
+        assert_eq!(refuse("npm ls", false), None);
+        assert!(refuse("npm publish", false).is_some());
+    }
+
+    /// The whole point of 2.2: the same command, refused and then allowed,
+    /// because somebody decided -- not because a constant in this file changed.
+    #[test]
+    fn a_granted_shell_runs_what_the_list_refuses() {
+        assert!(refuse("rm -rf build", false).is_some());
+        assert!(refuse("rm -rf build", true).is_none());
+        // Chaining only ever mattered as a way past the list. With no list there
+        // is nothing to get past.
+        assert!(refuse("npm ci && npm test", false).is_some());
+        assert!(refuse("npm ci && npm test", true).is_none());
+    }
+
+    /// Granting a shell is a decision about capability, not about credentials.
+    /// Nobody ticking "run any command" is thinking about their private keys.
+    #[test]
+    fn secrets_are_refused_however_wide_the_grant() {
+        for command in ["cat ~/.ssh/id_rsa", "cp .env /tmp/x"] {
+            assert!(
+                refuse(command, true).is_some(),
+                "{command} was allowed with a full grant"
+            );
+        }
+    }
+
+    #[test]
+    fn an_empty_command_is_refused_either_way() {
+        assert!(refuse("   ", true).is_some());
+        assert!(refuse("   ", false).is_some());
     }
 
     #[test]
     fn it_actually_runs_and_bounds_what_comes_back() {
         let here = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
-        let out = run(here, "ls").expect("ls should run");
+        let out = run(here, "ls", false).expect("ls should run");
         assert!(out.contains("Cargo.toml"), "got: {out}");
 
         // Refusals surface as errors the model can read, not silence.
-        let err = run(here, "rm -rf x").unwrap_err().to_string();
+        let err = run(here, "rm -rf x", false).unwrap_err().to_string();
         assert!(err.contains("rm"), "got: {err}");
     }
 }

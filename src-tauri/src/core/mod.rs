@@ -13,6 +13,7 @@
 //! - [`laps`] -- where a turn's time went
 pub mod laps;
 pub mod provider;
+pub mod reach;
 pub mod run;
 pub mod screen;
 pub mod tools;

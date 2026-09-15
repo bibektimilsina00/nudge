@@ -40,7 +40,7 @@ pub enum Wrote {
 /// Normalised without touching the filesystem, because the file usually does not
 /// exist yet and `canonicalize` fails on those -- which is exactly the case that
 /// needs checking.
-pub fn resolve(workspace: &Path, requested: &str) -> Result<PathBuf> {
+pub fn resolve(workspace: &Path, requested: &str, anywhere: bool) -> Result<PathBuf> {
     let requested = requested.trim();
     if requested.is_empty() {
         return Err(Error::Click("no path given".into()));
@@ -63,6 +63,10 @@ pub fn resolve(workspace: &Path, requested: &str) -> Result<PathBuf> {
 
     // Resolve `.` and `..` by hand. A `..` that walks above the workspace leaves
     // the stack empty, which is the escape this is here to catch.
+    //
+    // Still normalised when writing anywhere is allowed, because the point of
+    // normalising is to know what path is really meant, and that question does
+    // not stop mattering just because more answers are acceptable.
     let mut out = PathBuf::new();
     for part in joined.components() {
         match part {
@@ -75,7 +79,7 @@ pub fn resolve(workspace: &Path, requested: &str) -> Result<PathBuf> {
             other => out.push(other.as_os_str()),
         }
     }
-    if !out.starts_with(workspace) {
+    if !anywhere && !out.starts_with(workspace) {
         return Err(Error::Click(format!(
             "{requested} is outside the workspace ({})",
             workspace.display()
@@ -89,8 +93,14 @@ pub fn resolve(workspace: &Path, requested: &str) -> Result<PathBuf> {
 /// `permitted` says the user has agreed to replace this particular file; it is
 /// ignored when the file does not exist, because creating one needs no
 /// permission.
-pub fn write(workspace: &Path, requested: &str, content: &str, permitted: bool) -> Result<Wrote> {
-    let path = resolve(workspace, requested)?;
+pub fn write(
+    workspace: &Path,
+    requested: &str,
+    content: &str,
+    permitted: bool,
+    anywhere: bool,
+) -> Result<Wrote> {
+    let path = resolve(workspace, requested, anywhere)?;
     if content.len() > MAX_BYTES {
         return Err(Error::Click(format!(
             "that is {} KB and the limit is {} KB",
@@ -160,8 +170,14 @@ const SHOW_ON_MISS: usize = 3_000;
 /// to ask for the rest -- so a long file simply stopped mid-way and the model
 /// had no idea there was more. Line numbers are what make `edit` targetable and
 /// what let a second read ask for the part it actually wants.
-pub fn read(workspace: &Path, requested: &str, from: usize, lines: usize) -> Result<String> {
-    let path = resolve(workspace, requested)?;
+pub fn read(
+    workspace: &Path,
+    requested: &str,
+    from: usize,
+    lines: usize,
+    anywhere: bool,
+) -> Result<String> {
+    let path = resolve(workspace, requested, anywhere)?;
     if !path.is_file() {
         return Err(Error::Click(format!("{} is not a file", path.display())));
     }
@@ -225,8 +241,9 @@ pub fn edit(
     old: &str,
     new: &str,
     permitted: bool,
+    anywhere: bool,
 ) -> Result<Wrote> {
-    let path = resolve(workspace, requested)?;
+    let path = resolve(workspace, requested, anywhere)?;
     if !path.is_file() {
         return Err(Error::Click(format!(
             "{} does not exist -- use write to create it",
@@ -315,6 +332,31 @@ pub fn is_yes(answer: &str) -> bool {
 
 #[cfg(test)]
 mod tests {
+    /// The other half of 2.2. Outside the workspace is refused, and granted it
+    /// is not -- and the path is still normalised either way, because knowing
+    /// what path was really meant does not stop mattering when more answers are
+    /// acceptable.
+    #[test]
+    fn a_granted_write_reaches_outside_the_workspace() {
+        let w = std::path::Path::new("/tmp/nudge-workspace");
+        assert!(resolve(w, "/etc/hosts", false).is_err());
+        assert_eq!(
+            resolve(w, "/etc/hosts", true).unwrap(),
+            std::path::Path::new("/etc/hosts")
+        );
+        assert_eq!(
+            resolve(w, "/tmp/a/../b/c.txt", true).unwrap(),
+            std::path::Path::new("/tmp/b/c.txt")
+        );
+    }
+
+    /// Same line as the shell: capability, not credentials.
+    #[test]
+    fn secrets_are_refused_however_wide_the_grant() {
+        let w = std::path::Path::new("/tmp/nudge-workspace");
+        assert!(resolve(w, "/Users/me/.ssh/id_rsa", true).is_err());
+    }
+
     use super::*;
 
     /// One directory per test, named after it.
@@ -342,12 +384,12 @@ mod tests {
             "~/.ssh/authorized_keys",
             "../../../../etc/passwd",
         ] {
-            assert!(resolve(&w, bad).is_err(), "{bad} should be refused");
+            assert!(resolve(&w, bad, false).is_err(), "{bad} should be refused");
         }
         // And the ordinary cases still work, including a `..` that stays inside.
-        assert!(resolve(&w, "index.html").is_ok());
-        assert!(resolve(&w, "site/css/main.css").is_ok());
-        assert!(resolve(&w, "site/../index.html").is_ok());
+        assert!(resolve(&w, "index.html", false).is_ok());
+        assert!(resolve(&w, "site/css/main.css", false).is_ok());
+        assert!(resolve(&w, "site/../index.html", false).is_ok());
     }
 
     #[test]
@@ -359,7 +401,7 @@ mod tests {
             "keys/server.pem",
             ".npmrc",
         ] {
-            assert!(resolve(&w, bad).is_err(), "{bad} should be refused");
+            assert!(resolve(&w, bad, false).is_err(), "{bad} should be refused");
         }
     }
 
@@ -367,7 +409,7 @@ mod tests {
     #[test]
     fn a_new_file_is_written_and_an_existing_one_asks_first() {
         let w = workspace("new-vs-existing");
-        let made = write(&w, "index.html", "<h1>hi</h1>", false).unwrap();
+        let made = write(&w, "index.html", "<h1>hi</h1>", false, false).unwrap();
         assert!(
             matches!(made, Wrote::Done { backup: None, .. }),
             "new file, no asking"
@@ -377,7 +419,7 @@ mod tests {
             "<h1>hi</h1>"
         );
 
-        let again = write(&w, "index.html", "<h1>replaced</h1>", false).unwrap();
+        let again = write(&w, "index.html", "<h1>replaced</h1>", false, false).unwrap();
         assert!(
             matches!(again, Wrote::NeedsPermission { .. }),
             "must ask to replace"
@@ -393,8 +435,8 @@ mod tests {
     #[test]
     fn saying_yes_still_keeps_a_copy() {
         let w = workspace("backup");
-        write(&w, "index.html", "original", false).unwrap();
-        let done = write(&w, "index.html", "replaced", true).unwrap();
+        write(&w, "index.html", "original", false, false).unwrap();
+        let done = write(&w, "index.html", "replaced", true, false).unwrap();
         let Wrote::Done {
             backup: Some(b), ..
         } = done
@@ -408,7 +450,7 @@ mod tests {
         );
 
         // A second replacement does not clobber the first backup.
-        let done = write(&w, "index.html", "third", true).unwrap();
+        let done = write(&w, "index.html", "third", true, false).unwrap();
         let Wrote::Done {
             backup: Some(b2), ..
         } = done
@@ -423,7 +465,7 @@ mod tests {
     fn a_runaway_file_is_refused() {
         let w = workspace("runaway");
         let huge = "x".repeat(MAX_BYTES + 1);
-        assert!(write(&w, "big.txt", &huge, false).is_err());
+        assert!(write(&w, "big.txt", &huge, false, false).is_err());
     }
 
     /// Two matches means the model is guessing which one it meant, and choosing
@@ -431,9 +473,9 @@ mod tests {
     #[test]
     fn an_edit_must_be_unambiguous() {
         let w = workspace("edit-unique");
-        write(&w, "a.txt", "one\ntwo\none\n", false).unwrap();
+        write(&w, "a.txt", "one\ntwo\none\n", false, false).unwrap();
 
-        let twice = edit(&w, "a.txt", "one", "1", false)
+        let twice = edit(&w, "a.txt", "one", "1", false, false)
             .unwrap_err()
             .to_string();
         assert!(twice.contains("appears 2 times"), "got: {twice}");
@@ -443,13 +485,13 @@ mod tests {
             "must not have changed anything while refusing"
         );
 
-        let missing = edit(&w, "a.txt", "three", "3", false)
+        let missing = edit(&w, "a.txt", "three", "3", false, false)
             .unwrap_err()
             .to_string();
         assert!(missing.contains("not in"), "got: {missing}");
 
         // Enough context to be unique, and only that one changes.
-        edit(&w, "a.txt", "two\none", "two\nuno", false).unwrap();
+        edit(&w, "a.txt", "two\none", "two\nuno", false, false).unwrap();
         assert_eq!(
             std::fs::read_to_string(w.join("a.txt")).unwrap(),
             "one\ntwo\nuno\n"
@@ -460,8 +502,8 @@ mod tests {
     #[test]
     fn a_missed_edit_hands_back_the_file() {
         let w = workspace("edit-miss");
-        write(&w, "a.html", "<h1>Real Heading</h1>", false).unwrap();
-        let why = edit(&w, "a.html", "<h1>Guessed</h1>", "x", false)
+        write(&w, "a.html", "<h1>Real Heading</h1>", false, false).unwrap();
+        let why = edit(&w, "a.html", "<h1>Guessed</h1>", "x", false, false)
             .unwrap_err()
             .to_string();
         assert!(why.contains("Real Heading"), "did not show the file: {why}");
@@ -471,10 +513,10 @@ mod tests {
     #[test]
     fn an_edit_keeps_the_previous_version() {
         let w = workspace("edit-backup");
-        write(&w, "a.txt", "hello world", false).unwrap();
+        write(&w, "a.txt", "hello world", false, false).unwrap();
         let Wrote::Done {
             backup: Some(b), ..
-        } = edit(&w, "a.txt", "world", "there", false).unwrap()
+        } = edit(&w, "a.txt", "world", "there", false, false).unwrap()
         else {
             panic!("expected a backup");
         };
@@ -490,8 +532,8 @@ mod tests {
     #[test]
     fn an_edit_that_replaces_everything_still_asks() {
         let w = workspace("edit-whole");
-        write(&w, "a.txt", "everything", false).unwrap();
-        let out = edit(&w, "a.txt", "everything", "something else", false).unwrap();
+        write(&w, "a.txt", "everything", false, false).unwrap();
+        let out = edit(&w, "a.txt", "everything", "something else", false, false).unwrap();
         assert!(matches!(out, Wrote::NeedsPermission { .. }));
         assert_eq!(
             std::fs::read_to_string(w.join("a.txt")).unwrap(),
@@ -505,18 +547,18 @@ mod tests {
     fn reading_says_what_it_did_not_show() {
         let w = workspace("read");
         let body: String = (1..=500).map(|i| format!("line {i}\n")).collect();
-        write(&w, "big.txt", &body, false).unwrap();
+        write(&w, "big.txt", &body, false, false).unwrap();
 
-        let head = read(&w, "big.txt", 1, 10).unwrap();
+        let head = read(&w, "big.txt", 1, 10, false).unwrap();
         assert!(head.contains("    1  line 1"), "no line numbers: {head}");
         assert!(head.contains("   10  line 10"));
         assert!(!head.contains("line 11"), "returned more than asked");
         assert!(head.contains("not shown"), "did not admit there was more");
 
         // A window in the middle, and the end that admits nothing is missing.
-        let mid = read(&w, "big.txt", 250, 2).unwrap();
+        let mid = read(&w, "big.txt", 250, 2, false).unwrap();
         assert!(mid.contains("  250  line 250"));
-        let all = read(&w, "big.txt", 1, 500).unwrap();
+        let all = read(&w, "big.txt", 1, 500, false).unwrap();
         assert!(
             !all.contains("not shown"),
             "claimed more when it showed everything"
@@ -530,9 +572,9 @@ mod tests {
     fn one_enormous_line_does_not_eat_the_whole_file() {
         let w = workspace("read-minified");
         let body = format!("{}\nsecond line\nthird line\n", "x".repeat(50_000));
-        write(&w, "min.js", &body, false).unwrap();
+        write(&w, "min.js", &body, false, false).unwrap();
 
-        let out = read(&w, "min.js", 1, 10).unwrap();
+        let out = read(&w, "min.js", 1, 10, false).unwrap();
         assert!(
             out.contains("(line truncated)"),
             "did not cap the line: {}",
@@ -545,9 +587,9 @@ mod tests {
     #[test]
     fn reading_obeys_the_same_boundaries_as_writing() {
         let w = workspace("read-bounds");
-        assert!(read(&w, "../../../etc/passwd", 1, 5).is_err());
-        assert!(read(&w, "~/.ssh/id_rsa", 1, 5).is_err());
-        assert!(read(&w, "nope.txt", 1, 5).is_err(), "missing file");
+        assert!(read(&w, "../../../etc/passwd", 1, 5, false).is_err());
+        assert!(read(&w, "~/.ssh/id_rsa", 1, 5, false).is_err());
+        assert!(read(&w, "nope.txt", 1, 5, false).is_err(), "missing file");
     }
 
     /// Fails closed: only clear agreement counts, because the cost of reading a
