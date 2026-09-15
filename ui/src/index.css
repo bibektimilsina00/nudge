@@ -17,10 +17,16 @@
    * any backdrop.
    * ------------------------------------------------------------------ */
 
-  /* The window itself: dark and translucent, the way an AppKit sidebar is. */
-  --color-window: rgba(30, 30, 32, 0.72);
+  /* The window itself: dark and translucent, the way an AppKit sidebar is.
+   *
+   * 0.72 was the first try and it was far too thin -- over a bright wallpaper
+   * the rocks and water came through the rows and the text sat on top of them.
+   * Real vibrancy is more opaque than it looks: the blur does the work of
+   * feeling like glass, and the fill does the work of being legible. When the
+   * two fight, legibility wins, because a panel nobody can read is not a panel. */
+  --color-window: rgba(28, 28, 30, 0.93);
   /* A thing sitting on the window -- a card, a row, a field. */
-  --color-raise: rgba(255, 255, 255, 0.06);
+  --color-raise: rgba(255, 255, 255, 0.07);
   /* The same thing under the pointer. */
   --color-raise-hi: rgba(255, 255, 255, 0.11);
   /* And pressed, or selected. */
@@ -186,8 +192,12 @@ body,
  * Blur alone reads as fog. */
 .material {
   background-color: var(--color-window);
-  backdrop-filter: blur(30px) saturate(180%);
-  -webkit-backdrop-filter: blur(30px) saturate(180%);
+  /* More blur than seems necessary, which is what keeps it reading as glass now
+   * that the fill is nearly opaque. What comes through is the *colour* of what
+   * is behind, not its shapes -- a window over a blue lake should look faintly
+   * blue, and should never show the rocks. */
+  backdrop-filter: blur(48px) saturate(190%);
+  -webkit-backdrop-filter: blur(48px) saturate(190%);
 }
 
 /* A hairline that survives a Retina display.
