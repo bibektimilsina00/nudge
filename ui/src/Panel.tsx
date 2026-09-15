@@ -268,20 +268,46 @@ export default function Panel() {
 }
 
 /**
- * Send the companion out to the screen, or call it back.
+ * The companion's perch: a socket it sits in when parked, and leaps out of when
+ * released.
  *
- * It used to hold a socket with a miniature companion in it, which said where the
- * thing was by whether the socket was full. Two of them on one row -- one in the
- * notch above, one here -- read as two companions rather than one in two states,
- * so this is a word now and the notch keeps the picture.
+ * A button that *is* the thing's home reads better than one labelled "Undock
+ * Cursor" -- you can see where it went. The socket stays either way, because an
+ * empty spot that something belongs in is the half that carries the meaning.
+ *
+ * What sits in it is a dot rather than a miniature companion. Drawn properly it
+ * was a second companion one row under the one in the notch, which read as two
+ * of them rather than one in two states.
+ *
+ * The companion cannot literally fly between two windows, so the illusion is
+ * scale: releasing it grows and fades it out of the socket, calling it back drops
+ * it in from larger with a small overshoot, like something landing.
  */
 function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) {
   return (
     <button
       onClick={onToggle}
       aria-pressed={docked}
-      className="flex h-[30px] items-center rounded-full bg-raise px-3 text-[11.5px] font-medium transition-colors duration-150 hover:bg-raise-hi hairline"
+      className="flex h-[30px] items-center gap-2 rounded-full bg-raise pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-raise-hi hairline"
     >
+      <span
+        className={[
+          "grid size-[24px] shrink-0 place-items-center rounded-full overflow-hidden",
+          "transition-colors duration-300",
+          // Empty, the socket still reads as a spot something belongs in.
+          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
+        ].join(" ")}
+      >
+        <span
+          className={[
+            "block size-[10px] rounded-full bg-gradient-to-br from-[#6b5bff] to-[#3f8cff]",
+            "transition-[transform,opacity] duration-300",
+            docked
+              ? "scale-100 opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
+              : "scale-[1.7] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
+          ].join(" ")}
+        />
+      </span>
       {docked ? "Release" : "Call back"}
     </button>
   );
