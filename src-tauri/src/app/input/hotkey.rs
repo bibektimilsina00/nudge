@@ -258,6 +258,8 @@ pub(crate) async fn ask(app: AppHandle, heard: String) -> Result<()> {
         return Ok(());
     }
 
+    // Counted before the work, so a session that goes wrong still counts as use.
+    app.state::<crate::core::offers::Offers>().a_turn_happened();
     app.state::<Nudge>().begin(heard);
     let step = commands::advance(app.clone()).await?;
     app.emit("step", step).ok();

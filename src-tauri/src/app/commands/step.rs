@@ -131,6 +131,11 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
     // something imaginary is simply ignored.
     if let Some(Step::Unsure { needed: Some(want), .. }) = &step {
         offer_if_it_is_a_good_moment(&app, want);
+    } else if matches!(&step, Some(Step::Done { .. } | Step::Reply { .. })) {
+        // Nothing was asked for, and the turn is over. The only other moment
+        // worth raising something in -- and held to a far stricter budget,
+        // because this one is a guess rather than an answer.
+        volunteer_if_it_is_ever_a_good_moment(&app);
     }
 
     // Finishing ends the session; being unsure does not -- open the right app and
@@ -406,6 +411,33 @@ fn offer_if_it_is_a_good_moment(app: &AppHandle, want: &str) {
     app.state::<crate::app::state::Offering>().set(offer.clone());
     crate::app::ui::connect::ask(app, &offer);
     eprintln!("offer: asking about {}", offer.name);
+}
+
+/// Raise something nobody asked about, on the rare occasion that is defensible.
+///
+/// Everything that decides is in `core::offers`; what is supplied here is the two
+/// things it cannot know -- whether anything is running, and what is installed on
+/// this machine.
+fn volunteer_if_it_is_ever_a_good_moment(app: &AppHandle) {
+    let offers = app.state::<crate::core::offers::Offers>();
+    let busy = app.state::<Agents>().running();
+    let here = |name: &str| {
+        crate::core::tools::present::installed(name)
+            || crate::core::screen::launch::installed_apps()
+                .iter()
+                .any(|a| a.eq_ignore_ascii_case(name))
+    };
+    let Some(offer) = crate::core::offers::catalogue()
+        .into_iter()
+        .find(|o| offers.may_volunteer(o, busy, here))
+    else {
+        return;
+    };
+    offers.asked();
+    offers.volunteered();
+    app.state::<crate::app::state::Offering>().set(offer.clone());
+    crate::app::ui::connect::ask(app, &offer);
+    eprintln!("offer: raising {} unprompted", offer.name);
 }
 
 /// Ask whether to replace a file, and hold the task until the answer comes.

@@ -42,6 +42,20 @@ pub struct Offer {
     /// in their words, never as capabilities in ours: "summarise the open PRs",
     /// not "read repository metadata".
     pub examples: Vec<String>,
+    /// Applications or commands whose presence means this person plausibly uses
+    /// the thing.
+    ///
+    /// The only grounds on which an offer is ever raised unprompted. Somebody
+    /// with the Slack app on their Mac uses Slack; somebody with `gh` installed
+    /// works on GitHub. It is weak evidence and it is the only evidence there is
+    /// short of being asked -- which is why volunteering is held to a far
+    /// stricter budget than answering.
+    ///
+    /// Empty means never volunteered. Calendar and Mail ship with macOS, so
+    /// their presence says nothing at all about whether somebody wants them
+    /// connected.
+    #[serde(skip)]
+    pub evidence: Vec<&'static str>,
 }
 
 /// The offers there are, for now written down rather than discovered.
@@ -53,6 +67,7 @@ pub fn catalogue() -> Vec<Offer> {
     vec![
         Offer {
             name: "GitHub".into(),
+            evidence: vec!["gh", "GitHub Desktop"],
             mark: "GH".into(),
             tint: "#e6e6e6".into(),
             dark: true,
@@ -66,6 +81,7 @@ pub fn catalogue() -> Vec<Offer> {
         },
         Offer {
             name: "Calendar".into(),
+            evidence: vec![],
             mark: "31".into(),
             tint: "#1a73e8".into(),
             dark: false,
@@ -78,6 +94,7 @@ pub fn catalogue() -> Vec<Offer> {
         },
         Offer {
             name: "Mail".into(),
+            evidence: vec![],
             mark: "M".into(),
             tint: "#ea4335".into(),
             dark: false,
@@ -90,6 +107,7 @@ pub fn catalogue() -> Vec<Offer> {
         },
         Offer {
             name: "Slack".into(),
+            evidence: vec!["Slack"],
             mark: "S".into(),
             tint: "#4a154b".into(),
             dark: false,
@@ -109,6 +127,21 @@ pub fn catalogue() -> Vec<Offer> {
 /// might want. Two weeks is a guess and is the first number to change if the
 /// bar turns out to be annoying.
 const LATER_DAYS: u64 = 14;
+
+/// How long between offers nobody asked for.
+///
+/// Far longer than the gap between answers to a request, and deliberately so. An
+/// offer raised in reply to somebody hitting a wall is a useful answer; an offer
+/// raised because they own an application is a guess, and a guess gets one
+/// chance a week rather than one a day.
+const VOLUNTEER_DAYS: u64 = 7;
+
+/// Turns somebody has to have taken before anything is raised unprompted.
+///
+/// Not a delay, a sign of use. Somebody who has just installed this and is
+/// finding out what it does should not be sold anything -- the first thing a new
+/// person meets should be the thing they came for.
+const SETTLED_IN: u64 = 5;
 
 /// The least time between any two offers, whatever they are about.
 ///
@@ -146,6 +179,21 @@ pub struct Offers {
     /// When any offer was last put on screen. Not persisted: a quiet day is
     /// about this session's attention, and a restart is a new day's worth.
     last: Mutex<Option<u64>>,
+    /// When one was last raised without being asked for. Persisted, because a
+    /// weekly budget that resets whenever somebody quits is not weekly.
+    volunteered: Mutex<Option<u64>>,
+    /// Turns taken this session. See [`SETTLED_IN`].
+    turns: std::sync::atomic::AtomicU64,
+}
+
+/// The whole file, which is the answers plus the one timestamp that has to
+/// outlive the process.
+#[derive(Default, serde::Serialize, serde::Deserialize)]
+struct Written {
+    #[serde(default)]
+    volunteered: Option<u64>,
+    #[serde(default, flatten)]
+    answers: BTreeMap<String, Answer>,
 }
 
 pub fn now_ms() -> u64 {
@@ -158,15 +206,17 @@ pub fn now_ms() -> u64 {
 impl Offers {
     pub fn load() -> Offers {
         let path = dirs::home_dir().map(|d| d.join(".config/nudge/offers.toml"));
-        let answers = path
+        let written: Written = path
             .as_ref()
             .and_then(|p| std::fs::read_to_string(p).ok())
-            .and_then(|t| toml::from_str::<BTreeMap<String, Answer>>(&t).ok())
+            .and_then(|t| toml::from_str(&t).ok())
             .unwrap_or_default();
         Offers {
             path,
-            answers: Mutex::new(answers),
+            answers: Mutex::new(written.answers),
             last: Mutex::new(None),
+            volunteered: Mutex::new(written.volunteered),
+            turns: std::sync::atomic::AtomicU64::new(0),
         }
     }
 
@@ -199,6 +249,42 @@ impl Offers {
         *self.last.lock().unwrap() = Some(now_ms());
     }
 
+    /// Somebody said something. Counted, not recorded.
+    pub fn a_turn_happened(&self) {
+        self.turns
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    }
+
+    /// Is this a reasonable moment to raise something nobody asked about?
+    ///
+    /// Everything `may_ask` requires, and then three more things: they are
+    /// actually using this, there is some evidence they use the service, and the
+    /// last unprompted offer was a week ago. The extra weight is the whole
+    /// difference between an offer and a nag.
+    pub fn may_volunteer(&self, offer: &Offer, busy: bool, here: impl Fn(&str) -> bool) -> bool {
+        if offer.evidence.is_empty() {
+            return false;
+        }
+        if self.turns.load(std::sync::atomic::Ordering::Relaxed) < SETTLED_IN {
+            return false;
+        }
+        if !offer.evidence.iter().any(|e| here(e)) {
+            return false;
+        }
+        if let Some(when) = *self.volunteered.lock().unwrap() {
+            if now_ms().saturating_sub(when) < VOLUNTEER_DAYS * DAY_MS {
+                return false;
+            }
+        }
+        self.may_ask(&offer.name, busy)
+    }
+
+    /// Note that one was raised unprompted.
+    pub fn volunteered(&self) {
+        *self.volunteered.lock().unwrap() = Some(now_ms());
+        self.save();
+    }
+
     /// Note what they said, and keep it.
     pub fn answered(&self, service: &str, said: Said) {
         self.answers.lock().unwrap().insert(
@@ -211,8 +297,11 @@ impl Offers {
 
     fn save(&self) {
         let Some(path) = &self.path else { return };
-        let answers = self.answers.lock().unwrap();
-        let Ok(text) = toml::to_string(&*answers) else {
+        let written = Written {
+            volunteered: *self.volunteered.lock().unwrap(),
+            answers: self.answers.lock().unwrap().clone(),
+        };
+        let Ok(text) = toml::to_string(&written) else {
             return;
         };
         if let Some(parent) = path.parent() {
@@ -283,6 +372,68 @@ mod tests {
         assert!(o.may_ask("Calendar", false));
         o.asked();
         assert!(!o.may_ask("Mail", false), "a different service is still an interruption");
+    }
+
+    fn github() -> Offer {
+        catalogue().into_iter().find(|o| o.name == "GitHub").unwrap()
+    }
+
+    /// Five turns of use before anything is raised unprompted. Somebody finding
+    /// out what this does should meet the thing they came for, not an offer.
+    #[test]
+    fn nothing_is_volunteered_to_somebody_who_just_arrived() {
+        let o = offers();
+        assert!(!o.may_volunteer(&github(), false, |_| true));
+        for _ in 0..5 {
+            o.a_turn_happened();
+        }
+        assert!(o.may_volunteer(&github(), false, |_| true));
+    }
+
+    /// Owning the application is the only evidence there is, and without it
+    /// there is nothing but a guess.
+    #[test]
+    fn nothing_is_volunteered_without_evidence() {
+        let o = offers();
+        for _ in 0..5 {
+            o.a_turn_happened();
+        }
+        assert!(!o.may_volunteer(&github(), false, |_| false));
+    }
+
+    /// Calendar ships with macOS, so its presence says nothing about whether
+    /// anybody wants it connected -- it has no evidence and is never raised.
+    #[test]
+    fn something_everybody_has_is_never_volunteered() {
+        let o = offers();
+        for _ in 0..5 {
+            o.a_turn_happened();
+        }
+        let calendar = catalogue().into_iter().find(|c| c.name == "Calendar").unwrap();
+        assert!(calendar.evidence.is_empty());
+        assert!(!o.may_volunteer(&calendar, false, |_| true));
+    }
+
+    #[test]
+    fn one_unprompted_offer_a_week() {
+        let o = offers();
+        for _ in 0..5 {
+            o.a_turn_happened();
+        }
+        assert!(o.may_volunteer(&github(), false, |_| true));
+        o.volunteered();
+        assert!(!o.may_volunteer(&github(), false, |_| true));
+    }
+
+    /// Everything that stops a requested offer stops an unprompted one too.
+    #[test]
+    fn a_no_stops_the_unprompted_kind_as_well() {
+        let o = offers();
+        for _ in 0..5 {
+            o.a_turn_happened();
+        }
+        o.answered("GitHub", Said::No);
+        assert!(!o.may_volunteer(&github(), false, |_| true));
     }
 
     #[test]

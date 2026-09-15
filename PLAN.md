@@ -737,9 +737,28 @@ screen, so "I cannot" is rarer than it looks. The offer fires for services with 
 local application, and the ones where it will earn its keep are the web-shaped
 ones rather than the Apple ones.
 
-*Never done:* offering because the environment suggests it. `gh` is installed, so
-here is GitHub. That is inference rather than a request, it can fire on the first
-day, and it is how every application that nags you begins.
+**And sometimes unprompted**, which was added on request after the above said it
+never would. The objection stands and the answer to it is the budget: what makes a
+proactive offer tolerable is evidence plus rarity, so it is gated on both rather
+than fired on a timer.
+
+An offer may only be raised by itself when **all** of these hold, on top of
+everything a requested one needs:
+
+- **There is evidence.** The Slack app is on this Mac; `gh` is installed. Weak
+  evidence, and the only evidence there is short of being asked -- which is exactly
+  why it buys one chance a week rather than one a day.
+- **They are actually using this.** Five turns before anything is raised. Somebody
+  finding out what Nudge does should meet the thing they came for, not an offer.
+- **The last unprompted one was a week ago.** Persisted, because a weekly budget
+  that resets when somebody quits is not weekly.
+
+**Calendar and Mail have no evidence and are never raised**, because they ship
+with macOS and owning them says nothing about wanting them connected. Only the
+services somebody chose to install can be inferred from.
+
+Verified live: six cheap turns, then `offer: raising GitHub unprompted` -- once,
+with the week written down.
 
 **3.3 Credentials.** *Built.*
 
