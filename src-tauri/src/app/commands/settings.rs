@@ -482,3 +482,30 @@ pub fn servers(app: AppHandle) -> Vec<(String, String)> {
         })
         .collect()
 }
+
+/// Every grant macOS controls, and whether Nudge has it.
+///
+/// Read fresh each time rather than cached. The whole point of the page that
+/// shows these is that somebody leaves, ticks a box in System Settings, and comes
+/// back -- a cached answer would still say "not granted" over a grant that is
+/// already working.
+#[tauri::command]
+pub fn permits() -> Vec<crate::core::permits::Permit> {
+    crate::core::permits::all()
+}
+
+/// Ask the system for one.
+///
+/// Reports whether a prompt was still possible. It is not, once something has been
+/// refused -- macOS asks exactly once -- so a `false` here is what tells the
+/// interface to stop offering Allow and offer the Settings pane instead.
+#[tauri::command]
+pub fn ask_permit(key: String) -> bool {
+    crate::core::permits::ask(&key)
+}
+
+/// Open the exact pane for one.
+#[tauri::command]
+pub fn open_permit(key: String) {
+    crate::core::permits::open_settings(&key);
+}

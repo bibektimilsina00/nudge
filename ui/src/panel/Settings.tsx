@@ -8,6 +8,14 @@ import { Companion } from "../components/Companion";
 type VoiceMode = "off" | "system" | "gemini";
 type Allowed = { key: string; label: string; about: string; on: boolean };
 type Pick = { key: string; label: string; about: string };
+type PermitState = "granted" | "denied" | "unasked";
+type Permit = {
+  key: string;
+  name: string;
+  without: string;
+  state: PermitState;
+  essential: boolean;
+};
 type Brain = {
   provider: string;
   model: string;
@@ -18,7 +26,7 @@ type Brain = {
 };
 
 /** Which page of settings is open. */
-type Where = "root" | "allowed" | "model" | "voice" | "tools" | "screen";
+type Where = "root" | "allowed" | "model" | "voice" | "screen" | "permissions";
 
 /**
  * The settings sheet.
@@ -63,6 +71,7 @@ export function Settings({
   const [servers, setServers] = useState<[string, string][]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [look, setLook] = useState(DEFAULT_LOOK);
+  const [permits, setPermits] = useState<Permit[]>([]);
 
   useEffect(() => {
     void invoke<VoiceMode>("voice_mode").then(setVoice);
@@ -71,13 +80,23 @@ export function Settings({
     void invoke<Allowed[]>("reach").then(setAllowed);
     void invoke<Brain>("brain").then(setBrain);
     void invoke<string>("look").then(setLook);
+    // Polled, not asked once. The entire shape of granting one of these is that
+    // somebody leaves for System Settings and comes back, and an answer cached
+    // before they left would still say "not granted" over a grant already
+    // working. A second is faster than anybody can tick a box and switch back.
+    const grants = () => void invoke<Permit[]>("permits").then(setPermits);
+    grants();
+    const watching = window.setInterval(grants, 1000);
     // Servers connect in the background long after this mounts -- `npx` can spend
     // a minute fetching one it has never run -- so this looks again rather than
     // showing "starting…" forever to somebody who opened settings early.
     const look = () => void invoke<[string, string][]>("servers").then(setServers);
     look();
     const again = window.setInterval(look, 2000);
-    return () => window.clearInterval(again);
+    return () => {
+      window.clearInterval(again);
+      window.clearInterval(watching);
+    };
   }, []);
 
   const allow = (key: string, on: boolean) => {
@@ -96,6 +115,10 @@ export function Settings({
   };
 
   const open = allowed.filter((g) => g.on).length;
+  // Only the ones Nudge cannot work without. The microphone being off is a
+  // smaller app, not a broken one, and warning about it the same way would teach
+  // people to ignore the warning.
+  const short_of = permits.filter((p) => p.essential && p.state !== "granted");
 
   if (where === "allowed") {
     return (
@@ -195,43 +218,6 @@ export function Settings({
     );
   }
 
-  if (where === "tools") {
-    return (
-      <Page title="Tools" onBack={() => setWhere("root")}>
-        <div className="space-y-2 pt-1">
-          <Row
-            icon={<I.Grid />}
-            label="Integrations"
-            sub="Services Nudge can reach"
-            chevron
-            onClick={onIntegrations}
-          />
-          <Row
-            icon={<I.Bolt />}
-            label="Skills"
-            sub="Folders of instructions it can follow"
-            chevron
-            onClick={onSkills}
-          />
-        </div>
-        <Section title="Servers">
-          {servers.length === 0 ? (
-            <p className="px-0.5 text-[10.5px] leading-snug text-ink-3">
-              None yet. Each one is three lines in config.toml and brings its own
-              tools.
-            </p>
-          ) : (
-            // A count rather than a tick: a server you only know the name of is
-            // one you have to trust.
-            servers.map(([name, said]) => (
-              <Row key={name} icon={<I.Dot className="bg-white/40" />} label={name} value={said} />
-            ))
-          )}
-        </Section>
-      </Page>
-    );
-  }
-
   if (where === "screen") {
     return (
       <Page title="Companion" onBack={() => setWhere("root")}>
@@ -289,8 +275,54 @@ export function Settings({
     );
   }
 
+  if (where === "permissions") {
+    return (
+      <Page title="Permissions" onBack={() => setWhere("root")}>
+        <p className="px-0.5 pt-1 pb-2.5 text-[10.5px] leading-snug text-ink-3">
+          Nudge looks at your screen and moves your cursor, so macOS makes you say
+          so. Granting one takes effect immediately — no restart.
+        </p>
+        <div className="space-y-2">
+          {permits.map((p) => (
+            <Grant key={p.key} permit={p} />
+          ))}
+        </div>
+      </Page>
+    );
+  }
+
   return (
     <div className="flex-1 overflow-y-auto px-3 pb-3">
+      {/* Above everything, and only when it is true. Nudge cannot do the thing it
+          is for without these, so a missing one is not a setting -- it is the
+          reason nothing works, and it belongs where somebody looking for that
+          reason will land. */}
+      {short_of.length > 0 && (
+        <button
+          onClick={() => setWhere("permissions")}
+          className="mt-2 flex w-full items-center gap-2.5 rounded-xl bg-[#ffd60a]/10 px-2.5 py-2 text-left transition-colors duration-150 hover:bg-[#ffd60a]/15 hairline"
+        >
+          <span className="text-[#ffd60a]">
+            <svg viewBox="0 0 16 16" className="size-[15px]" fill="none" stroke="currentColor" strokeWidth={1.7} strokeLinecap="round">
+              <path d="M8 1.8 15 14H1z" strokeLinejoin="round" />
+              <path d="M8 6.4v3.2M8 11.6v.1" />
+            </svg>
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12px] font-medium text-[#ffd60a]">
+              {short_of.length === 1
+                ? `${short_of[0].name} is off`
+                : `${short_of.length} permissions are off`}
+            </span>
+            <span className="mt-px block text-[10.5px] leading-snug text-ink-2">
+              {short_of[0].without}
+            </span>
+          </span>
+          <svg viewBox="0 0 16 16" className="size-3 shrink-0 text-ink-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M6.5 3.5 11 8l-4.5 4.5" />
+          </svg>
+        </button>
+      )}
       {/* Each row says what is inside it, so checking a setting -- which is most
           of why anybody opens this -- needs no clicks at all. */}
       <Section title="Settings">
@@ -320,11 +352,18 @@ export function Settings({
         />
         <Row
           icon={<I.Grid />}
-          label="Tools"
-          sub="Integrations, skills and servers"
-          value={servers.length ? `${servers.length} server${servers.length > 1 ? "s" : ""}` : undefined}
+          label="Integrations"
+          sub="Services Nudge can reach"
+          value={servers.length ? `${servers.length} connected` : undefined}
           chevron
-          onClick={() => setWhere("tools")}
+          onClick={onIntegrations}
+        />
+        <Row
+          icon={<I.Bolt />}
+          label="Skills"
+          sub="Folders of instructions it can follow"
+          chevron
+          onClick={onSkills}
         />
         <Row
           icon={<I.Arrow />}
@@ -333,6 +372,23 @@ export function Settings({
           value={LOOKS.find((l) => l.key === look)?.name ?? look}
           chevron
           onClick={() => setWhere("screen")}
+        />
+      </Section>
+
+      <Section title="System">
+        <Row
+          icon={<I.Shield />}
+          label="Permissions"
+          sub="What macOS lets Nudge do"
+          value={
+            short_of.length > 0
+              ? `${short_of.length} off`
+              : permits.length
+                ? "all granted"
+                : undefined
+          }
+          chevron
+          onClick={() => setWhere("permissions")}
         />
       </Section>
 
@@ -369,4 +425,76 @@ function short(path: string) {
   const rest = path.slice(home.length);
   const cut = rest.indexOf("/");
   return cut === -1 ? "~" : `~${rest.slice(cut)}`;
+}
+
+/**
+ * One grant, and the one thing to do about it.
+ *
+ * The button changes with the state because the routes are genuinely different.
+ * macOS shows each prompt exactly once: before that, Allow works and is one
+ * click; after a refusal -- or a dismissal, which it records as the same thing --
+ * the API is silent forever and the only way through is the pane. Offering Allow
+ * to somebody who already said no is a button that does nothing, which is how an
+ * app teaches people its buttons are decorative.
+ */
+function Grant({ permit }: { permit: Permit }) {
+  const [tried, setTried] = useState(false);
+  const granted = permit.state === "granted";
+  // After a refusal, and after an Allow that produced no prompt, the pane is the
+  // only remaining route.
+  const pane = permit.state === "denied" || tried;
+
+  return (
+    <div
+      className={`flex items-start gap-2.5 rounded-xl p-2.5 hairline ${
+        granted ? "bg-raise" : "bg-raise-hi"
+      }`}
+    >
+      <span
+        className={`mt-px grid size-[17px] shrink-0 place-items-center rounded-full ${
+          granted ? "text-blue" : "text-ink-3"
+        }`}
+      >
+        {granted ? (
+          <svg viewBox="0 0 16 16" className="size-[15px]" fill="none" stroke="currentColor" strokeWidth={2.2} strokeLinecap="round" strokeLinejoin="round">
+            <path d="m3 8.5 3.5 3.5L13 5" />
+          </svg>
+        ) : (
+          <span className="size-[9px] rounded-full inset-ring-1 inset-ring-current" />
+        )}
+      </span>
+
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-1.5">
+          <h3 className="text-[12px] font-medium">{permit.name}</h3>
+          {permit.essential && !granted && (
+            <span className="rounded bg-[#ffd60a]/15 px-1 py-px text-[9px] font-semibold text-[#ffd60a]">
+              NEEDED
+            </span>
+          )}
+        </div>
+        <p className="mt-px text-[10.5px] leading-snug text-ink-3">{permit.without}</p>
+      </div>
+
+      {!granted && (
+        <button
+          onClick={() => {
+            if (pane) {
+              void invoke("open_permit", { key: permit.key });
+              return;
+            }
+            // `false` means macOS will not prompt -- already answered. The row
+            // switches to the pane rather than leaving a dead button behind.
+            void invoke<boolean>("ask_permit", { key: permit.key }).then((asked) => {
+              if (!asked) void invoke("open_permit", { key: permit.key });
+              setTried(true);
+            });
+          }}
+          className="h-[24px] shrink-0 rounded-control bg-blue px-2.5 text-[11.5px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi active:scale-[0.98]"
+        >
+          {pane ? "Open Settings" : "Allow"}
+        </button>
+      )}
+    </div>
+  );
 }

@@ -1,10 +1,19 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
 type Service = { name: string; tint: string; mark: string; dark?: boolean; blurb: string };
 
 /**
- * The integrations browser. UI only for now -- nothing here connects to anything,
- * and `Connect` is inert.
+ * The integrations browser.
+ *
+ * Two halves, and only the first is real. The tool servers at the top are
+ * whatever the config named and are actually connected and actually working; the
+ * catalogue underneath is a list of services Nudge does not reach yet, and
+ * `Connect` on those is inert.
+ *
+ * The real ones go first and say so. A page that opens on a wall of famous logos
+ * that do nothing reads as a product that does nothing -- while the thing that
+ * does work, and is doing it right now, was not on this page at all.
  *
  * Monogram tiles rather than the real brand marks: shipping other companies'
  * logos into a binary is a licensing question, and a coloured initial carries the
@@ -66,6 +75,17 @@ const SERVICES: Service[] = [
 
 export function Integrations({ onBack }: { onBack: () => void }) {
   const [query, setQuery] = useState("");
+  const [servers, setServers] = useState<[string, string][]>([]);
+
+  // They connect in the background long after this mounts -- `npx` can spend a
+  // minute fetching a server it has never run -- so this looks again rather than
+  // saying "starting…" forever.
+  useEffect(() => {
+    const look = () => void invoke<[string, string][]>("servers").then(setServers);
+    look();
+    const again = window.setInterval(look, 2000);
+    return () => window.clearInterval(again);
+  }, []);
 
   // Filtering is real even though connecting is not -- a search box that does
   // nothing is more confusing than no search box.
@@ -109,6 +129,26 @@ export function Integrations({ onBack }: { onBack: () => void }) {
       </div>
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
+        {servers.length > 0 && !query && (
+          <>
+            <p className="px-0.5 pt-0.5 text-[10.5px] text-ink-3">Connected</p>
+            {servers.map(([name, said]) => (
+              <div key={name} className="flex items-center gap-2.5 rounded-xl bg-raise p-2.5 hairline">
+                <span className="grid size-5 shrink-0 place-items-center rounded-[6px] bg-blue/20 text-blue">
+                  <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
+                    <path d="M9 2 4 9h3.5L7 14l5-7H8.5Z" strokeLinejoin="round" />
+                  </svg>
+                </span>
+                <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold">{name}</h3>
+                {/* A count, not a tick. A server you only know the name of is one
+                    you have to trust; one that says it brought fourteen tools is
+                    one you can weigh. */}
+                <span className="shrink-0 text-[10.5px] text-ink-3">{said}</span>
+              </div>
+            ))}
+            <p className="px-0.5 pt-2 text-[10.5px] text-ink-3">Not yet reachable</p>
+          </>
+        )}
         {shown.map((s) => (
           <Card key={s.name} service={s} />
         ))}
