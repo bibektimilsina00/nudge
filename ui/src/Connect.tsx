@@ -59,10 +59,24 @@ export default function Connect() {
     };
   }, []);
 
+  // Answering plays the exit before anything else happens.
+  //
+  // The window is hidden by Rust, and hiding it is instant -- so telling Rust
+  // first means the bar vanishes and the animation plays to nobody. It leaves
+  // first, then says so.
+  const [leaving, setLeaving] = useState(false);
   const answer = (said: "yes" | "later" | "no") => {
-    if (!offer) return;
-    void invoke("answer_offer", { service: offer.name, said }).catch(() => {});
-    setOffer(null);
+    if (!offer || leaving) return;
+    setLeaving(true);
+    const name = offer.name;
+    window.setTimeout(() => {
+      void invoke("answer_offer", { service: name, said }).catch(() => {});
+      setOffer(null);
+      setLeaving(false);
+      // Matches `--animate-into-notch`. A number in two places, and the wrong
+      // half to leave to chance: too short and it is cut off, too long and the
+      // bar sits there finished, waiting.
+    }, 220);
   };
 
   // Escape is no different from Not now: the key people press to make something
@@ -88,16 +102,30 @@ export default function Connect() {
     // rewording itself rather than as a new thing being asked.
     <div
       key={offer.name}
-      className="w-full rounded-b-[26px] bg-[#0d0d0f]/95 px-6 py-5 text-white backdrop-blur-2xl inset-ring-1 inset-ring-white/[0.08] motion-safe:animate-drop"
+      // Origin at the top centre, which is where the notch is: it grows out of
+      // that rectangle and shrinks back into it.
+      className={[
+        "w-full origin-top rounded-b-[26px] px-5 py-4 text-white backdrop-blur-2xl",
+        "bg-[#0c0c0e]/95 inset-ring-1 inset-ring-white/[0.08]",
+        leaving ? "motion-safe:animate-into-notch" : "motion-safe:animate-from-notch",
+      ].join(" ")}
+      style={{
+        // A wash of the service's own colour, off to one side and very faint.
+        // It ties the bar to the thing it is asking about without printing a
+        // logo, and at four percent it is a warmth rather than a colour.
+        backgroundImage:
+          `radial-gradient(120% 140% at 88% 0%, ${offer.tint}14 0%, transparent 60%),` +
+          " radial-gradient(90% 120% at 10% 0%, rgba(110,120,255,0.10) 0%, transparent 55%)",
+      }}
     >
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <Marks offer={offer} />
 
         <div className="min-w-0 flex-1">
-          <h1 className="truncate text-[16px] font-semibold tracking-tight">
+          <h1 className="truncate text-[13.5px] font-semibold tracking-tight">
             Connect {offer.name} to Nudge
           </h1>
-          <p className="mt-[3px] text-[12.5px] text-white/40">Use Nudge to:</p>
+          <p className="mt-[2px] text-[11px] text-white/40">Use Nudge to:</p>
         </div>
 
         <div className="flex shrink-0 items-center gap-2">
@@ -130,11 +158,11 @@ export default function Connect() {
 function Marks({ offer }: { offer: Offer }) {
   return (
     <div className="flex shrink-0 items-center">
-      <span className="grid size-[44px] place-items-center rounded-xl bg-gradient-to-br from-[#6b5bff] to-[#3f8cff] text-[17px] font-bold">
+      <span className="grid size-[36px] place-items-center rounded-[10px] bg-gradient-to-br from-[#6b5bff] to-[#3f8cff] text-[14px] font-bold">
         N
       </span>
       <span
-        className="-ml-2.5 grid size-[44px] place-items-center rounded-xl text-[15px] font-bold ring-[3px] ring-[#0d0d0f]"
+        className="-ml-2 grid size-[36px] place-items-center rounded-[10px] text-[13px] font-bold ring-[2.5px] ring-[#0c0c0e]"
         style={{ backgroundColor: offer.tint, color: offer.dark ? "#111" : "#fff" }}
       >
         {offer.mark}
@@ -177,7 +205,7 @@ function Examples({ examples }: { examples: string[] }) {
   if (examples.length === 0) return null;
 
   return (
-    <div className="relative mt-4">
+    <div className="relative mt-3">
       <div
         ref={rail}
         // The scrollbar is hidden rather than styled: this is a row of five
@@ -188,7 +216,7 @@ function Examples({ examples }: { examples: string[] }) {
         {examples.map((e) => (
           <span
             key={e}
-            className="shrink-0 rounded-full bg-white/[0.07] px-4 py-[9px] text-[13px] whitespace-nowrap text-white/75 inset-ring-1 inset-ring-white/[0.06]"
+            className="shrink-0 rounded-full bg-white/[0.06] px-3 py-[6px] text-[11.5px] whitespace-nowrap text-white/70 inset-ring-1 inset-ring-white/[0.06]"
           >
             {e}
           </span>
@@ -197,13 +225,13 @@ function Examples({ examples }: { examples: string[] }) {
       {edges.left && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#0d0d0f] to-transparent"
+          className="pointer-events-none absolute inset-y-0 left-0 w-10 bg-gradient-to-r from-[#0c0c0e] to-transparent"
         />
       )}
       {edges.right && (
         <span
           aria-hidden
-          className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#0d0d0f] to-transparent"
+          className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-[#0c0c0e] to-transparent"
         />
       )}
     </div>
@@ -226,7 +254,7 @@ function Choice({
     <button
       onClick={onClick}
       className={[
-        "flex items-center gap-1.5 rounded-full px-4 py-[9px] text-[13px] font-medium transition-colors duration-150 active:scale-[0.97]",
+        "flex items-center gap-1.5 rounded-full px-3 py-[6px] text-[11.5px] font-medium transition-colors duration-150 active:scale-[0.97]",
         primary
           ? "bg-[#0a84ff] text-white hover:bg-[#0a7ae8]"
           : "bg-white/[0.07] text-white/85 hover:bg-white/[0.12]",
@@ -234,7 +262,7 @@ function Choice({
     >
       <svg
         viewBox="0 0 16 16"
-        className="size-[15px]"
+        className="size-[13px]"
         fill="none"
         stroke="currentColor"
         strokeWidth={1.8}

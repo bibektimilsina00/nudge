@@ -19,10 +19,15 @@
   /* Working. Slow enough to read as breathing rather than as a warning, and
      scale only -- see the note in Face.tsx about why nothing here flashes. */
   --animate-breath: breath 2s ease-in-out infinite;
-  /* Arriving. `ease-out` because it is entering -- it should be quickest at the
-     moment somebody notices it and settle rather than accelerate. The curve is
-     the strong one; the built-in easings are too weak to read as deliberate. */
-  --animate-drop: drop 380ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  /* Out of the notch, and back into it.
+     Not a slide: the bar comes from the black rectangle it is centred under, so
+     it grows out of that -- narrow and short, expanding outward and down. The
+     transform origin is the top centre, which is where the notch is.
+     `ease-out` arriving, because it should be quickest at the moment somebody
+     notices it. `ease-in` leaving, which is the one case ease-in is right for:
+     something disappearing should accelerate away rather than crawl off. */
+  --animate-from-notch: from-notch 360ms cubic-bezier(0.23, 1, 0.32, 1) both;
+  --animate-into-notch: into-notch 220ms cubic-bezier(0.55, 0, 0.9, 0.4) both;
   --animate-think: think 1.15s ease-in-out infinite;
   --animate-breathe: breathe 5s ease-in-out infinite;
 
@@ -30,16 +35,25 @@
      control it is pointing at. */
   /* A working agent, at a glance. Expands and fades rather than spinning: a
      spinner reads as "waiting for something", and an agent is not waiting. */
-  @keyframes drop {
+  @keyframes from-notch {
     from {
-      /* From just behind its own top edge, not from far above: it slides out of
-         the bezel, so it must never be seen arriving from off in the distance. */
-      transform: translateY(-101%);
+      transform: translateY(-12%) scaleX(0.16) scaleY(0.5);
       opacity: 0;
     }
     to {
-      transform: translateY(0);
+      transform: none;
       opacity: 1;
+    }
+  }
+
+  @keyframes into-notch {
+    from {
+      transform: none;
+      opacity: 1;
+    }
+    to {
+      transform: translateY(-12%) scaleX(0.16) scaleY(0.5);
+      opacity: 0;
     }
   }
 
