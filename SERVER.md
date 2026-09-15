@@ -66,3 +66,13 @@ this shape do it. **Both can be true at once:** bring-your-own-key stays, and is
 free; the proxy is what people pay for. That keeps the proxy *optional*, which
 means it failing degrades Nudge rather than stopping it — and an optional
 dependency is a much cheaper thing to operate than a required one.
+
+## What has to change when the proxy ships
+
+The marketing page currently answers "does my screen go anywhere?" with
+*"Nothing routes through a server of ours — there is not one in the path."*
+
+That is true now and false the day a proxy exists. It is the kind of sentence
+that survives a launch because nobody remembers writing it, and being wrong about
+where somebody's screen goes is not a sentence to be wrong about. Change it in
+the same commit as the proxy, and say plainly which route is which.

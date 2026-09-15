@@ -25,3 +25,5 @@ server/__pycache__/
 server/nudge.db
 server/releases/
 server/.env
+web/.next/
+server/.pytest_cache/

@@ -1,0 +1,36 @@
+# Everything Nudge needs to be downloadable, on one box.
+#
+# The API and the site are separate containers behind one hostname: the site is
+# a static-ish frontend that changes often, the API holds the database and the
+# builds and must not restart when a heading is reworded.
+services:
+  api:
+    build: ./server
+    environment:
+      # Postgres in anything real. SQLite is the default so this file runs
+      # unchanged on a laptop.
+      NUDGE_DATABASE_URL: ${DATABASE_URL:-sqlite:///./nudge.db}
+      NUDGE_WEB_ORIGIN: ${WEB_ORIGIN:-http://localhost:3000}
+    volumes:
+      # The builds, kept outside the image so a deploy does not lose them.
+      - releases:/srv/releases
+    ports:
+      - "8080:8080"
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./web
+      args:
+        # Same origin in production, because the reverse proxy in front of both
+        # sends /api to the API. A browser then makes no cross-origin request at
+        # all, which is one fewer thing to get wrong.
+        NEXT_PUBLIC_API: ${PUBLIC_API:-}
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+    restart: unless-stopped
+
+volumes:
+  releases:
