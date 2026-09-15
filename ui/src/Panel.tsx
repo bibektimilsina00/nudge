@@ -206,8 +206,6 @@ export default function Panel() {
             <Report kind={reporting} onBack={() => setView("settings")} />
           ) : view === "settings" ? (
             <Settings
-              docked={docked}
-              onDock={dock}
               onIntegrations={() => openIntegrations("settings")}
               onSkills={() => openSkills("settings")}
               onReport={(k) => {

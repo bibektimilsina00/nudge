@@ -18,7 +18,7 @@ type Brain = {
 };
 
 /** Which page of settings is open. */
-type Where = "root" | "allowed" | "answering" | "tools" | "screen";
+type Where = "root" | "allowed" | "model" | "voice" | "tools" | "screen";
 
 /**
  * The settings sheet.
@@ -38,16 +38,18 @@ type Where = "root" | "allowed" | "answering" | "tools" | "screen";
  * So it is pages now, and the pages are made of pickers. The root says what each
  * page currently holds, so the common case -- checking rather than changing -- is
  * answered without opening anything.
+ *
+ * One page per thing somebody would go looking for, which is not the same as one
+ * page per part of the code. Which model answers and which microphone it hears
+ * you through were together because both are "the model" from the inside; from
+ * the outside they are unrelated, and nobody adjusting their microphone wants to
+ * scroll past a choice that costs money.
  */
 export function Settings({
-  docked,
-  onDock,
   onIntegrations,
   onSkills,
   onReport,
 }: {
-  docked: boolean;
-  onDock: (v: boolean) => void;
   onIntegrations: () => void;
   onSkills: () => void;
   onReport: (kind: "bug" | "idea") => void;
@@ -126,9 +128,9 @@ export function Settings({
     );
   }
 
-  if (where === "answering" && brain) {
+  if (where === "model" && brain) {
     return (
-      <Page title="Answering" onBack={() => setWhere("root")}>
+      <Page title="Model" onBack={() => setWhere("root")}>
         {problem && (
           <p className="mt-1 mb-2 rounded-xl bg-[#ff453a]/12 p-2 text-[10.5px] leading-snug text-[#ff8a80]">
             {problem}
@@ -158,6 +160,13 @@ export function Settings({
           </p>
         </Section>
 
+      </Page>
+    );
+  }
+
+  if (where === "voice") {
+    return (
+      <Page title="Voice" onBack={() => setWhere("root")}>
         <Section title="Speaks back">
           <Choice
             options={[
@@ -174,7 +183,13 @@ export function Settings({
         </Section>
 
         <Section title="Listens with">
-          <Row icon={<I.MicIcon />} label={mic} sub="Whatever macOS has selected." />
+          {/* macOS owns this one. Offering a picker here would be a second place
+              to set it that the system can overrule at any moment. */}
+          <Row
+            icon={<I.MicIcon />}
+            label={mic}
+            sub="Whichever input macOS has selected. Change it in Sound settings."
+          />
         </Section>
       </Page>
     );
@@ -270,17 +285,6 @@ export function Settings({
             <code className="text-ink-2">companions.ts</code>.
           </p>
         )}
-
-        <Section title="Right now">
-          <Choice
-            options={[
-              { key: "loose", label: "Following your cursor", about: "Where it works. Point and ask." },
-              { key: "parked", label: "Parked in the panel", about: "Out of the way, still running." },
-            ]}
-            value={docked ? "parked" : "loose"}
-            onChange={(v) => onDock(v === "parked")}
-          />
-        </Section>
       </Page>
     );
   }
@@ -300,11 +304,19 @@ export function Settings({
         />
         <Row
           icon={<I.Spark />}
-          label="Answering"
-          sub="Model, thinking, voice"
+          label="Model"
+          sub="Who answers, and how hard it thinks"
           value={brain?.provider ?? "…"}
           chevron
-          onClick={() => setWhere("answering")}
+          onClick={() => setWhere("model")}
+        />
+        <Row
+          icon={<I.Wave />}
+          label="Voice"
+          sub="Speaking and listening"
+          value={{ off: "silent", system: "System", gemini: "Natural" }[voice]}
+          chevron
+          onClick={() => setWhere("voice")}
         />
         <Row
           icon={<I.Grid />}
