@@ -348,7 +348,7 @@ function Tile({
         title={agent.title}
         className="grid size-full place-items-center text-white transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-105 active:scale-[0.97]"
       >
-        <Face state={agent.state} step={agent.step} size={46} />
+        <Face state={agent.state} step={agent.step} size={46} hue={hue(agent.id)} />
       </button>
 
       {/* A question outranks the controls: it is the one state that needs a
@@ -409,12 +409,26 @@ function Dot({
   );
 }
 
-/* The six-colour palette went with the tile's background.
+/**
+ * How far to turn this agent's face on the colour wheel.
  *
- * It existed so two agents running at once were distinguishable at a glance --
- * which `Agents::start` has always made impossible: it refuses to start a second
- * while one is live, because there is one cursor. The colour was distinguishing
- * a case that cannot occur. */
+ * The palette that used to sit behind the tile went with the tile's background,
+ * and this is what replaced it -- the same job done to the face instead of to a
+ * square around it. `agent.riv` paints the ball purple and exposes no colour
+ * input, so the artwork is rotated rather than recoloured: the eyes stay white,
+ * because white has no hue to turn.
+ *
+ * Zero for the first, so the ordinary case is the artwork exactly as drawn.
+ * Spread wide after that, because two agents a few degrees apart are two agents
+ * nobody can tell apart.
+ */
+function hue(id: number) {
+  const turns = [0, 150, 70, 220, 300, 40];
+  // Ids start at one, so the first agent has to land on the first turn -- which
+  // is none. Indexing by the id itself gave the very first agent anybody ever
+  // runs a recoloured face, and the artwork as drawn to nobody.
+  return turns[Math.abs(id - 1) % turns.length];
+}
 
 function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
   const tone = TONE[agent.state];
@@ -427,7 +441,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
     // inset ring is the language everything else in Nudge is already written in.
     <div className="w-[326px] rounded-2xl bg-[#1e1e1e] text-white inset-ring-1 inset-ring-white/[0.09]">
       <header className="flex items-center gap-2.5 px-3 pt-2.5 pb-2">
-        <Face state={agent.state} step={agent.step} size={26} />
+        <Face state={agent.state} step={agent.step} size={26} hue={hue(agent.id)} />
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-[12.5px] font-semibold tracking-tight">{agent.title}</h1>
           {/* State and step on one quiet line rather than a loud pill beside the

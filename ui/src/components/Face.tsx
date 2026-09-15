@@ -23,11 +23,24 @@ export function Face({
   state,
   step,
   size = 22,
+  hue,
 }: {
   state: AgentState["state"];
   step: number;
   /** Pixels. A chip on the tile at 22; the whole point of an empty state at 64. */
   size?: number;
+  /**
+   * Degrees to rotate the artwork's colour by, or nothing to leave it alone.
+   *
+   * The purple is painted into `agent.riv` and the file exposes no colour input,
+   * so it cannot be set the way a state is. What can be done is turn the whole
+   * canvas on the colour wheel, which costs nothing and leaves the eyes alone --
+   * they are white, and white has no hue to rotate.
+   *
+   * A real colour would mean binding one in the Rive editor. This is the version
+   * that works with the file as it is.
+   */
+  hue?: number;
 }) {
   const { rive, RiveComponent } = useRive({
     src: agent,
@@ -86,7 +99,11 @@ export function Face({
 
   return (
     <div
-      style={{ width: size, height: size }}
+      style={{
+        width: size,
+        height: size,
+        filter: hue ? `hue-rotate(${hue}deg)` : undefined,
+      }}
       className={`shrink-0 ${state === "running" ? "motion-safe:animate-breath" : ""}`}
       aria-hidden
     >
