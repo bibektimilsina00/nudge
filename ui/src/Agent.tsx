@@ -84,14 +84,77 @@ function Mark({ status }: { status: Todo["status"] }) {
   }
   if (status === "active") {
     return (
-      <span className="relative mt-[4px] grid size-2 shrink-0 place-items-center">
-        {/* Behind the dot, so the dot itself does not move on a line of text. */}
-        <span aria-hidden className="absolute size-2 rounded-full bg-[#0a84ff] motion-safe:animate-halo" />
-        <span className="relative size-2 rounded-full bg-[#0a84ff]" />
-      </span>
+      <span className="mt-[4px] size-2 shrink-0 rounded-full bg-[#0a84ff] ring-2 ring-[#0a84ff]/25" />
     );
   }
   return <span className="mt-[4px] size-2 shrink-0 rounded-full ring-1 ring-white/25" />;
+}
+
+/**
+ * Every step it has taken, in order.
+ *
+ * `history` has always been collected and never shown, so the card answered
+ * "what is it doing" and never "what has it done" -- which is the question
+ * somebody actually has when they come back to it after two minutes away.
+ *
+ * Newest first, because the interesting end of a list of forty is the end that
+ * just happened. Open on a click, like the commands: this is the detail, and
+ * detail that is always open is noise until the moment it is not.
+ */
+export function Steps({ history }: { history: string[] }) {
+  if (history.length === 0) return null;
+  return (
+    <Fold count={history.length} label={`step${history.length === 1 ? "" : "s"} taken`}>
+      <ol className="mt-1.5 max-h-44 space-y-1 overflow-y-auto">
+        {[...history].reverse().map((line, i) => (
+          <li key={i} className="flex items-start gap-1.5 text-[10.5px] leading-snug text-white/55">
+            {/* Numbered from the real position, not from the top of a reversed
+                list -- otherwise the newest step is called number one. */}
+            <span className="mt-[1px] w-4 shrink-0 text-right font-mono text-[9px] text-white/25">
+              {history.length - i}
+            </span>
+            <span className="min-w-0">{line}</span>
+          </li>
+        ))}
+      </ol>
+    </Fold>
+  );
+}
+
+/**
+ * The disclosure both lists use.
+ *
+ * `<details>` rather than state: the browser already knows how to do this,
+ * remembers it per element, and is keyboard-accessible without being told.
+ */
+function Fold({
+  count,
+  label,
+  children,
+}: {
+  count: number;
+  label: string;
+  children: ReactNode;
+}) {
+  return (
+    <details className="group mt-2">
+      <summary className="flex cursor-default list-none items-center gap-1 text-[9.5px] tracking-wide text-white/30 uppercase transition-colors duration-150 hover:text-white/55">
+        <svg
+          viewBox="0 0 12 12"
+          className="size-2.5 transition-transform duration-200 ease-out group-open:rotate-90"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={1.6}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M4.5 2.5 8 6l-3.5 3.5" />
+        </svg>
+        {count} {label}
+      </summary>
+      {children}
+    </details>
+  );
 }
 
 /**
@@ -104,7 +167,11 @@ function Mark({ status }: { status: Todo["status"] }) {
 export function Artifacts({ made }: { made: Made[] }) {
   if (made.length === 0) return null;
   return (
-    <div className="mt-2 flex flex-wrap gap-1.5">
+    <div className="mt-2.5">
+      <p className="mb-1 text-[9.5px] tracking-wide text-white/30 uppercase">
+        {made.length} file{made.length === 1 ? "" : "s"} — click to open
+      </p>
+      <div className="flex flex-wrap gap-1.5">
       {made.map((m) => (
         <button
           key={m.path}
@@ -119,6 +186,7 @@ export function Artifacts({ made }: { made: Made[] }) {
           <span className="truncate">{m.path.split("/").pop()}</span>
         </button>
       ))}
+      </div>
     </div>
   );
 }
@@ -135,21 +203,7 @@ export function Artifacts({ made }: { made: Made[] }) {
 export function Commands({ ran }: { ran: Ran[] }) {
   if (ran.length === 0) return null;
   return (
-    <details className="group mt-2">
-      <summary className="flex cursor-default list-none items-center gap-1 text-[9.5px] tracking-wide text-white/30 uppercase transition-colors duration-150 hover:text-white/55">
-        <svg
-          viewBox="0 0 12 12"
-          className="size-2.5 transition-transform duration-200 ease-out group-open:rotate-90"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth={1.6}
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M4.5 2.5 8 6l-3.5 3.5" />
-        </svg>
-        {ran.length} command{ran.length === 1 ? "" : "s"}
-      </summary>
+    <Fold count={ran.length} label={`command${ran.length === 1 ? "" : "s"} run`}>
       {/* Capped and scrollable: a directory listing must not make the card
           taller than the thing it lives in. */}
       <div className="mt-1.5 max-h-44 space-y-1.5 overflow-y-auto">
@@ -165,7 +219,7 @@ export function Commands({ ran }: { ran: Ran[] }) {
           </div>
         ))}
       </div>
-    </details>
+    </Fold>
   );
 }
 
@@ -181,10 +235,13 @@ export function Commands({ ran }: { ran: Ran[] }) {
  */
 export default function AgentCard() {
   const [agents, setAgents] = useState<Agent[]>([]);
-  // Collapsed to start. A running agent should be visible, not in the way --
-  // the tile says "still going" and the card is one click away. A question is
-  // the exception and opens itself, below.
-  const [collapsed, setCollapsed] = useState(true);
+  // Which agent's card is open, by id. Nothing is open to start: a running agent
+  // should be visible, not in the way.
+  //
+  // By id rather than a single `collapsed` flag, which is what it was: opening
+  // one opened all four at once, because there was one piece of state for four
+  // cards. A question opens itself, below.
+  const [opened, setOpened] = useState<number | null>(null);
   // Tiles somebody has waved away. Hiding is not stopping -- the agent carries on
   // and the Agents tab still has it; this is only about the corner of the screen.
   const [hidden, setHidden] = useState<number[]>([]);
@@ -195,11 +252,11 @@ export default function AgentCard() {
     return () => void sub.then((un) => un());
   }, []);
 
-  // Something new to say is a reason to come back out.
-  const waiting = agents.some((a) => a.state === "waiting");
+  // A question is a reason to come out -- but only the agent that asked it.
+  const asking = agents.find((a) => a.state === "waiting")?.id ?? null;
   useEffect(() => {
-    if (waiting) setCollapsed(false);
-  }, [waiting]);
+    if (asking !== null) setOpened(asking);
+  }, [asking]);
 
   // Finished work belongs in the Agents tab, not floating over the screen.
   const live = agents
@@ -225,32 +282,28 @@ export default function AgentCard() {
     const watch = new ResizeObserver(tell);
     watch.observe(el);
     return () => watch.disconnect();
-  }, [live.length, collapsed]);
+  }, [live.length, opened]);
 
   if (live.length === 0) return null;
 
-  if (collapsed) {
-    return (
-      // `w-fit` rather than `w-full`: the element has to be the size of the tiles
-      // for the measurement above to mean anything.
-      <div ref={box} className="flex w-fit flex-col items-end gap-2.5 p-2.5">
-        {live.map((a) => (
+  const open = live.find((a) => a.id === opened);
+
+  return (
+    // `w-fit` so the measurement above means something: the element has to be the
+    // size of what is in it, which is a column of tiles or one card.
+    <div ref={box} className="flex w-fit flex-col items-end gap-2.5 p-2.5">
+      {open ? (
+        <Card agent={open} onCollapse={() => setOpened(null)} />
+      ) : (
+        live.map((a) => (
           <Tile
             key={a.id}
             agent={a}
-            onOpen={() => setCollapsed(false)}
+            onOpen={() => setOpened(a.id)}
             onHide={() => setHidden((h) => [...h, a.id])}
           />
-        ))}
-      </div>
-    );
-  }
-
-  return (
-    <div ref={box} className="flex w-[340px] flex-col gap-1.5 p-1">
-      {live.map((a) => (
-        <Card key={a.id} agent={a} onCollapse={() => setCollapsed(true)} />
-      ))}
+        ))
+      )}
     </div>
   );
 }
@@ -349,15 +402,12 @@ function Dot({
 
 function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
   return (
-    <div className="w-full">
+    <div className="w-[320px]">
       <div
-        className={[
-          "rounded-2xl bg-[#141824] p-3.5 text-white backdrop-blur-xl",
-          "inset-ring-1 inset-ring-white/[0.12]",
-          agent.state === "running"
-            ? "shadow-[0_8px_28px_rgba(10,132,255,0.35)]"
-            : "shadow-[0_8px_28px_rgba(0,0,0,0.5)]",
-        ].join(" ")}
+        // One shadow, and it is a shadow rather than a light. A tinted glow that
+        // changed with state read as the card itself emitting -- and the state is
+        // already said twice, by the pill and by the face.
+        className="rounded-2xl bg-[#141824] p-3.5 text-white shadow-[0_10px_30px_rgba(0,0,0,0.55)] backdrop-blur-xl inset-ring-1 inset-ring-white/[0.12]"
       >
         <header className="flex items-center gap-2">
           <Face state={agent.state} step={agent.step} />
@@ -397,6 +447,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
 
         <Plan plan={agent.plan} />
         <Artifacts made={agent.made} />
+        <Steps history={agent.history} />
         <Commands ran={agent.ran} />
 
         <div className="mt-3 h-[3px] overflow-hidden rounded-full bg-white/10">
