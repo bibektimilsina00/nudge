@@ -231,31 +231,22 @@ export default function AgentCard() {
  */
 function Tile({ agent, onOpen }: { agent: Agent; onOpen: () => void }) {
   const c = colour(agent.id);
-  const working = agent.state === "running";
   return (
     <button
       onClick={onOpen}
       aria-label={`${agent.title} — expand`}
       title={agent.title}
-      style={{ backgroundColor: c.bg, boxShadow: `0 6px 20px ${c.glow}` }}
+      style={{ backgroundColor: c.bg }}
       className="relative grid size-[38px] shrink-0 place-items-center rounded-[11px] text-white transition-transform duration-150 ease-[cubic-bezier(0.23,1,0.32,1)] hover:scale-105 active:scale-[0.97]"
     >
-      {/* Behind the tile, so the tile itself never moves -- a button that
-          breathes is harder to hit than one that sits still. */}
-      {working && (
-        <span
-          aria-hidden
-          style={{ backgroundColor: c.bg }}
-          className="absolute inset-0 rounded-[11px] motion-safe:animate-halo"
-        />
-      )}
       {/* The tile is what is on screen almost all the time -- the card is
           collapsed unless someone opens it -- so this is where being visibly
           alive actually counts. It was a drawing of a robot, which looks the
           same whether the agent is working or has been dead for a minute. */}
-      <div className="relative size-[26px]">
-        <Face state={agent.state} step={agent.step} />
-      </div>
+      {/* Sized here, not by the wrapper. `Face` draws at its own `size` and
+          defaults to 22, so a larger box around it only moved the canvas off
+          centre -- which is exactly what it looked like. */}
+      <Face state={agent.state} step={agent.step} size={32} />
       {agent.state === "waiting" && (
         <span className="absolute -top-0.5 -right-0.5 size-2.5 rounded-full bg-[#e8b027] ring-2 ring-black/60" />
       )}

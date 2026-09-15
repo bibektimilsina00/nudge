@@ -141,6 +141,25 @@ pub fn run() {
             agent::place_window(handle);
             ui::tray::install(handle, &hotkey)?;
             input::inject::start(handle);
+
+            // `NUDGE_CARD=1` puts a worked example on the agent card and leaves it
+            // there, so how it looks can be changed without racing a real task.
+            //
+            // Published from a task rather than from here. `publish` reaches the
+            // window through `run_on_main_thread`, which posts to an event loop
+            // that does not exist yet during setup -- so the first attempt was
+            // simply dropped, the agent existed, and the card never appeared.
+            if std::env::var_os("NUDGE_CARD").is_some() {
+                let showing = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+                    let id = showing
+                        .state::<crate::core::run::agent::Agents>()
+                        .demonstrate();
+                    println!("nudge: agent#{id} is a standing example (NUDGE_CARD)");
+                    agent::publish(&showing);
+                });
+            }
             input::cursor::follow(handle);
             input::hotkey::register(handle, &hotkey)?;
             Ok(())

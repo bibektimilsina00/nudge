@@ -175,6 +175,64 @@ impl Agents {
         Some(self.start_now(goal, title, status, background))
     }
 
+    /// Put a worked example on the card, so it can be looked at and designed.
+    ///
+    /// The card is normally invisible: it appears only while an agent is running,
+    /// which makes changing how it looks a matter of starting a real task, doing
+    /// the work fast enough to see it, and losing it before the change is right.
+    ///
+    /// This seeds a **real agent in the real list**, so what gets styled is the
+    /// rendering path that actually runs -- not a preview mode that drifts from
+    /// it. Every part is filled: a plan part-done, files made, commands run, so
+    /// nothing is left unexercised because it happened to be empty.
+    ///
+    /// Behind `NUDGE_CARD` and off otherwise, for the reason `NUDGE_SAY` is: an
+    /// environment variable lasts exactly as long as the process somebody started
+    /// on purpose, where a setting is turned on once and forgotten.
+    ///
+    /// **While it is on, no real agent can start.** One at a time is a rule about
+    /// the mouse, and this one never finishes, so it holds the slot. That is not
+    /// worked around: a special case in `running` to ignore this agent would put a
+    /// branch in the real path to serve a styling mode, and the real path is where
+    /// two agents fighting over one cursor gets decided. Quit and start again
+    /// without the variable.
+    pub fn demonstrate(&self) -> u64 {
+        let id = self.start_now(
+            "tidy up my downloads folder".into(),
+            "Tidying downloads".into(),
+            "Moving the last few files into place.".into(),
+            true,
+        );
+        self.edit(id, |a| {
+            a.step = 4;
+            a.plan = vec![
+                Todo { text: "Look at what is in there".into(), status: Doing::Done },
+                Todo { text: "Group by what each file is".into(), status: Doing::Done },
+                Todo { text: "Move them into folders".into(), status: Doing::Active },
+                Todo { text: "Report what moved".into(), status: Doing::Pending },
+            ];
+            a.made = vec![
+                Made { path: "/Users/you/Downloads/Invoices/march.pdf".into() },
+                Made { path: "/Users/you/Downloads/Screenshots/notes.png".into() },
+            ];
+            a.ran = vec![
+                Ran {
+                    command: "ls -la ~/Downloads".into(),
+                    output: "total 248\ndrwxr-xr-x  14 you  staff   448 Sep 15 12:04 .\n-rw-r--r--   1 you  staff  81kB march.pdf".into(),
+                },
+                Ran {
+                    command: "file ~/Downloads/*".into(),
+                    output: "march.pdf: PDF document, version 1.7\nnotes.png: PNG image data, 1284 x 812".into(),
+                },
+            ];
+            a.history = vec![
+                "Looked at the Downloads folder".into(),
+                "Sorted 12 files by kind".into(),
+            ];
+        });
+        id
+    }
+
     fn start_now(&self, goal: String, title: String, status: String, background: bool) -> u64 {
         let id = self.next_id.fetch_add(1, Ordering::Relaxed) + 1;
         self.abort.store(false, Ordering::Relaxed);

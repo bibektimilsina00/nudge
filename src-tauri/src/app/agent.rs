@@ -101,6 +101,7 @@ pub fn place_window(app: &AppHandle) {
 
 fn show_window(app: &AppHandle, visible: bool) {
     let Some(win) = app.get_webview_window("agents") else {
+        eprintln!("agents: no window to show");
         return;
     };
     if visible {
