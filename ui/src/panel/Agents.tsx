@@ -11,6 +11,9 @@ import { Face } from "../components/Face";
  */
 export function Agents() {
   const [agents, setAgents] = useState<Agent[]>([]);
+  // Which past run is open. One at a time: two open tiles in a two-column grid
+  // leaves the column heights fighting, and nobody compares two histories.
+  const [opened, setOpened] = useState<number | null>(null);
 
   useEffect(() => {
     void invoke<Agent[]>("agents").then(setAgents);
@@ -52,9 +55,11 @@ export function Agents() {
         <Empty compact={days.size > 0} />
       )}
       {[...days].map(([day, runs]) => (
-        <Section key={day} title={day}>
+        <Section key={day} title={day} grid>
           {runs.map((a) => (
-            <Card key={a.id} agent={a} />
+            <Tile key={a.id} agent={a} open={opened === a.id} onOpen={() =>
+              setOpened((o) => (o === a.id ? null : a.id))
+            } />
           ))}
         </Section>
       ))}
@@ -77,13 +82,89 @@ function whichDay(at: number) {
   const when = new Date(at);
   const midnight = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
   const days = Math.round((midnight(new Date()) - midnight(when)) / 86_400_000);
-  if (days <= 0) return "Today";
+  if (days <= 0) return "Earlier today";
   if (days === 1) return "Yesterday";
   return when.toLocaleDateString(undefined, {
     day: "numeric",
     month: "long",
     ...(when.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
   });
+}
+
+/**
+ * A finished run, as a tile.
+ *
+ * Two across rather than a list, because a past run is recognised by its shape
+ * and its colour long before anybody reads the title -- and a column of
+ * full-width rows makes every run look equally like the one being searched for.
+ *
+ * Opening one spans it across both columns rather than growing it in place. A
+ * tile that gets taller than its neighbour drags the grid around it; one that
+ * takes the whole row simply becomes a card for as long as it is open.
+ */
+function Tile({
+  agent,
+  open,
+  onOpen,
+}: {
+  agent: Agent;
+  open: boolean;
+  onOpen: () => void;
+}) {
+  const detail =
+    agent.plan.length > 0 ||
+    agent.made.length > 0 ||
+    agent.ran.length > 0 ||
+    agent.history.length > 0;
+
+  if (open) {
+    return (
+      <div className="col-span-2 rounded-card bg-raise p-2.5 hairline">
+        <button
+          onClick={onOpen}
+          className="flex w-full items-center gap-2 text-left"
+          aria-expanded
+        >
+          <Face state={agent.state} step={agent.step} size={18} hue={hue(agent.id)} />
+          <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold">{agent.title}</h3>
+          <span className="shrink-0 text-[9.5px] text-ink-3">{at(agent.started)}</span>
+          <svg viewBox="0 0 12 12" className="size-2.5 shrink-0 rotate-90 text-ink-3" fill="none" stroke="currentColor" strokeWidth={1.6} strokeLinecap="round" strokeLinejoin="round">
+            <path d="M4.5 2.5 8 6l-3.5 3.5" />
+          </svg>
+        </button>
+        <p className="mt-1 text-[10.5px] leading-snug text-ink-2">
+          {agent.state === "failed" ? agent.why : agent.status}
+        </p>
+        <Plan plan={agent.plan} />
+        <Artifacts made={agent.made} />
+        <Steps history={agent.history} />
+        <Commands ran={agent.ran} />
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={() => detail && onOpen()}
+      className="flex h-[92px] flex-col items-start rounded-card bg-raise p-2.5 text-left transition-colors duration-150 hairline hover:bg-raise-hi"
+    >
+      <Face state={agent.state} step={agent.step} size={22} hue={hue(agent.id)} />
+      {/* Two lines then clipped, so every tile is the same height whatever it was
+          asked to do -- a grid of ragged boxes is harder to scan than a list. */}
+      <h3 className="mt-1.5 line-clamp-2 w-full text-[11.5px] leading-tight font-semibold">
+        {agent.title}
+      </h3>
+      <span className="mt-auto flex w-full items-center gap-1.5 text-[9.5px] text-ink-3">
+        {at(agent.started)}
+        <span className="capitalize">· {agent.state}</span>
+        {agent.made.length > 0 && (
+          <span className="ml-auto shrink-0">
+            {agent.made.length} file{agent.made.length === 1 ? "" : "s"}
+          </span>
+        )}
+      </span>
+    </button>
+  );
 }
 
 /**
