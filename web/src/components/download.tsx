@@ -73,7 +73,7 @@ function Primary({
         size="lg"
         asChild={!!release}
         disabled={!release}
-        className="h-12 rounded-full bg-gold px-7 font-display text-[0.9375rem] font-semibold text-black hover:bg-gold/90"
+        className="h-12 rounded-full bg-accent px-7 font-display text-[0.9375rem] font-semibold text-white hover:bg-accent-hi"
       >
         {release ? (
           <a href={downloadUrl(release)}>
@@ -183,7 +183,7 @@ export function Checksum({ platform = "macos-arm64" }: { platform?: string }) {
         {copied ? "Checksum copied" : ""}
       </span>
       {copied ? (
-        <Check className="size-3.5 shrink-0 text-gold" aria-hidden />
+        <Check className="size-3.5 shrink-0 text-accent" aria-hidden />
       ) : (
         <Copy className="size-3.5 shrink-0 opacity-50 group-hover:opacity-100" aria-hidden />
       )}

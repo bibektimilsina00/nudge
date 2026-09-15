@@ -9,9 +9,10 @@
    notch hanging off its top edge, and a notch is only convincing against the
    black a MacBook's actually is. #0B0B0B would give the trick away.
 
-   The accent is taken out of the artwork rather than picked: it is the gold of
-   the cat's nose and the ellipse it sits on. One accent, and it appears where
-   something is live or worth acting on, never as decoration.
+   The accent is the blue macOS itself uses for a selected control, and the same
+   one Nudge's own interface uses -- so the site and the app agree rather than
+   the page having a colour of its own. One accent, appearing where something is
+   live or worth acting on, never as decoration.
    ------------------------------------------------------------------------- */
 
 @theme {
@@ -25,8 +26,8 @@
   --color-line: rgba(255, 255, 255, 0.09);
   --color-line-2: rgba(255, 255, 255, 0.16);
 
-  --color-gold: #e9b44c;
-  --color-gold-dim: rgba(233, 180, 76, 0.14);
+  --color-accent: #0a84ff;
+  --color-accent-hi: #3d9bff;
 
   --font-display: var(--font-space-grotesk), ui-sans-serif, system-ui, sans-serif;
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
@@ -66,13 +67,13 @@ summary {
 }
 
 ::selection {
-  background: var(--color-gold);
+  background: var(--color-accent);
   color: #000;
 }
 
 /* Focus that is actually visible on black. */
 :focus-visible {
-  outline: 2px solid var(--color-gold);
+  outline: 2px solid var(--color-accent);
   outline-offset: 3px;
   border-radius: 4px;
 }

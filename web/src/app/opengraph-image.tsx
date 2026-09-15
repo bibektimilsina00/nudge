@@ -41,7 +41,7 @@ export default function Image() {
           <div style={{ marginTop: 28, fontSize: 28, color: "#a1a1a6" }}>
             An assistant that can see your screen
           </div>
-          <div style={{ marginTop: 40, fontSize: 24, color: "#e9b44c" }}>
+          <div style={{ marginTop: 40, fontSize: 24, color: "#0a84ff" }}>
             nudge.runmycrew.com
           </div>
         </div>

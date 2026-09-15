@@ -1,6 +1,7 @@
 import Image from "next/image";
 import { Check } from "lucide-react";
 
+import { Cat } from "@/components/cat";
 import { Checksum, DownloadButton } from "@/components/download";
 import { Nav } from "@/components/nav";
 import {
@@ -28,7 +29,7 @@ export default function Home() {
     <div id="top">
       <a
         href="#download"
-        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-(--z-notch) focus-visible:rounded-full focus-visible:bg-gold focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-black"
+        className="sr-only focus-visible:not-sr-only focus-visible:fixed focus-visible:top-3 focus-visible:left-3 focus-visible:z-(--z-notch) focus-visible:rounded-full focus-visible:bg-accent focus-visible:px-4 focus-visible:py-2 focus-visible:text-sm focus-visible:font-medium focus-visible:text-white"
       >
         Skip to download
       </a>
@@ -75,30 +76,37 @@ function Hero() {
   ];
 
   return (
-    <section className="mx-auto w-full max-w-[72rem] px-6 pt-20 pb-20 sm:pt-28">
-      <div className="max-w-[46rem]">
-        <h1 className="font-display text-[2.5rem] leading-[1.05] font-bold text-balance sm:text-[3.75rem]">
-          An assistant that can see your screen.
-        </h1>
+    <section className="mx-auto w-full max-w-[72rem] px-6 pt-16 pb-20 sm:pt-24">
+      <div className="grid items-center gap-12 lg:grid-cols-[1.25fr_1fr] lg:gap-8">
+        <div>
+          <h1 className="font-display text-[2.5rem] leading-[1.05] font-bold text-balance sm:text-[3.75rem]">
+            An assistant that can see your screen.
+          </h1>
 
-        <p className="mt-6 max-w-[42rem] text-[1.0625rem] leading-relaxed text-pretty text-ink-2 sm:text-[1.125rem]">
+          <p className="mt-6 max-w-[42rem] text-[1.0625rem] leading-relaxed text-pretty text-ink-2 sm:text-[1.125rem]">
           Hold one key and say what you want. Nudge reads what is in front of you
           and works it the way you would — finding the control, clicking it,
           typing into it — in whatever app you happen to be in.
         </p>
 
-        <div id="download" className="mt-9 scroll-mt-24">
-          <DownloadButton align="start" />
+          <div id="download" className="mt-9 scroll-mt-24">
+            <DownloadButton align="start" />
+          </div>
+
+          <ul className="mt-10 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-x-7">
+            {signals.map((s) => (
+              <li key={s} className="flex items-center gap-2 text-[0.875rem] text-ink-2">
+                <Check className="size-4 shrink-0 text-accent" aria-hidden />
+                {s}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <ul className="mt-10 flex flex-col gap-2.5 sm:flex-row sm:flex-wrap sm:gap-x-7">
-          {signals.map((s) => (
-            <li key={s} className="flex items-center gap-2 text-[0.875rem] text-ink-2">
-              <Check className="size-4 shrink-0 text-gold" aria-hidden />
-              {s}
-            </li>
-          ))}
-        </ul>
+        {/* Ordered after the text on a phone, beside it on a wide screen. */}
+        <div className="order-first flex justify-center lg:order-none lg:justify-end">
+          <Cat />
+        </div>
       </div>
     </section>
   );
@@ -221,7 +229,7 @@ function How() {
           <li key={b.title}>
             <span
               aria-hidden
-              className="font-mono text-[0.8125rem] tabular-nums text-gold"
+              className="font-mono text-[0.8125rem] tabular-nums text-accent"
             >
               {String(i + 1).padStart(2, "0")}
             </span>
@@ -260,7 +268,7 @@ function Runs() {
             <ul className="mt-5 space-y-2.5">
               {g.items.map((i) => (
                 <li key={i} className="flex items-start gap-2.5 text-[0.9375rem] text-ink-2">
-                  <Check className="mt-[3px] size-4 shrink-0 text-gold" aria-hidden />
+                  <Check className="mt-[3px] size-4 shrink-0 text-accent" aria-hidden />
                   {i}
                 </li>
               ))}
