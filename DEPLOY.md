@@ -4,20 +4,41 @@ Nudge's site runs on the shared box at `161.118.213.166`, alongside riocut and
 edumlt, behind the Caddy those already use. Nothing here publishes a port — the
 proxy reaches both containers by name over the existing `web` network.
 
-    https://nudge.riocut.com   →  proxy-caddy  →  nudge-web-1:3000
-                                              →  nudge-api-1:8080   (/api/*)
+    https://nudge.runmycrew.com  →  proxy-caddy  →  nudge-web-1:3000
+                                                 →  nudge-api-1:8080   (/api/*)
 
-## The one manual step
+`nudge.riocut.com` is served by the same block and works too, if a record is
+pointed at it.
 
-A DNS record, in Cloudflare, on riocut.com:
+## DNS
+
+One record in Cloudflare, per hostname:
 
 | Type | Name | Content | Proxy |
 |---|---|---|---|
 | A | `nudge` | `161.118.213.166` | Proxied (orange) |
 
-TLS needs nothing: the origin certificate already on the box covers
-`*.riocut.com`, so this host is included. Cloudflare's SSL mode for riocut.com is
-already Full (strict), which is what that cert is for.
+## The certificate, and why this one works
+
+Caddy on this box serves `*.riocut.com`'s Cloudflare Origin certificate for
+**both** hostnames. For `nudge.riocut.com` that is correct. For
+`nudge.runmycrew.com` it is the wrong name, and works anyway because that zone
+is on Cloudflare's **Full** mode, which encrypts to the origin without checking
+what it is handed.
+
+That is worth knowing rather than forgetting. **Switching runmycrew.com to Full
+(strict) breaks this host immediately** — strict wants a certificate valid for
+the name. The fix is a minute's work: create an Origin Certificate for
+`*.runmycrew.com` in Cloudflare, put the pair in `/opt/proxy/certs/`, and give
+that hostname its own block with its own `tls` line.
+
+Until then: Cloudflare to the browser is properly encrypted, and Cloudflare to
+this box is encrypted but unauthenticated.
+
+**The symptom, if this is ever wrong: Cloudflare error 525.** That is the
+handshake between Cloudflare and here failing, and the usual cause is a hostname
+Caddy has no block for — it aborts rather than presenting anything, and 525 is
+what the visitor sees.
 
 ## Deploying a change
 
