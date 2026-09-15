@@ -271,7 +271,7 @@ async fn score() {
                         eprintln!("      retrying in {secs}s: {last}");
                         tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
                     }
-                    match subagent::run(provider, &workspace, &ask, &[], "", verify, |step| {
+                    match subagent::run(provider, &workspace, &ask, &[], "", false, verify, |step| {
                         perform(cfg, provider, step)
                     })
                     .await

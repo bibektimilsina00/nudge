@@ -153,6 +153,7 @@ where
             controls: &[],
             tools: &[],
             reach: String::new(),
+            shell: false,
             workspace: String::new(),
         };
         let Ok(step) = provider.next_step_blind(&ask).await else {
@@ -223,6 +224,7 @@ pub async fn run<F, Fut>(
     task: &str,
     tools: &[crate::core::tools::mcp::Tool],
     reach: &str,
+    shell: bool,
     verify: bool,
     mut act: F,
 ) -> Result<Found>
@@ -256,6 +258,7 @@ where
             controls: &[],
             tools,
             reach: reach.to_string(),
+            shell,
             workspace: workspace.display().to_string(),
         };
         let step = provider.next_step_blind(&ask).await?;
@@ -361,6 +364,7 @@ mod tests {
             &[],
             "",
             false,
+            false,
             |_| async { Ok("a\nb\nc\nd".into()) },
         )
         .await
@@ -389,7 +393,7 @@ mod tests {
                 next: None,
             },
         ]));
-        let found = run(&p, std::path::Path::new("/tmp"), "x", &[], "", false, |_| async {
+        let found = run(&p, std::path::Path::new("/tmp"), "x", &[], "", false, false, |_| async {
             Err(crate::error::Error::Click("rm is not allowed".into()))
         })
         .await
@@ -407,7 +411,7 @@ mod tests {
             })
             .collect();
         let p = Scripted(std::sync::Mutex::new(forever));
-        let found = run(&p, std::path::Path::new("/tmp"), "x", &[], "", false, |_| async {
+        let found = run(&p, std::path::Path::new("/tmp"), "x", &[], "", false, false, |_| async {
             Ok(String::new())
         })
         .await

@@ -250,6 +250,7 @@ impl Nudge {
             task,
             &self.tools(),
             &self.reach.prompt(),
+            self.reach.has(crate::core::reach::Grant::Shell),
             self.cfg.verify,
             act,
         )
@@ -485,6 +486,7 @@ impl Nudge {
             controls: &controls,
             tools: &self.tools(),
             reach: self.reach.prompt(),
+            shell: self.reach.has(crate::core::reach::Grant::Shell),
             workspace: self.workspace().display().to_string(),
         };
         // When the system has already named exactly the control that was asked

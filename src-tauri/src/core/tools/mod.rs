@@ -7,5 +7,6 @@
 pub mod fetch;
 pub mod files;
 pub mod mcp;
+pub mod present;
 pub mod running;
 pub mod shell;

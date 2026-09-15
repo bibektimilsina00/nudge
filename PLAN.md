@@ -585,11 +585,42 @@ not written anywhere a reader would look.
 Everything here exists because of §1's end state. None of it is needed while the
 only user wrote the program.
 
-**3.1 Notice what is installed.**
+**3.1 Notice what is installed.** *Built.*
 
-Detect the coding agents, CLIs and tools present, and work with whatever is there
-rather than with a fixed list. Report the absence of something only when it would
-have helped.
+`core/tools/present.rs`. Around forty names a model reaches for -- `gh`, `ffmpeg`,
+`jq`, `docker`, the package managers, the macOS ones -- checked against the PATH
+once and grouped into a line of prompt.
+
+**Usable, not merely installed**, and that distinction is the whole design.
+Telling the model `ffmpeg` exists while the shell is still read-only buys a
+refusal and a wasted turn, so the list is what is installed *and* currently
+allowed. On this machine:
+
+    read-only:   git; docker; node, npm, python3, pip3, cargo, rustc, java,
+                 ruby, swift; brew
+    full shell:  + gh, make, kubectl, pnpm, deno, uv, jq, sqlite3, ffmpeg,
+                 zip, unzip, curl, osascript, shortcuts, pbcopy, mdfind
+
+Granting the shell nearly doubles it. That is the right shape: a grant should not
+only permit more, it should visibly *offer* more, and the offer arrives without
+anybody being told to look again.
+
+**Absence is never reported.** Only what is here is named. A list of what is
+missing would be longer, mostly irrelevant, and would spend tokens on every turn
+saying that a machine is a normal machine. Naming something missing belongs at the
+moment it would have helped -- which is 3.2.
+
+Also: `agents_installed` used to run `which` six times at startup, on the path
+where somebody is waiting. It walks the PATH now, like this does.
+
+*Two things the tests caught, both mine:* the first version tested the finished
+sentence and reported `gh` was being offered when it was not, because the word
+*right* contains "gh". And cross-checking the result with `command -v` said `rg`
+was installed when it is a shell function -- `/bin/sh -c`, which is what Nudge
+actually runs commands through, cannot see it. Excluding it was correct; the
+instrument was wrong.
+
+*Done when:* the prompt names what is here rather than the model guessing. **Done.**
 
 **3.2 Ask for what is missing, once.**
 

@@ -485,6 +485,9 @@ pub struct Ask<'a> {
     /// What has been allowed beyond the defaults, already written out. Empty in
     /// the ordinary case, which is every case until somebody decides otherwise.
     pub reach: String,
+    /// Whether the shell may run anything, which decides which installed tools
+    /// are worth naming -- see [`crate::core::tools::present`].
+    pub shell: bool,
     /// Where commands run and files are written.
     ///
     /// Told, not guessed. Without it a subagent asked to search "this project"
@@ -554,6 +557,9 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
     let reach = &ask.reach;
+    // What this machine actually has, which is the difference between reaching
+    // for `gh` and finding out it is not there.
+    let here = crate::core::tools::present::line(ask.shell);
 
     // Where tools sit in the order, and it is second -- above a command and far
     // above the screen. A server told to read a file reads it; the screen route
@@ -646,7 +652,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Paths are relative to it. If you need to know what is in there, look \
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
-         {facts}{controls}{tools}{reach}\
+         {facts}{here}{controls}{tools}{reach}\
          Steps already completed:\n{history}{stalled}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
@@ -1328,6 +1334,7 @@ mod tests {
             controls: &[],
             tools: &[],
             reach: String::new(),
+            shell: false,
             workspace: "/tmp/workspace".into(),
         }
     }

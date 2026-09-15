@@ -32,6 +32,16 @@ const ALLOWED: &[&str] = &[
     "docker", "brew", "git",
 ];
 
+/// Would the allow-list let this program run at all?
+///
+/// Asked by [`crate::core::tools::present`], which will not offer the model a
+/// tool the shell is going to refuse. Says nothing about arguments -- `git` may
+/// run and `git push` may not -- because the question here is whether the program
+/// is worth naming, not whether one command is allowed.
+pub fn may_run(program: &str) -> bool {
+    ALLOWED.contains(&program)
+}
+
 /// Subcommands that read, for programs that can also write.
 ///
 /// `git` is the one that matters: `git status` is a question and `git push` is

@@ -86,13 +86,9 @@ pub fn agents_installed() -> Vec<(&'static str, &'static str, &'static str)> {
         .get_or_init(|| {
             AGENTS
                 .iter()
-                .filter(|(name, _, _)| {
-                    std::process::Command::new("/usr/bin/which")
-                        .arg(name)
-                        .output()
-                        .map(|o| o.status.success())
-                        .unwrap_or(false)
-                })
+                // Was six `which` processes at startup, on the path where
+                // somebody is waiting. `present::installed` walks the PATH.
+                .filter(|(name, _, _)| super::present::installed(name))
                 .copied()
                 .collect()
         })
