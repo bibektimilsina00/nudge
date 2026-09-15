@@ -18,27 +18,42 @@ One record in Cloudflare, per hostname:
 |---|---|---|---|
 | A | `nudge` | `161.118.213.166` | Proxied (orange) |
 
-## The certificate, and why this one works
+## Certificates
 
-Caddy on this box serves `*.riocut.com`'s Cloudflare Origin certificate for
-**both** hostnames. For `nudge.riocut.com` that is correct. For
-`nudge.runmycrew.com` it is the wrong name, and works anyway because that zone
-is on Cloudflare's **Full** mode, which encrypts to the origin without checking
-what it is handed.
+One Cloudflare Origin certificate per zone, in `/opt/proxy/certs/`, and a Caddy
+block per hostname naming its own:
 
-That is worth knowing rather than forgetting. **Switching runmycrew.com to Full
-(strict) breaks this host immediately** — strict wants a certificate valid for
-the name. The fix is a minute's work: create an Origin Certificate for
-`*.runmycrew.com` in Cloudflare, put the pair in `/opt/proxy/certs/`, and give
-that hostname its own block with its own `tls` line.
+| Host | Certificate |
+|---|---|
+| `nudge.runmycrew.com` | `runmycrew.pem` / `runmycrew.key` — `*.runmycrew.com` |
+| `nudge.riocut.com` | `origin.pem` / `origin.key` — `*.riocut.com`, shared with riocut |
 
-Until then: Cloudflare to the browser is properly encrypted, and Cloudflare to
-this box is encrypted but unauthenticated.
+Both are correct for their own name, so **Full (strict)** is safe on either zone.
 
-**The symptom, if this is ever wrong: Cloudflare error 525.** That is the
-handshake between Cloudflare and here failing, and the usual cause is a hostname
-Caddy has no block for — it aborts rather than presenting anything, and 525 is
-what the visitor sees.
+They briefly shared riocut's certificate, which worked only because
+runmycrew.com was on **Full** — that encrypts to the origin without checking what
+it is handed. It would have broken the moment anybody switched that zone to
+strict, with no clue as to why, which is the kind of trap worth not leaving.
+
+Installing a new one:
+
+```sh
+sudo install -o ubuntu -g ubuntu -m 644 cert.pem /opt/proxy/certs/<zone>.pem
+sudo install -o ubuntu -g ubuntu -m 600 cert.key /opt/proxy/certs/<zone>.key
+```
+
+Check the pair matches before reloading — a mismatched cert and key is another
+525 with no explanation:
+
+```sh
+openssl x509 -in cert.pem -noout -pubkey | openssl md5
+openssl pkey -in cert.key -pubout   | openssl md5
+```
+
+**Cloudflare error 525 means the handshake between Cloudflare and this box
+failed.** The usual causes, in order: no Caddy block for that hostname (it aborts
+rather than presenting anything), a certificate that does not cover the name
+while the zone is on Full (strict), or a cert and key that are not a pair.
 
 ## Deploying a change
 
