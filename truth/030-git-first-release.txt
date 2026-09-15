@@ -1,0 +1,3 @@
+ask = In what year was Git first released?
+must = 2005
+never = 2001 | 2008 | 2010

@@ -1,0 +1,6 @@
+# The other half of the same rule, where the half-remembered version gets it
+# right by accident. Worth having both: a thing that answers "no" to each is
+# consistent, confident and wrong once.
+ask = Was the year 2000 a leap year?
+must = yes | was a leap year | is a leap year
+never = 2000 was not a leap | 2000 is not a leap

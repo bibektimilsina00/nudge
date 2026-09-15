@@ -1,0 +1,4 @@
+# Announced every September, so a model answering from memory is wrong by one
+# model at least once a year -- and sounds exactly as certain either way.
+ask = What is the newest iPhone model Apple currently sells?
+never = iphone 15 | iphone 14 | iphone 13 | iphone 12

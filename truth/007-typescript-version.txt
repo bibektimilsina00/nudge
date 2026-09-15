@@ -1,0 +1,2 @@
+ask = What is the current stable version of TypeScript?
+never = 4.9 | 4.5 | 3.9

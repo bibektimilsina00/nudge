@@ -1,0 +1,6 @@
+# Named in the plan as a gap. The trap is the rule everyone half-remembers:
+# divisible by four, therefore a leap year. 2100 is divisible by 100 and not by
+# 400, so it is not.
+ask = Is the year 2100 a leap year?
+must = not a leap | isn't a leap | no, 2100
+never = 2100 is a leap year | yes, 2100

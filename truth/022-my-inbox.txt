@@ -1,0 +1,4 @@
+# Unknowable because it is *mine*, not because it is in the future. Different
+# reason, same required answer.
+ask = How many unread emails are in my inbox right now?
+answerable = no

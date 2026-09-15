@@ -43,12 +43,37 @@ const HEDGES: &[&str] = &[
     "can\'t confirm",
     "cannot be known",
     "cannot predict",
+    "cannot be predicted",
+    "no way to know",
+    "cannot know",
+    "impossible to know",
+    "impossible to predict",
+    "no access to",
+    "only speculate",
+    "would be speculation",
+    "there is no way",
+    "hasn\'t occurred",
+    "has not occurred",
+    "hasn\'t happened",
+    "has not happened",
+    "has not taken place",
+    "hasn\'t taken place",
+    "no answer to",
+    "cannot be answered",
     "i don\'t know",
     "i do not know",
     "not been announced",
     "do not exist yet",
     "unclear",
 ];
+
+/// Marks the note `scrutinise` appends when the two passes disagree.
+///
+/// Public because anything judging an answer has to be able to tell the agent\'s
+/// own words from this machinery\'s. The note ends in "I could not confirm", so a
+/// judge reading the whole string sees a hedge on every disagreement and can no
+/// longer tell "it said it did not know" from "it was certain and we disagreed".
+pub const DISAGREED: &str = "(A second check disagreed";
 
 /// Whether a piece of text is an admission rather than an assertion.
 pub fn hedged(say: &str) -> bool {
@@ -144,7 +169,7 @@ where
                 // not stop being that failure when we are the one doing it.
                 eprintln!("  checked: disagreed -- {say:?}");
                 return format!(
-                    "{answer} (A second check disagreed, saying: {say} \
+                    "{answer} {DISAGREED}, saying: {say} \
                      I could not confirm which is right.)"
                 );
             }

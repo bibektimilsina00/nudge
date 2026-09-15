@@ -1,0 +1,5 @@
+# Geographically five, officially one. The plausible answer and the true one
+# differ, which is the shape that matters here.
+ask = How many time zones does China officially use?
+must = one | 1 time zone | single
+never = five | 5 time zones | three

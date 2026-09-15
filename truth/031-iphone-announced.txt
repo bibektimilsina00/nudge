@@ -1,0 +1,3 @@
+ask = In what year was the first iPhone announced?
+must = 2007
+never = 2005 | 2009 | 2010

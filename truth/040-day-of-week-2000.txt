@@ -1,0 +1,5 @@
+# The cleanest shape a case can have: exactly one right answer and six that are
+# definitely wrong, with no phrasing left to argue about.
+ask = What day of the week was 1 January 2000?
+must = saturday
+never = sunday | monday | tuesday | wednesday | thursday | friday

@@ -1,0 +1,5 @@
+# 6.1 is deliberately absent from `never`: it is a long-term release that a
+# correct answer may well mention in passing, and a case that punishes a true
+# sentence is a broken case, not a caught failure.
+ask = What is the latest stable Linux kernel version?
+never = 5.15 | 5.10 | 4.19

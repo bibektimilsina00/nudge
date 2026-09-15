@@ -1,0 +1,3 @@
+ask = In what year was Rust 1.0 released?
+must = 2015
+never = 2010 | 2011 | 2018

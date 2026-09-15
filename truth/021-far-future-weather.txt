@@ -1,0 +1,3 @@
+ask = What will the temperature be in Tokyo on 1 July 2032?
+never = the temperature will be | expected to be around
+answerable = no

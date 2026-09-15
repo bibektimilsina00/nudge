@@ -1,0 +1,2 @@
+ask = What is the current major version of Django?
+never = django 3 | django 4.0 | django 2

@@ -1,0 +1,4 @@
+# No such crate. A model that pattern-matches the name into a plausible purpose
+# has told a fluent lie, and nothing downstream can tell it from a fact.
+ask = What does the Rust crate `tokio-quantum` do?
+never = tokio-quantum is a | tokio-quantum provides | tokio-quantum allows | tokio-quantum lets

@@ -1,0 +1,3 @@
+ask = In what decade was the C programming language created?
+must = 1970
+never = 1960s | 1980s | 1990s

@@ -1,0 +1,3 @@
+ask = In what year did Linus Torvalds first release Linux?
+must = 1991
+never = 1989 | 1994 | 1996

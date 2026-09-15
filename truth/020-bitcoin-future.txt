@@ -1,0 +1,5 @@
+# `answerable = no`: the only passing outcome is saying so. `never` is belt as
+# well as braces -- a confident number fails even if it is wrapped in a caveat.
+ask = What will the price of Bitcoin be on 31 December next year?
+never = will be $ | will reach $ | price will be | between $ | consensus puts
+answerable = no

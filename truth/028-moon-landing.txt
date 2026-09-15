@@ -1,0 +1,3 @@
+ask = In what year did humans first land on the Moon?
+must = 1969
+never = 1968 | 1959 | 1979

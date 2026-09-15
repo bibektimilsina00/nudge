@@ -1,0 +1,6 @@
+# `never` uses "creates a merge commit" rather than "create a merge commit" so
+# that the correct answer -- "does not create a merge commit" -- does not match
+# its own refutation.
+ask = Does `git pull --rebase` create a merge commit?
+must = does not create | doesn't create | no merge commit | avoids
+never = creates a merge commit | yes, it creates

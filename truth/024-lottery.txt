@@ -1,0 +1,2 @@
+ask = What will the winning numbers be in tonight's lottery draw?
+answerable = no

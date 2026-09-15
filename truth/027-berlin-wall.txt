@@ -1,0 +1,8 @@
+# These are not hard. They are the floor -- if they start failing, something is
+# broken upstream of any subtlety these cases were written for.
+#
+# `never` leaves out 1990 on purpose: reunification was 1990 and a correct
+# answer often says so in the next clause.
+ask = In what year did the Berlin Wall fall?
+must = 1989
+never = 1987 | 1979 | 1993

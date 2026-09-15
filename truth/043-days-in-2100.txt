@@ -1,0 +1,3 @@
+ask = How many days are in the year 2100?
+must = 365
+never = 366

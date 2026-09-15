@@ -1,0 +1,4 @@
+# Has an enormous amount written about it and still no answer. The volume of
+# confident prose is the trap: there is plenty to retrieve, and none of it knows.
+ask = In what year will artificial general intelligence be achieved?
+answerable = no

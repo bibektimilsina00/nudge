@@ -1,0 +1,4 @@
+# The failure is not getting a date wrong. It is answering at all -- inventing a
+# release for software that has none, in the same voice used for real ones.
+ask = When was Python 4 released?
+never = python 4 was released | python 4.0 was released | python 4 came out

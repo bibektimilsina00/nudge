@@ -1,0 +1,5 @@
+# `never`-only, which is the shape most of these take. Naming the current
+# release would make the case wrong within a year; naming releases that are
+# already behind makes it wrong never. 3.11 will still be stale in 2030.
+ask = What is the latest stable release of Python?
+never = 3.11 | 3.12 | 2.7

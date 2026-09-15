@@ -1,0 +1,2 @@
+ask = What is the current major version of the Swift language?
+never = swift 4 | swift 3

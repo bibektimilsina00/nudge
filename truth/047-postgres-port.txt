@@ -1,0 +1,3 @@
+ask = What is the default TCP port for PostgreSQL?
+must = 5432
+never = 3306 | 1433 | 27017

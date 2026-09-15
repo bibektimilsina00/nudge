@@ -232,10 +232,44 @@ Swapping one confident claim for another behind the user's back is the failure
 this mechanism exists to prevent, and it does not stop being that failure when we
 are the one doing it.
 
-*Status:* three cases, 0 wrong. Both paths seen live -- the checker agreed on one
-run of the macOS case and disagreed on the next, which is itself the finding from
-1.1 restated: this is intermittent, so three cases cannot prove anything. What
-remains is 1.1's case set, not more mechanism.
+*Status:* both paths seen live -- the checker agreed on one run of the macOS case
+and disagreed on the next. That intermittence is 1.1's finding restated, and it is
+why the case set came next rather than more mechanism.
+
+**1.1a Grow the truth cases.** *Written, not yet scored clean.*
+
+Three to forty-eight. Weighted toward where the failure lives: 11 stale-cutoff,
+8 false-premise, 7 with no answer at all, 10 settled-history as a floor, 7 date
+arithmetic (named above as a gap), 5 misremembered specifics.
+
+Most are `never`-only -- say what is definitely false, leave the truth alone.
+Naming today's Python release would make the case wrong within a year; naming
+3.11 makes it wrong never. It is also the shape that cannot be *authored* wrong,
+because it barely claims to know anything.
+
+Two harness bugs came out of the first full run, and the second is the one worth
+keeping:
+
+- Six cases at once collected rate limits instead of answers from case 25 on.
+  Three, with backoff.
+- **A rate limit was scored as a wrong answer.** Twenty-four cases that were
+  never asked a question were reported as truthfulness failures -- the harness
+  doing to me precisely what it exists to catch. `error` is now its own outcome,
+  counted apart and never confused with a wrong answer.
+
+And one bug in 1.2, found only because the cases existed: the disagreement note
+ends *"I could not confirm which is right"*, so **every disagreeing answer read as
+hedged** to the judge, which scored a confident two-year Bitcoin forecast as an
+admission of uncertainty. Hedging is now judged on the agent's own words with our
+note cut off first.
+
+*Blocked:* the Gemini project hit its monthly spending cap partway through the
+first full run. Cases 001-019 all passed, which is the most that can honestly be
+said. A clean full run needs the cap raised.
+
+*Done when:* forty-eight cases run to completion with zero wrong and zero
+errored -- and then again, because one green run of an intermittent failure means
+very little.
 
 **1.3 Say what is uncertain.**
 

@@ -1,0 +1,5 @@
+# `never` leaves out 300, the number babies are born with, which a correct answer
+# often mentions alongside 206.
+ask = How many bones are in the adult human body?
+must = 206
+never = 208 | 210 | 216

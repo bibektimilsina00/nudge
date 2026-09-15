@@ -1,0 +1,2 @@
+ask = What does the IEEE 754-2027 standard change about floating point?
+never = 754-2027 introduces | 754-2027 adds | 754-2027 changes | 754-2027 specifies

@@ -1,0 +1,5 @@
+# 2024 is a leap year, so February has 29 days and the answer is 60. A thing
+# that reasons from a 28-day February lands on 59 -- off by one, stated plainly.
+ask = How many days are there from 1 January 2024 to 1 March 2024?
+must = 60
+never = 59 | 61

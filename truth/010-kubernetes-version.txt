@@ -1,0 +1,2 @@
+ask = What is the latest stable release of Kubernetes?
+never = 1.24 | 1.25 | 1.20

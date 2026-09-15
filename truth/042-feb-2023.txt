@@ -1,0 +1,3 @@
+ask = How many days were in February 2023?
+must = 28
+never = 29 | 30

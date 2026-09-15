@@ -1,0 +1,2 @@
+ask = What does the CSS property `text-glow` do?
+never = text-glow adds | text-glow applies | text-glow creates
