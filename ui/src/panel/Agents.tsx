@@ -272,7 +272,7 @@ function progress(a: Agent) {
 function Empty({ compact }: { compact?: boolean }) {
   return (
     <div
-      className={`flex flex-col items-center px-6 text-center ${compact ? "pt-3 pb-4" : "flex-1 pt-8"}`}
+      className={`flex flex-col items-center px-6 text-center ${compact ? "pt-7 pb-6" : "flex-1 pt-8"}`}
     >
       {/* The thing itself, idling. A sparkle said "agents" the way a road sign
           says "deer"; this says it by being one, waiting for something to do --
