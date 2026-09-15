@@ -1,0 +1,20 @@
+app = Finder
+goal = open Finder
+expect = none
+--
+AXMenuBarItem | Apple | 27 16 | 34 33
+AXMenuBarItem | Finder | 74 16 | 62 33
+AXMenuBarItem | File | 125 16 | 42 33
+AXRadioButton | Add “Red” label | 12 971 | 24 22
+AXRadioButton | Add “Orange” label | 12 971 | 24 22
+AXRadioButton | Add “Yellow” label | 12 971 | 24 22
+AXRadioButton | Add “Green” label | 12 971 | 24 22
+AXRadioButton | Add “Blue” label | 12 971 | 24 22
+AXRadioButton | Add “Purple” label | 12 971 | 24 22
+AXRadioButton | Add “Gray” label | 12 971 | 24 22
+AXButton | Tags… | 22 974 | 41 18
+AXMenuBarItem | Edit | 168 16 | 45 33
+AXMenuBarItem | View | 214 16 | 50 33
+AXMenuBarItem | Go | 257 16 | 38 33
+AXMenuBarItem | Window | 310 16 | 69 33
+AXMenuBarItem | Help | 368 16 | 49 33

@@ -1,0 +1,14 @@
+app = Music
+goal = switch to Music
+expect = none
+--
+AXMenuBarItem | Apple | 27 16 | 34 33
+AXMenuBarItem | Music | 72 16 | 59 33
+AXMenuBarItem | File | 122 16 | 42 33
+AXMenuBarItem | Edit | 164 16 | 45 33
+AXMenuBarItem | Song | 212 16 | 52 33
+AXMenuBarItem | View | 262 16 | 50 33
+AXMenuBarItem | Controls | 322 16 | 72 33
+AXMenuBarItem | Account | 392 16 | 71 33
+AXMenuBarItem | Window | 462 16 | 70 33
+AXMenuBarItem | Help | 520 16 | 49 33

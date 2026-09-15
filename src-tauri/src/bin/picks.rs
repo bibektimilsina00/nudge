@@ -61,25 +61,65 @@ fn main() {
 /// Takes the frontmost application's controls as they are right now. Bring the
 /// app you want to the front first -- an application with no window exposes a
 /// menu bar and nothing else, which reads exactly like one that exposes nothing.
+/// What an application is called, asked of the system rather than of the window
+/// in front -- which by definition is not the one being recorded.
+fn app_name(pid: i32) -> Option<String> {
+    let out = std::process::Command::new("osascript")
+        .arg("-e")
+        .arg(format!(
+            "tell application \"System Events\" to get name of first process whose unix id is {pid}"
+        ))
+        .output()
+        .ok()?;
+    let name = String::from_utf8_lossy(&out.stdout).trim().to_string();
+    (!name.is_empty()).then_some(name)
+}
+
 fn record(spec: &str) -> std::io::Result<()> {
+    // `--pid 631` records a named application instead of whatever is in front.
+    //
+    // Added because the first fifteen cases are all the same editor: recording
+    // meant bringing an app to the front, so every case came from the app that
+    // was already there. Reaching a Finder window, a browser and a terminal
+    // meant taking over the screen a few dozen times, and a harness that
+    // interrupts you is a harness that stays at fifteen cases.
+    let (spec, asked) = match spec.split_once("--pid ") {
+        Some((before, rest)) => {
+            let (num, tail) = rest.split_once(' ').unwrap_or((rest, ""));
+            (
+                format!("{before}{tail}"),
+                num.trim().parse::<i32>().ok(),
+            )
+        }
+        None => (spec.to_string(), None),
+    };
     let Some((goal, expect)) = spec.rsplit_once('=') else {
-        eprintln!("usage: record \"<goal>\" = <the label that should win, or none>");
+        eprintln!("usage: record [--pid N] \"<goal>\" = <the label that should win, or none>");
         std::process::exit(2);
     };
     let (goal, expect) = (goal.trim(), expect.trim());
 
-    for n in (1..=3).rev() {
-        eprint!("\rbring the app to the front... {n} ");
-        std::thread::sleep(std::time::Duration::from_secs(1));
+    if asked.is_none() {
+        for n in (1..=3).rev() {
+            eprint!("\rbring the app to the front... {n} ");
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+        eprintln!("\r                                  ");
     }
-    eprintln!("\r                                  ");
 
-    let Some((pid, app, _)) = privacy::frontmost_window() else {
-        eprintln!("could not tell what is frontmost");
-        std::process::exit(1);
+    let front = privacy::frontmost_window();
+    let (pid, app) = match asked {
+        Some(pid) => (pid, app_name(pid).unwrap_or_else(|| format!("pid {pid}"))),
+        None => match &front {
+            Some((pid, app, _)) => (*pid, app.clone()),
+            None => {
+                eprintln!("could not tell what is frontmost");
+                std::process::exit(1);
+            }
+        },
     };
     let controls = ax::controls(pid);
-    if controls.is_empty() {
+    if controls.is_empty() && !expect.eq_ignore_ascii_case("none") {
         eprintln!("{app} exposed nothing -- does it have a window open?");
         std::process::exit(1);
     }

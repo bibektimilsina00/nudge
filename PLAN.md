@@ -341,14 +341,42 @@ model's own report. They still get the subagent's structural one.
 *Done when:* a recalled fact and an observed action do not sound the same. **They
 do not**, and there is a test by that name.
 
-**1.4 Grow the control cases.**
+**1.4 Grow the control cases.** *Fifty cases, 0 wrong.*
 
-Fifteen is enough to catch a regression and not enough to find an unknown failure.
-Each one costs a sentence. Cover: dense settings panes, file lists, web content,
-toolbars with icon-only buttons, dialogs, and at least one application that
-exposes nothing so the fallback is exercised.
+Fifteen were all the same editor, and the reason turned out to be mechanical:
+recording used whatever was in front, so every case came from the app that was
+already there. `picks record --pid N` fixed that -- it reaches a named application
+without taking over the screen, which is the difference between a harness at
+fifteen cases and one at fifty.
 
-*Done when:* forty cases, and the wrong-pick count is still zero.
+Five applications now, and the second number is the one that matters:
+
+| | | |
+|---|---|---|
+| Code | 37 | 195 controls: file rows, icon toolbars, shortcut labels, duplicates |
+| Finder | 3 | Seven radio buttons sharing one position, labels in smart quotes |
+| Arc, Music, Preview | 7 | A menu bar and nothing else |
+| ghostty | 3 | Seven controls in total -- the fallback has to fire |
+
+The shape worth naming: **five of those applications have a menu named after
+themselves.** *"open Music"* means launch it, and lands on a menu bar item if
+nothing stops it. That guard existed already; nothing had ever tested it, because
+the only app in the case set was called Code and nobody says "open Code" meaning
+the menu.
+
+*Not covered, and named in the original wording:* a dense settings pane, real web
+content, and a dialog. Nothing on this machine had such a window open -- Arc
+contributed a menu bar rather than a page. `--pid` makes each a one-liner the next
+time one exists.
+
+*The honest caveat:* thirty-five cases were added at once and none of them failed.
+That is either a matcher which holds or a set written by whoever knew what it
+does, and the two look identical from here. Three apparent failures in the first
+run were wrong **expectations** rather than wrong picks -- a tab labelled
+`PLAN.md, preview` does not tie with a row labelled `PLAN.md`, and seven Finder
+radio buttons sharing a position do not share a name.
+
+*Done when:* forty cases, and the wrong-pick count is still zero. **Both true.**
 
 ### Phase 2 — Reach
 
