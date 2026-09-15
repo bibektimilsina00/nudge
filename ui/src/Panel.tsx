@@ -268,41 +268,20 @@ export default function Panel() {
 }
 
 /**
- * The companion's perch: a socket it sits in when parked, and leaps out of when
- * released.
+ * Send the companion out to the screen, or call it back.
  *
- * A button that *is* the thing's home reads better than one labelled "Undock
- * Cursor" -- you can see where it went. The companion cannot literally fly between
- * two windows, so the illusion is scale: releasing it grows and fades it out of the
- * socket, calling it back drops it in from larger with a small overshoot, like
- * something landing.
+ * It used to hold a socket with a miniature companion in it, which said where the
+ * thing was by whether the socket was full. Two of them on one row -- one in the
+ * notch above, one here -- read as two companions rather than one in two states,
+ * so this is a word now and the notch keeps the picture.
  */
 function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) {
   return (
     <button
       onClick={onToggle}
       aria-pressed={docked}
-      className="flex h-[30px] items-center gap-2 rounded-full bg-raise pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-raise-hi hairline"
+      className="flex h-[30px] items-center rounded-full bg-raise px-3 text-[11.5px] font-medium transition-colors duration-150 hover:bg-raise-hi hairline"
     >
-      <span
-        className={[
-          "grid size-[24px] shrink-0 place-items-center rounded-full overflow-hidden",
-          "transition-colors duration-300",
-          // Empty, the socket still reads as a spot something belongs in.
-          docked ? "bg-black/40" : "bg-black/25 inset-ring-1 inset-ring-white/15",
-        ].join(" ")}
-      >
-        <span
-          className={[
-            "block transition-[transform,opacity] duration-300",
-            docked
-              ? "scale-[0.42] opacity-100 ease-[cubic-bezier(0.34,1.4,0.44,1)]"
-              : "scale-[0.95] opacity-0 ease-[cubic-bezier(0.4,0,1,1)]",
-          ].join(" ")}
-        >
-          <Companion mode="idle" anchored />
-        </span>
-      </span>
       {docked ? "Release" : "Call back"}
     </button>
   );
