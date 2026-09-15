@@ -23,7 +23,7 @@ SIGN_ID ?= $(shell cat $(IDENTITY_FILE) 2>/dev/null \
 export APPLE_SIGNING_IDENTITY = $(SIGN_ID)
 
 .DEFAULT_GOAL := help
-.PHONY: truth help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks release ship-check
+.PHONY: truth help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks release ship-check share
 
 help: ## Show this list
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -63,6 +63,9 @@ probe: ## Ask one question and write hit-<provider>.png -- GOAL="..." required
 	@test -n '$(GOAL)' || { echo 'usage: make probe GOAL="open the UV editor"'; exit 2; }
 	cd src-tauri && $(if $(PROVIDER),NUDGE_PROVIDER=$(PROVIDER)) $(if $(MODEL),NUDGE_MODEL=$(MODEL)) \
 	  cargo run --release --quiet --bin probe -- '$(GOAL)'
+
+share: ## Pack a build to send someone, with instructions (no Apple account needed)
+	@./scripts/share.sh
 
 release: ## Build, sign, notarise and staple a build other people can open
 	@./scripts/release.sh

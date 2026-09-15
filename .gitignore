@@ -13,3 +13,4 @@ dist/
 clicky/
 opencode/
 .signing-identity-release
+.signing/
