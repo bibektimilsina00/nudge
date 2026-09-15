@@ -31,6 +31,14 @@ pub struct Config {
     /// Thinking is part of what it is, and the only question is how much. That is
     /// a question for the bench rather than an opinion --
     /// `NUDGE_THINK=low cargo run --bin bench` scores hits and latency together.
+    ///
+    /// It is also the most expensive line in the file. Thinking bills at the
+    /// output rate, five times input, so it outweighs the choice of model.
+    /// Measured on 3.6-flash against a 1280px screenshot, two calls per level:
+    /// minimal and low emit **no thinking tokens at all** and cost $0.00102 a
+    /// call; medium emits between 446 and 2,079 and costs $0.0027 to $0.0088.
+    /// Erratic as well as dear -- those two medium numbers are the same request
+    /// twice.
     pub think: Option<String>,
     /// Have a second pass try to refute an answer before it is given.
     ///

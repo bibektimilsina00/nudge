@@ -52,6 +52,25 @@ blocked_titles = []
 # end up among your tracked files.
 workspace = "~/Nudge"
 
+# How hard the model thinks before answering: "minimal" | "low" | "medium" | "high".
+#
+# Thinking tokens bill at the OUTPUT rate, which is five times the input rate, so
+# this line costs more than the choice of model does. Measured on 3.6-flash with a
+# 1280px screenshot, two calls each:
+#
+#   minimal   0 thinking tokens    $0.00102 a call
+#   low       0 thinking tokens    $0.00103 a call
+#   medium    446-2,079            $0.0027-$0.0088 a call
+#   high      818-930              $0.0041 a call
+#
+# Medium is not only dearer, it is erratic -- 446 tokens one call and 2,079 the
+# next, for the same request. Low emits none at all.
+#
+# It costs accuracy: the bench had low at 51% hits against medium's 58%. Those
+# numbers predate the accessibility tree, which resolves many controls by name
+# without the model looking at pixels at all, so they are due a re-run.
+think = "low"
+
 # Have a second pass try to refute an answer before it is given.
 #
 # Off, and staying off for now. Measured on one full trace: answering took two

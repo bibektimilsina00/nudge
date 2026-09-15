@@ -524,6 +524,62 @@ bounds, the current URL from the browser, whether a text field has focus.
 
 ---
 
+## Thinking costs more than the model does
+
+The question was whether we were paying for an expensive model. We were not; we
+were paying for `think = "medium"`.
+
+Prices, fetched rather than remembered, per million tokens:
+
+| Model | Input | Output *(thinking counts as output)* |
+|---|---|---|
+| gemini-3.6-flash | $0.75 | $3.75 |
+| gemini-3.8-flash | $0.75 | $3.75 |
+| gemini-3.5-flash | $1.50 | $9.00 |
+| gemini-3.5-flash-lite | $0.30 | $2.50 |
+
+Output is five times input, and thinking bills as output. So the setting that
+decides how much it thinks matters more than the setting that decides what it is.
+
+Measured on 3.6-flash against a 1280px screenshot, two calls per level:
+
+| `think` | Thinking tokens | Cost per call |
+|---|---|---|
+| minimal | 0 | $0.00102 |
+| low | 0 | $0.00103 |
+| medium | 446 – 2,079 | $0.0027 – $0.0088 |
+| high | 818 – 930 | $0.0041 |
+
+**Low and minimal emit no thinking tokens at all** on this model. Medium emits
+between 446 and 2,079 -- and those two numbers are the same request twice, which
+makes it erratic as well as dear. A 4.7x swing in the bill for one prompt.
+
+Stacked with the model, per turn, and what $10 of credit buys:
+
+| | Cost/turn | Turns per $10 |
+|---|---|---|
+| 3.6-flash + medium | ~$0.0058 | ~1,700 |
+| 3.6-flash + low | $0.0010 | ~9,700 |
+| 3.5-flash-lite + low | $0.0005 | ~21,000 |
+
+Twelve-fold between where the config was and what the code defaults to. Input was
+a flat 1,090 tokens at `max_edge = 1280` across every call, so image size is not
+where the money goes.
+
+*Caveat on the absolute numbers:* the test prompt was shorter than Nudge's real
+one, so per-turn costs are optimistic. The ratios are the part to trust.
+
+*What it cost to take the measurement wrong the first time:* `noclobber` refused
+the second and third `cat >` of the request body, so three runs all sent the first
+level and `low` appeared to think harder than `medium`. The same trap as the
+commit messages. `>|` or nothing.
+
+**Changed:** `think = "low"`. The bench had low at 51% hits against medium's 58%,
+but that was measured before the accessibility tree existed -- many controls now
+resolve by name without the model looking at pixels, and some never reach the
+model at all. Those numbers are owed a re-run before the 7 points are believed.
+
+
 ## Latency — measured, not guessed
 
 Measured against a comparable product rather than guessed at. It is **not**
