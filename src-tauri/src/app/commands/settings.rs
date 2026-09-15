@@ -459,28 +459,85 @@ pub fn retune(
     })
 }
 
+/// A tool server, as the interface shows it.
+#[derive(serde::Serialize)]
+pub struct Server {
+    /// Whatever it was named in the config, which may be anything.
+    pub name: String,
+    /// What is actually running, so the name does not have to carry the meaning.
+    pub about: String,
+    /// Connected and offering this many, or why not.
+    pub said: String,
+    pub failed: bool,
+}
+
 /// The tool servers, and whether they arrived.
 ///
-/// A count rather than a tick. A server described only by its name is something
-/// you have to trust; one that says it brought fourteen tools is something you can
-/// weigh -- the same reasoning as the menu bar, which says it the same way.
+/// A count rather than a tick, which is the same reasoning the menu bar uses: a
+/// server described only by its name is something you have to trust, while one
+/// that says it brought fourteen tools is something you can weigh.
+///
+/// The name alone was not enough though. These are named in the config by whoever
+/// wrote it -- "files" is a perfectly reasonable thing to call a server and tells
+/// a reader nothing at all -- so what is actually running is carried beside it.
+/// Whether a server connected is worth showing precisely because it can fail on a
+/// credential, and then nothing works and nothing says why.
 #[tauri::command]
-pub fn servers(app: AppHandle) -> Vec<(String, String)> {
+pub fn servers(app: AppHandle) -> Vec<Server> {
     use crate::core::run::session::ServerState;
-    app.state::<crate::core::run::session::Nudge>()
+    let nudge = app.state::<crate::core::run::session::Nudge>();
+    let specs = nudge.cfg.mcp.clone();
+    nudge
         .tool_servers()
         .into_iter()
         .map(|(name, state)| {
+            let about = specs
+                .iter()
+                .find(|s| s.name == name)
+                .map(running_what)
+                .unwrap_or_default();
+            let failed = matches!(state, ServerState::Failed(_));
             let said = match state {
-                ServerState::Starting => "starting…".to_string(),
+                ServerState::Starting => "connecting…".to_string(),
                 ServerState::Ready(0) => "nothing offered".into(),
                 ServerState::Ready(1) => "1 tool".into(),
                 ServerState::Ready(n) => format!("{n} tools"),
-                ServerState::Failed(why) => format!("failed — {why}"),
+                ServerState::Failed(why) => why,
             };
-            (name, said)
+            Server {
+                name,
+                about,
+                said,
+                failed,
+            }
         })
         .collect()
+}
+
+/// One line describing what a server actually is.
+///
+/// The published package name where there is one, because that is the part
+/// somebody can look up; `npx -y` is scaffolding and says nothing. Any path
+/// arguments come after it, since "which folder" is the whole question with a
+/// filesystem server and the difference between fine and alarming.
+fn running_what(spec: &crate::core::tools::mcp::Spec) -> String {
+    let package = spec
+        .args
+        .iter()
+        .find(|a| !a.starts_with('-') && !a.starts_with('/'))
+        .cloned()
+        .unwrap_or_else(|| spec.command.clone());
+    let paths: Vec<&str> = spec
+        .args
+        .iter()
+        .filter(|a| a.starts_with('/'))
+        .map(|s| s.as_str())
+        .collect();
+    if paths.is_empty() {
+        package
+    } else {
+        format!("{package} · {}", paths.join(", "))
+    }
 }
 
 /// Every grant macOS controls, and whether Nudge has it.

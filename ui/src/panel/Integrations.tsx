@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 type Service = { name: string; tint: string; mark: string; dark?: boolean; blurb: string };
+type Server = { name: string; about: string; said: string; failed: boolean };
 
 /**
  * The integrations browser.
@@ -75,13 +76,13 @@ const SERVICES: Service[] = [
 
 export function Integrations({ onBack }: { onBack: () => void }) {
   const [query, setQuery] = useState("");
-  const [servers, setServers] = useState<[string, string][]>([]);
+  const [servers, setServers] = useState<Server[]>([]);
 
   // They connect in the background long after this mounts -- `npx` can spend a
   // minute fetching a server it has never run -- so this looks again rather than
   // saying "starting…" forever.
   useEffect(() => {
-    const look = () => void invoke<[string, string][]>("servers").then(setServers);
+    const look = () => void invoke<Server[]>("servers").then(setServers);
     look();
     const again = window.setInterval(look, 2000);
     return () => window.clearInterval(again);
@@ -131,19 +132,41 @@ export function Integrations({ onBack }: { onBack: () => void }) {
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
         {servers.length > 0 && !query && (
           <>
-            <p className="px-0.5 pt-0.5 text-[10.5px] text-ink-3">Connected</p>
-            {servers.map(([name, said]) => (
-              <div key={name} className="flex items-center gap-2.5 rounded-xl bg-raise p-2.5 hairline">
-                <span className="grid size-5 shrink-0 place-items-center rounded-[6px] bg-blue/20 text-blue">
+            <p className="px-0.5 pt-0.5 text-[10.5px] text-ink-3">
+              Connected — tool servers from your config
+            </p>
+            {servers.map((s) => (
+              <div key={s.name} className="flex items-start gap-2.5 rounded-xl bg-raise p-2.5 hairline">
+                <span
+                  className={`grid size-5 shrink-0 place-items-center rounded-[6px] ${
+                    s.failed ? "bg-[#ff453a]/20 text-[#ff8a80]" : "bg-blue/20 text-blue"
+                  }`}
+                >
                   <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
                     <path d="M9 2 4 9h3.5L7 14l5-7H8.5Z" strokeLinejoin="round" />
                   </svg>
                 </span>
-                <h3 className="min-w-0 flex-1 truncate text-[12px] font-semibold">{name}</h3>
-                {/* A count, not a tick. A server you only know the name of is one
-                    you have to trust; one that says it brought fourteen tools is
-                    one you can weigh. */}
-                <span className="shrink-0 text-[10.5px] text-ink-3">{said}</span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline gap-2">
+                    <h3 className="min-w-0 truncate text-[12px] font-semibold">{s.name}</h3>
+                    {/* A count, not a tick. A server you only know the name of is
+                        one you have to trust; one that says it brought fourteen
+                        tools is one you can weigh. */}
+                    <span
+                      className={`ml-auto shrink-0 text-[10.5px] ${
+                        s.failed ? "text-[#ff8a80]" : "text-ink-3"
+                      }`}
+                    >
+                      {s.said}
+                    </span>
+                  </div>
+                  {/* The name is whatever the config called it, and "files" is a
+                      reasonable name that means nothing to a reader. This is what
+                      is actually running. */}
+                  {s.about && (
+                    <p className="mt-px truncate font-mono text-[10px] text-ink-3">{s.about}</p>
+                  )}
+                </div>
               </div>
             ))}
             <p className="px-0.5 pt-2 text-[10.5px] text-ink-3">Not yet reachable</p>

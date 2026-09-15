@@ -75,7 +75,7 @@ export function Settings({
   const [version, setVersion] = useState("");
   const [allowed, setAllowed] = useState<Allowed[]>([]);
   const [brain, setBrain] = useState<Brain | null>(null);
-  const [servers, setServers] = useState<[string, string][]>([]);
+  const [servers, setServers] = useState<{ name: string }[]>([]);
   const [problem, setProblem] = useState<string | null>(null);
   const [look, setLook] = useState(DEFAULT_LOOK);
   const [permits, setPermits] = useState<Permit[]>([]);
@@ -99,7 +99,7 @@ export function Settings({
     // Servers connect in the background long after this mounts -- `npx` can spend
     // a minute fetching one it has never run -- so this looks again rather than
     // showing "starting…" forever to somebody who opened settings early.
-    const look = () => void invoke<[string, string][]>("servers").then(setServers);
+    const look = () => void invoke<{ name: string }[]>("servers").then(setServers);
     look();
     const again = window.setInterval(look, 2000);
     return () => {
