@@ -9,6 +9,7 @@
 //!
 //!     cargo run --bin truth                       # score every case
 //!     cargo run --bin truth -- 003                # just one, with its working
+//!     cargo run --bin truth -- --verify           # and pay for the second pass
 //!
 //! A case is a question, some strings that must appear in the answer, and some
 //! that must not:
@@ -203,7 +204,12 @@ fn main() {
 }
 
 async fn score() {
-    let only = std::env::args().nth(1);
+    let args: Vec<String> = std::env::args().skip(1).collect();
+    // Off here too, and not only in config. The point of switching the checking
+    // off was to stop paying for it, and a harness that turns it back on every
+    // run is still paying for it -- just somewhere the bill is easier to miss.
+    let verify = args.iter().any(|a| a == "--verify");
+    let only = args.into_iter().find(|a| !a.starts_with("--"));
     let cases = match load() {
         Ok(c) => c,
         Err(e) => {
@@ -265,10 +271,7 @@ async fn score() {
                         eprintln!("      retrying in {secs}s: {last}");
                         tokio::time::sleep(std::time::Duration::from_secs(secs)).await;
                     }
-                    // On here regardless of config: this is the harness that
-                    // has to show the checking is worth its bill, and it cannot
-                    // do that with the checking switched off.
-                    match subagent::run(provider, &workspace, &ask, true, |step| {
+                    match subagent::run(provider, &workspace, &ask, verify, |step| {
                         perform(cfg, provider, step)
                     })
                     .await

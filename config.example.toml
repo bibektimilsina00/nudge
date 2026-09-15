@@ -51,3 +51,15 @@ blocked_titles = []
 # A folder for work it produces -- not a source repository, or generated pages
 # end up among your tracked files.
 workspace = "~/Nudge"
+
+# Have a second pass try to refute an answer before it is given.
+#
+# Off, and staying off for now. Measured on one full trace: answering took two
+# model calls carrying 428 characters of search results; checking took four more
+# carrying 7,059, because every checker turn re-sends the whole prompt plus
+# everything found so far. Three times the calls and worse in tokens, to buy
+# accuracy nobody is currently relying on.
+#
+# `cargo run --bin truth -- --verify` turns it on for a scoring run. Nothing else
+# does.
+verify = false

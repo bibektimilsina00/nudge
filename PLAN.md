@@ -195,13 +195,40 @@ plausible and wrong, and arithmetic on dates.
 *Also not covered:* this drives the blind path. The original failure came from an
 agent that also had a screenshot.
 
-**1.2 Verify before asserting.** *Built.*
+**1.2 Verify before asserting.** *Built, and then parked. It is off.*
+
+### Why it is off
+
+One full trace of case 001: answering took two model calls carrying 428
+characters of search results. Checking took **four more carrying 7,059**, because
+every checker turn re-sends the whole prompt plus everything found so far. Three
+times the calls, worse in tokens. Against which it has not yet caught a real
+error, and during development it damaged two answers before the guards went in.
+
+**Nobody is relying on this product yet.** A wrong answer today costs one
+person's afternoon and is recoverable in a sentence. The tokens are not
+recoverable at all, and they are what is actually scarce -- the Gemini project hit
+its monthly spending cap partway through the first full truth run. Paying triple
+for accuracy that has no user is the wrong order to spend in. Until then a wrong
+answer is the model's to answer for, and the switch is right there.
+
+`verify = false` in config, and `cargo run --bin truth -- --verify` is the only
+thing that turns it on -- deliberately not `make truth`, because a harness that
+quietly re-enables it every run is still paying the bill, just somewhere easier
+to miss.
+
+*Revisit when* there are people using this whose trust is worth more than the
+tokens. The mechanism, the guards and the harness are built and tested; what is
+deferred is the spending, not the work.
+
+### What it does, when it is on
 
 `scrutinise`, in `core/run/subagent.rs`. A subagent that looked something up does
 not return the answer directly: a second, independent pass is told the answer
-already exists and asked to find what is wrong with it. One extra round trip, and
-only on answers that came from looking something up -- a subagent reporting what a
-file contains has nothing to refute.
+already exists and asked to find what is wrong with it. Gated three ways -- it
+must have looked something up, must not already be an admission, and must state a
+specific, because the failure it exists for is a confidently wrong *number* and an
+answer with no digit in it is not that failure.
 
 Building it turned up the thing worth writing down. **A checker told to find a
 fault will find one**, and the first two versions each made an answer worse:
@@ -234,7 +261,8 @@ are the one doing it.
 
 *Status:* both paths seen live -- the checker agreed on one run of the macOS case
 and disagreed on the next. That intermittence is 1.1's finding restated, and it is
-why the case set came next rather than more mechanism.
+why the case set came next rather than more mechanism. It is also why parking this
+costs little: one green run would not have settled anything anyway.
 
 **1.1a Grow the truth cases.** *Written, not yet scored clean.*
 
@@ -512,6 +540,10 @@ Two lessons from building these, worth keeping:
 ---
 
 ## 7. Deliberately not doing
+
+**Verifying every answer, for now.** Built and switched off -- see 1.2. Three
+times the tokens to protect users who do not exist yet. The order matters: get
+something worth trusting in front of people, then pay to make it trustworthy.
 
 - **A window.** Ever. See §1.
 - **Streaming the model's reply.** Measured four times: the first chunk arrives at
