@@ -212,6 +212,13 @@ pub struct World {
     /// What has been granted beyond the defaults, in the same words the user was
     /// shown when they granted it.
     pub granted: Vec<String>,
+    /// Where work could be sent: the git remotes configured in the workspace,
+    /// as `name url`.
+    ///
+    /// The only part of the known world that is about *destinations*. A push or
+    /// fetch aimed at a remote that is not one of these is going somewhere the
+    /// user was not working with.
+    pub remotes: Vec<String>,
     /// Files this run created, newest last.
     ///
     /// The judge is never shown what is in them. A script the user asked for is
@@ -325,6 +332,13 @@ pub fn prompt_for(said: &[String], world: &World, action: &str, risk: Risk) -> S
             "Granted beyond the defaults: {}\n",
             world.granted.join("; ")
         )),
+    }
+    match world.remotes.is_empty() {
+        // Said out loud rather than left out. An absent section reads as "no
+        // information"; this says which it is, so a push to anywhere at all is
+        // weighed knowing nothing was configured.
+        true => out.push_str("Git remotes: none configured here\n"),
+        false => out.push_str(&format!("Git remotes: {}\n", world.remotes.join("; "))),
     }
     if !world.made.is_empty() {
         out.push_str(&format!(
@@ -445,6 +459,7 @@ mod tests {
         World {
             workspace: "/Users/x/Nudge".into(),
             granted: vec!["run any command".into()],
+            remotes: vec!["origin git@github.com:someone/thing.git".into()],
             made: Vec::new(),
             note: None,
         }
@@ -618,6 +633,24 @@ mod tests {
             Verdict::Unsure { why, .. } => assert!(!why.is_empty()),
             other => panic!("{other:?}"),
         }
+    }
+
+    /// Where work could be sent is part of orienting a judgement.
+    #[test]
+    fn the_remotes_are_named_and_their_absence_is_said_out_loud() {
+        let step = Step::Run {
+            command: "git push backup main".into(),
+            say: String::new(),
+        };
+        let p = prompt(&["fix the test".into()], &world(), &step, Risk::Exec);
+        assert!(p.contains("origin git@github.com:someone/thing.git"), "{p}");
+
+        // And with none, that is stated rather than the section vanishing --
+        // an absent line reads as "no information" instead of "none set up".
+        let mut bare = world();
+        bare.remotes = Vec::new();
+        let p = prompt(&["fix the test".into()], &bare, &step, Risk::Exec);
+        assert!(p.contains("none configured here"), "{p}");
     }
 
     /// The observation reaches the judge, and is about *this* action rather

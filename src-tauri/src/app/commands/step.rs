@@ -767,6 +767,10 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
             .into_iter()
             .map(|g| g.told().to_string())
             .collect(),
+        // Where things could be sent. One git call, against a model call that
+        // takes two and a half seconds -- not worth caching, and a cache would
+        // have to notice the workspace moving.
+        remotes: crate::core::tools::files::remotes(&nudge.workspace()),
         // Named, never opened. A script the user asked for is ordinary work;
         // running one the agent wrote for reasons of its own is not, and the
         // effects of a file cannot be read off the command that runs it.

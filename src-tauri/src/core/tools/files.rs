@@ -156,6 +156,44 @@ pub fn changed(path: &Path) -> Option<String> {
     Some(format!("+{plus} -{minus}"))
 }
 
+/// The git remotes configured where the work is happening.
+///
+/// Part of the known world the judge is given, and the one part of it that is
+/// about *where things can go* rather than where they are. A push or a fetch
+/// aimed at a remote that is not one of these is going somewhere the user was
+/// not working with, and that is worth weighing against what they asked for.
+///
+/// Names and URLs only -- there is nothing in a remote list that is content, and
+/// it is exactly the kind of fact a screenshot cannot be trusted for.
+///
+/// Empty outside a repository, and empty when git is not installed. Both are
+/// ordinary, and an empty list says "nothing known" rather than "nowhere
+/// allowed": this orients a judgement, it does not make one.
+pub fn remotes(workspace: &Path) -> Vec<String> {
+    let Ok(out) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(workspace)
+        .args(["remote", "-v"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    let mut seen: Vec<String> = Vec::new();
+    for line in String::from_utf8_lossy(&out.stdout).lines() {
+        // "origin\tgit@github.com:x/y.git (fetch)" -- the name and the URL, and
+        // not the direction, which would list every remote twice.
+        let mut parts = line.split_whitespace();
+        let (Some(name), Some(url)) = (parts.next(), parts.next()) else {
+            continue;
+        };
+        let said = format!("{name} {url}");
+        if !seen.contains(&said) {
+            seen.push(said);
+        }
+    }
+    seen
+}
+
 /// Copy aside every existing file a tool call names, before it runs.
 ///
 /// A tool on somebody else's server is opaque: there is no way to know whether
@@ -604,6 +642,46 @@ mod tests {
 
         std::fs::write(&file, "one\ntwo CHANGED\nthree\nfour\n").unwrap();
         assert_eq!(changed(&file), Some("+2 -1".into()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Remotes are read, deduplicated, and empty outside a repository.
+    #[test]
+    fn the_remotes_are_where_things_could_be_sent() {
+        let dir = workspace("remotes");
+        std::fs::create_dir_all(&dir).unwrap();
+        // Not a repository yet: nothing known, which is not the same as nothing
+        // allowed.
+        assert!(remotes(&dir).is_empty());
+
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(args)
+                .output()
+                .expect("git");
+        };
+        git(&["init", "-q"]);
+        git(&[
+            "remote",
+            "add",
+            "origin",
+            "git@github.com:someone/thing.git",
+        ]);
+        git(&[
+            "remote",
+            "add",
+            "backup",
+            "https://elsewhere.example/thing.git",
+        ]);
+
+        let found = remotes(&dir);
+        // Twice each in `git remote -v` -- fetch and push -- and once here.
+        assert_eq!(found.len(), 2, "{found:?}");
+        assert!(found.iter().any(|r| r.contains("someone/thing.git")));
+        assert!(found.iter().any(|r| r.starts_with("backup ")));
 
         let _ = std::fs::remove_dir_all(&dir);
     }
