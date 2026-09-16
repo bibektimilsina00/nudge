@@ -108,10 +108,11 @@ export default function Panel() {
       .catch(() => {});
   }, []);
 
-  // Closing should not leave the panel parked three screens deep.
-  useEffect(() => {
-    if (!open) setView("home");
-  }, [open]);
+  // The panel keeps its place when it closes. It used to go back to Home, so as
+  // not to be parked three screens deep next time -- but it closes every time you
+  // go and do the thing it just asked you to do (approve a sign-in, copy a token,
+  // look something up), and starting over on every return is the opposite of
+  // helpful. The tabs are one click away if Home is where you wanted.
 
   // Keep the hover region the same shape as what is on screen. Held at the
   // tallest view's size, the panel stayed open far below anything visible.

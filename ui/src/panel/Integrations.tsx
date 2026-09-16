@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 
 import { Label } from "../components/controls";
 
@@ -175,27 +176,31 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
       setCode(started);
       setCopied(false);
       setOpen(true);
-
-      const until = Date.now() + started.expires_in * 1000;
-      for (;;) {
-        if (Date.now() > until) throw new Error("That code expired. Try again.");
-        await new Promise((r) => setTimeout(r, started.interval * 1000));
-        // null means not yet; anything else means the token is in the Keychain.
-        const done = await invoke<string | null>("sign_in_poll");
-        if (done !== null) break;
-      }
-      setCode(null);
-      // The token is stored, but a connection is still only real once the
-      // server has started and said what it can do -- same as a pasted one.
-      go();
+      // Rust does the waiting and says how it went. It has to: approving happens
+      // in a browser, so this window is hidden throughout, and a hidden webview
+      // throttles its timers until a polling loop here effectively stops.
     } catch (e) {
       setCode(null);
+      setBusy(false);
       setFailed(String(e));
       setOpen(true);
-    } finally {
-      setBusy(false);
     }
   };
+
+  useEffect(() => {
+    const stop = listen<string>("signed-in", (e) => {
+      setBusy(false);
+      setCode(null);
+      if (e.payload.startsWith("ok:")) {
+        setOpen(false);
+        onChanged();
+      } else {
+        setFailed(e.payload);
+        setOpen(true);
+      }
+    });
+    return () => void stop.then((f) => f());
+  }, [onChanged]);
 
   const go = () => {
     setBusy(true);

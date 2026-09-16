@@ -9,7 +9,7 @@
 use crate::core::connect::{self, Made};
 use crate::core::tools::{mcp, secret};
 use serde::Serialize;
-use tauri::{AppHandle, Manager};
+use tauri::{AppHandle, Emitter, Manager};
 
 /// One row on the integrations page.
 #[derive(Serialize)]
@@ -240,18 +240,42 @@ pub fn choose_tools(app: AppHandle, key: String, allowed: Vec<String>) -> Result
     Ok(())
 }
 
-/// A sign-in somebody is part way through.
+/// Start the server, and write the connection down only if it answers.
 ///
-/// Held here rather than handed to the window because the device code is the
-/// half that proves the sign-in is ours. The window gets the short code meant to
-/// be read aloud and nothing else.
-#[derive(Default)]
-pub struct SigningIn(pub std::sync::Mutex<Option<Pending>>);
-
-pub struct Pending {
-    key: String,
-    client_id: String,
-    device_code: String,
+/// The half of `connect` that decides whether a connection exists, pulled out so
+/// the sign-in task runs exactly the same check rather than a second version of
+/// it that could drift.
+async fn join(app: AppHandle, key: String) -> Result<usize, String> {
+    let offer = connect::offer(&key).ok_or_else(|| format!("no such integration: {key}"))?;
+    let made = Made {
+        key: key.clone(),
+        extra: Vec::new(),
+        tools: Vec::new(),
+        allowed: None,
+        declined: Vec::new(),
+        at: now_ms(),
+    };
+    let spec = connect::spec(&made).ok_or_else(|| "could not build that server".to_string())?;
+    let started = mcp::Servers::start(std::slice::from_ref(&spec)).await;
+    let tools: Vec<String> = started.tools().iter().map(|t| t.name.clone()).collect();
+    if tools.is_empty() {
+        undo(&key, offer.token.is_some());
+        return Err(match started.failed(&key) {
+            Some(why) => format!("{} did not start: {why}", offer.name),
+            None => format!("{} started but offered no tools", offer.name),
+        });
+    }
+    let path = app.state::<Connections>().path.clone();
+    let mut all = connect::read(path.as_deref());
+    all.retain(|m| m.key != key);
+    all.push(Made {
+        tools: tools.clone(),
+        allowed: Some(tools.clone()),
+        ..made
+    });
+    connect::write(path.as_deref(), &all);
+    eprintln!("connected {key}: {} tools", tools.len());
+    Ok(tools.len())
 }
 
 /// Start a sign-in, and give back the code to show.
@@ -266,6 +290,53 @@ pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::s
     // is installed on a repository. Asking for scopes here would be asking for
     // something the app does not grant that way.
     let waiting = crate::core::signin::begin(client_id, "").await?;
+    let device_code = waiting.device_code.clone();
+    let id = client_id.to_string();
+    let for_task = key.clone();
+    let handle = app.clone();
+    let deadline = waiting.expires_in;
+
+    // The waiting used to live in the window, on the reasoning that closing the
+    // card should end it. That was wrong for this flow in particular: approving
+    // happens in a browser, so the window is hidden for the whole of it -- and a
+    // hidden WKWebView throttles its timers until the loop effectively stops.
+    // It has to be here, and it ends on its own when the code expires.
+    tauri::async_runtime::spawn(async move {
+        use crate::core::signin::Poll;
+        let started = std::time::Instant::now();
+        loop {
+            if started.elapsed().as_secs() > deadline {
+                let _ = handle.emit("signed-in", "That code expired. Try again.");
+                break;
+            }
+            match crate::core::signin::poll(&id, &device_code).await {
+                Poll::Pending { interval } => {
+                    tokio::time::sleep(std::time::Duration::from_secs(interval)).await
+                }
+                Poll::Stopped(why) => {
+                    let _ = handle.emit("signed-in", why);
+                    break;
+                }
+                Poll::Token(token) => {
+                    let said = match secret::to_keychain(
+                        &connect::keychain_item(&for_task),
+                        &token,
+                    ) {
+                        // Signing in is half of it; a connection is only real
+                        // once the server has started and said what it offers.
+                        Ok(()) => match join(handle.clone(), for_task.clone()).await {
+                            Ok(n) => format!("ok:{n}"),
+                            Err(why) => why,
+                        },
+                        Err(e) => e.to_string(),
+                    };
+                    let _ = handle.emit("signed-in", said);
+                    break;
+                }
+            }
+        }
+    });
+
 
     // Opened here rather than in the window, because that is how every other
     // link in this app is opened and adding a plugin to do it from JavaScript
@@ -274,46 +345,7 @@ pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::s
         .arg(&waiting.verification_uri)
         .spawn();
 
-    *app.state::<SigningIn>().0.lock().unwrap() = Some(Pending {
-        key,
-        client_id: client_id.to_string(),
-        device_code: waiting.device_code.clone(),
-    });
     Ok(waiting)
-}
-
-/// Ask once whether they have finished.
-///
-/// One step per call, so the window owns the waiting -- it can show progress,
-/// stop, and be closed without leaving a loop running behind it.
-#[tauri::command]
-pub async fn sign_in_poll(app: AppHandle) -> Result<Option<String>, String> {
-    use crate::core::signin::Poll;
-
-    let Some((key, client_id, device_code)) = ({
-        let held = app.state::<SigningIn>();
-        let held = held.0.lock().unwrap();
-        held.as_ref()
-            .map(|p| (p.key.clone(), p.client_id.clone(), p.device_code.clone()))
-    }) else {
-        return Err("nothing is signing in".into());
-    };
-
-    match crate::core::signin::poll(&client_id, &device_code).await {
-        Poll::Pending { .. } => Ok(None),
-        Poll::Stopped(why) => {
-            *app.state::<SigningIn>().0.lock().unwrap() = None;
-            Err(why)
-        }
-        Poll::Token(token) => {
-            // Straight to the Keychain, the same place a pasted one goes, so
-            // everything downstream cannot tell the difference -- and neither
-            // can GitHub, which treats both as bearer tokens.
-            secret::to_keychain(&connect::keychain_item(&key), &token).map_err(|e| e.to_string())?;
-            *app.state::<SigningIn>().0.lock().unwrap() = None;
-            Ok(Some(token))
-        }
-    }
 }
 
 /// Which workspace a Slack token belongs to.
