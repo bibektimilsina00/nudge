@@ -421,10 +421,12 @@ fn record(app: &AppHandle, kind: &str, said: &str, outcome: Outcome) {
 fn record_by(app: &AppHandle, kind: &str, said: &str, outcome: Outcome, rule: Option<String>) {
     use crate::core::audit::{Audit, Entry};
     let entry = Entry::new(kind, said, outcome).allowed_by(rule);
-    // Attributed to whichever run is going, so a finished agent can be read back
-    // as a story rather than as lines scattered through everything else.
-    let entry = match app.state::<Agents>().list().iter().find(|a| !a.finished()) {
-        Some(a) => entry.during(a.id),
+    // Attributed to the run that is actually acting, which the runtime says
+    // rather than this guessing. Guessing looked for an agent that had not
+    // finished and lost exactly the records worth keeping: an agent stopped
+    // mid-step is already finished by the time its refusal comes back.
+    let entry = match app.state::<Agents>().doing() {
+        Some(id) => entry.during(id),
         None => entry,
     };
     app.state::<Audit>().note(entry);

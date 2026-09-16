@@ -131,3 +131,20 @@ fn carry_out(app: &AppHandle, pending: crate::core::reach::Pending, yes: bool) {
         }
     }
 }
+
+/// What a run actually did, from the record rather than from its own account.
+///
+/// The card already shows the commands an agent ran and the files it made,
+/// because the agent reported them. This is the other half: what it *tried* and
+/// was refused, and what it stopped to ask about. Those never appeared anywhere
+/// a person could see, which meant the only evidence a model had reached for
+/// something it should not have was a sentence it wrote about itself.
+#[tauri::command]
+pub fn trail(app: AppHandle, run: Option<u64>) -> Vec<crate::core::audit::Entry> {
+    let audit = app.state::<crate::core::audit::Audit>();
+    match run {
+        Some(id) => audit.of_run(id),
+        // Newest first and bounded: this is a glance, not an export.
+        None => audit.recent(200),
+    }
+}

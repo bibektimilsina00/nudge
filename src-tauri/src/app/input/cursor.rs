@@ -38,6 +38,7 @@ pub fn follow(app: &AppHandle) {
         };
         let mut ctrl_was = false;
         let mut click_was = false;
+        let mut escape_was = false;
         let mut tick: u32 = 0;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(16));
@@ -101,7 +102,23 @@ pub fn follow(app: &AppHandle) {
             // It is the key people already hit when a computer starts acting on
             // its own, so it must work from anywhere -- not only when some window
             // of ours happens to have focus, which is never.
-            if click::escape_down() && !crate::core::screen::keyboard::we_pressed_escape() {
+            // Edge-triggered: the press, not the holding of it.
+            //
+            // Level-triggered, a key that reads as held stops every agent that
+            // ever starts, at sixty times a second, and the log says "stopped by
+            // Escape" each time with nothing to say it was the same press. A
+            // stuck Escape is not hypothetical -- a synthetic key-down whose
+            // key-up never landed did exactly this on the machine this was
+            // written on, and every agent for the next hour died on arrival.
+            //
+            // The click watcher a few lines up is edge-triggered for the same
+            // reason. One press should stop what is running, not everything that
+            // starts afterwards.
+            let escape = click::escape_down();
+            let pressed = escape && !escape_was;
+            escape_was = escape;
+
+            if pressed && !crate::core::screen::keyboard::we_pressed_escape() {
                 let agents = app.state::<crate::core::run::agent::Agents>();
                 for a in agents.list() {
                     if !a.finished() {

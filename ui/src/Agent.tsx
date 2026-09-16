@@ -12,6 +12,19 @@ export type AgentState =
 
 /** A command an agent ran, and what came back. */
 export type Ran = { command: string; output: string };
+
+/** One line of the record — see `core/audit.rs`. */
+export type Trail = {
+  at: number;
+  run?: number;
+  kind: string;
+  said: string;
+  outcome:
+    | { outcome: "did"; detail: string }
+    | { outcome: "refused"; why: string }
+    | { outcome: "asked"; question: string };
+  rule?: string;
+};
 /** A file it produced. */
 export type Made = { path: string };
 /** One line of its plan. */
@@ -130,16 +143,19 @@ export function Steps({ history }: { history: string[] }) {
  * remembers it per element, and is keyboard-accessible without being told.
  */
 function Fold({
+  open = false,
   count,
   label,
   children,
 }: {
+  /** Open on arrival. For the one section somebody needs to see without asking. */
+  open?: boolean;
   count: number;
   label: string;
   children: ReactNode;
 }) {
   return (
-    <details className="group mt-2">
+    <details className="group mt-2" open={open}>
       <summary className="flex cursor-default list-none items-center gap-1 text-[10.5px] text-ink-3 transition-colors duration-150 hover:text-ink-2">
         <svg
           viewBox="0 0 12 12"
@@ -220,6 +236,55 @@ export function Commands({ ran }: { ran: Ran[] }) {
             </pre>
           </div>
         ))}
+      </div>
+    </Fold>
+  );
+}
+
+/**
+ * What it tried and could not do.
+ *
+ * The sections above are the agent's own account of itself: the commands it ran,
+ * the files it made. This is the other half, read from the record rather than
+ * from the agent — what a gate refused, and what it stopped to ask about.
+ *
+ * Those had nowhere to appear before, which meant the only evidence that a model
+ * had reached for something it should not have was a sentence the model wrote
+ * about itself. Open by default when there is anything in it, because a refusal
+ * is the one thing here somebody actually needs to see.
+ */
+export function Refused({ trail }: { trail: Trail[] }) {
+  const notable = trail.filter((t) => t.outcome.outcome !== "did");
+  if (notable.length === 0) return null;
+
+  return (
+    <Fold
+      count={notable.length}
+      label={`refused or asked`}
+      open
+    >
+      <div className="mt-1.5 max-h-44 space-y-1.5 overflow-y-auto">
+        {notable.map((t, i) => {
+          const refused = t.outcome.outcome === "refused";
+          return (
+            <div key={i} className="rounded-lg bg-black/40 p-1.5">
+              <code className="block font-mono text-[10px] break-all text-ink-2">
+                <span className={refused ? "text-[#ff8a80]" : "text-[#ffd60a]"}>
+                  {refused ? "refused" : "asked"}
+                </span>
+                <span className="text-ink-3"> · {t.kind} · </span>
+                {t.said}
+              </code>
+              <p className="mt-1 text-[9.5px] leading-snug text-ink-3">
+                {t.outcome.outcome === "refused"
+                  ? t.outcome.why
+                  : t.outcome.outcome === "asked"
+                    ? t.outcome.question
+                    : ""}
+              </p>
+            </div>
+          );
+        })}
       </div>
     </Fold>
   );
@@ -434,6 +499,22 @@ export function hue(id: number) {
 
 function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
   const tone = TONE[agent.state];
+
+  // Read rather than pushed. A refusal is rare, and polling one open card twice
+  // a second costs less than another event channel and a subscription to keep
+  // in step with it.
+  const [trail, setTrail] = useState<Trail[]>([]);
+  useEffect(() => {
+    const look = () =>
+      void invoke<Trail[]>("trail", { run: agent.id })
+        .then(setTrail)
+        .catch(() => {});
+    look();
+    // Only while it is still going. A finished run's record does not change.
+    if (agent.state === "done" || agent.state === "failed" || agent.state === "stopped") return;
+    const again = window.setInterval(look, 1500);
+    return () => window.clearInterval(again);
+  }, [agent.id, agent.state]);
   return (
     // No shadow. It floats over whatever happens to be behind it, and a drop
     // shadow on a dark card over a dark screen is a smudge -- the ring is what
@@ -477,6 +558,9 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
 
         <Plan plan={agent.plan} />
         <Artifacts made={agent.made} />
+        {/* Above the agent's own account of itself, because what it was stopped
+            from doing matters more than what it managed. */}
+        <Refused trail={trail} />
         <Steps history={agent.history} />
         <Commands ran={agent.ran} />
       </div>

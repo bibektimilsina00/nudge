@@ -262,6 +262,7 @@ pub fn run() {
             commands::answer_agent,
             commands::stop_agent,
             commands::dismiss_agent,
+            commands::trail,
         ])
         .run(tauri::generate_context!())
         .expect("nudge failed to start");

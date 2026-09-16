@@ -219,19 +219,20 @@ pub fn spawn(
         // port 3000 tomorrow is Nudge's fault, not the user's -- and a process
         // nobody is watching is the whole risk of being able to start one.
         app.state::<crate::app::state::Background>().stop_all();
-        // What was recorded, not what was returned. `set_state` refuses to move
+        // Recorded first, then read back and logged. `set_state` refuses to move
         // an agent out of `Stopped`, so a late `Done` arriving after Escape is
-        // already ignored -- but the log printed the return value and cheerfully
-        // said `ended: Done` about a run that was recorded as stopped. A log that
-        // disagrees with the record is worse than no log.
+        // already ignored -- and reading afterwards is what makes the log agree
+        // with the record rather than merely intend to. Reading first, which is
+        // what this did, printed whatever the agent was mid-run: every finished
+        // task logged `ended: Running`, which is not a thing that can be true.
+        app.state::<Agents>().set_state(id, end.clone());
         let recorded = app
             .state::<Agents>()
             .list()
             .into_iter()
             .find(|a| a.id == id)
             .map(|a| a.state);
-        eprintln!("agent#{id} ended: {:?}", recorded.unwrap_or(end.clone()));
-        app.state::<Agents>().set_state(id, end);
+        eprintln!("agent#{id} ended: {:?}", recorded.unwrap_or(end));
         app.state::<Nudge>().end();
         publish(&app);
     });
@@ -465,10 +466,14 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             return State::Stopped;
         }
 
+        // Named for the record, around the step and not a moment longer: a
+        // refusal arriving after the agent was stopped still belongs to it.
+        app.state::<Agents>().now_doing(id);
         let outcome = match commands::perform(app, &step) {
             Ok(()) => commands::perform_async(app, &step).await,
             Err(e) => Err(e),
         };
+        app.state::<Agents>().now_doing(0);
         if let Err(e) = outcome {
             failures += 1;
             eprintln!("agent#{id} turn {turn}: could not perform it -- {e} (x{failures})");

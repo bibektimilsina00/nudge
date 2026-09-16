@@ -150,6 +150,14 @@ impl Agent {
 
 /// Every agent this session has seen, running or not.
 pub struct Agents {
+    /// The run a step is being carried out for, right now. Zero for none.
+    ///
+    /// Explicit rather than inferred. Whoever records what happened used to look
+    /// for an agent that had not finished, which is wrong twice: with two runs
+    /// it picks an arbitrary one, and an agent stopped mid-step is already
+    /// finished by the time its tool call returns -- so the one record that
+    /// most wants attributing, a refusal, is the one that loses it.
+    doing: std::sync::atomic::AtomicU64,
     items: Mutex<Vec<Agent>>,
     next_id: AtomicU64,
     /// Set to stop whichever agent is running. One at a time, so one flag.
@@ -166,6 +174,7 @@ pub struct Agents {
 impl Default for Agents {
     fn default() -> Self {
         Agents {
+            doing: AtomicU64::default(),
             items: Mutex::default(),
             next_id: AtomicU64::default(),
             abort: AtomicBool::default(),
@@ -335,6 +344,19 @@ impl Agents {
             .unwrap()
             .iter()
             .any(|a| a.background && !a.finished())
+    }
+
+    /// Mark which run is acting, for the record. Zero clears it.
+    pub fn now_doing(&self, id: u64) {
+        self.doing.store(id, Ordering::Relaxed);
+    }
+
+    /// The run a step is being carried out for, if any.
+    pub fn doing(&self) -> Option<u64> {
+        match self.doing.load(Ordering::Relaxed) {
+            0 => None,
+            id => Some(id),
+        }
     }
 
     pub fn running(&self) -> bool {
