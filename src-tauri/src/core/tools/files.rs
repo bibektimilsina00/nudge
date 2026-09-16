@@ -156,6 +156,55 @@ pub fn changed(path: &Path) -> Option<String> {
     Some(format!("+{plus} -{minus}"))
 }
 
+/// What has changed in the workspace, according to git.
+///
+/// The half a person never skips when they hand work to somebody: not "what did
+/// you say you did", but "what is different now". A delegation ends with output
+/// and today that output is believed -- while `git status` is one call away and
+/// answers the question the output is only claiming to.
+///
+/// Status rather than diff, because a new file is the commonest thing a
+/// delegated agent produces and a diff against HEAD would not mention it.
+///
+/// Empty outside a repository. Which is a real answer and not an error: a
+/// workspace that is not a repository has nothing to compare against, and
+/// saying nothing is better than implying nothing changed.
+pub fn altered(workspace: &Path) -> Vec<String> {
+    let Ok(out) = std::process::Command::new("git")
+        .arg("-C")
+        .arg(workspace)
+        .args(["status", "--porcelain"])
+        .output()
+    else {
+        return Vec::new();
+    };
+    String::from_utf8_lossy(&out.stdout)
+        .lines()
+        .filter_map(|line| {
+            // "XY path", where XY is the status. Both letters matter -- " M" is
+            // changed and not staged, "??" is new -- and the model reads them
+            // the same way a person does.
+            let (state, path) = line.split_at(line.len().min(2));
+            let path = path.trim();
+            if path.is_empty() {
+                return None;
+            }
+            Some(format!(
+                "{} {path}",
+                match state.trim() {
+                    "??" => "new",
+                    "D" => "deleted",
+                    "A" => "added",
+                    "M" | "MM" => "changed",
+                    "R" => "renamed",
+                    other => other,
+                }
+            ))
+        })
+        .take(40)
+        .collect()
+}
+
 /// The git remotes configured where the work is happening.
 ///
 /// Part of the known world the judge is given, and the one part of it that is
@@ -642,6 +691,44 @@ mod tests {
 
         std::fs::write(&file, "one\ntwo CHANGED\nthree\nfour\n").unwrap();
         assert_eq!(changed(&file), Some("+2 -1".into()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// What changed is read from git rather than from anybody's account of it.
+    #[test]
+    fn what_changed_is_what_git_says_changed() {
+        let dir = workspace("altered");
+        std::fs::create_dir_all(&dir).unwrap();
+        // Not a repository: nothing to say, and saying nothing is honest.
+        assert!(altered(&dir).is_empty());
+
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(args)
+                .output()
+                .expect("git");
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        std::fs::write(dir.join("kept.txt"), "one\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "first"]);
+
+        // Nothing since the commit.
+        assert!(altered(&dir).is_empty(), "{:?}", altered(&dir));
+
+        std::fs::write(dir.join("kept.txt"), "two\n").unwrap();
+        std::fs::write(dir.join("fresh.txt"), "new\n").unwrap();
+        let found = altered(&dir);
+
+        // A new file is the commonest thing a delegated agent makes, and a diff
+        // against HEAD would not have mentioned it.
+        assert!(found.iter().any(|f| f == "new fresh.txt"), "{found:?}");
+        assert!(found.iter().any(|f| f == "changed kept.txt"), "{found:?}");
 
         let _ = std::fs::remove_dir_all(&dir);
     }

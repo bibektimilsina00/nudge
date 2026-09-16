@@ -28,6 +28,14 @@ const SETTLED: std::time::Duration = std::time::Duration::from_millis(900);
 /// How often to look.
 const BEAT: std::time::Duration = std::time::Duration::from_millis(300);
 
+/// Silence long enough to be a problem.
+///
+/// Well short of the fifteen minutes a job is allowed to live, because the point
+/// is to say something while it is still worth saying. Generous anyway: a coding
+/// agent thinking about a large repository is genuinely quiet for minutes, and
+/// stopping one mid-thought would be worse than waiting.
+const STALLED: std::time::Duration = std::time::Duration::from_secs(4 * 60);
+
 /// Watch a job until it ends, answering what can be answered.
 ///
 /// Spawned and left to it. The agent that started the job carries on and can
@@ -51,7 +59,7 @@ pub fn over(app: &AppHandle, job: u64, task: String) {
                 None => return,
             };
             if !alive {
-                eprintln!("supervisor: job {job} finished");
+                finished(&app, job);
                 return;
             }
 
@@ -62,6 +70,29 @@ pub fn over(app: &AppHandle, job: u64, task: String) {
                 still = std::time::Instant::now();
                 tokio::time::sleep(BEAT).await;
                 continue;
+            }
+
+            // Nothing at all for a long time. Not a question -- `waiting` would
+            // have caught that -- so it is thinking, wedged, or waiting on
+            // something nobody can see.
+            if still.elapsed() > STALLED {
+                give_up(
+                    &app,
+                    job,
+                    &format!("said nothing for {} minutes", STALLED.as_secs() / 60),
+                );
+                return;
+            }
+
+            // The same thing over and over. A build printing a line per file is
+            // working; a cycle with nothing new between the repeats is not.
+            if let Some(round) = crate::core::stuck::looping(&seen) {
+                give_up(
+                    &app,
+                    job,
+                    &format!("went round in circles on {:?}", first_line(&round)),
+                );
+                return;
             }
 
             if still.elapsed() < SETTLED {
@@ -173,4 +204,65 @@ fn put_to_the_person(app: &AppHandle, job: u64, question: &asked::Asked) {
     app.state::<Nudge>().note(format!(
         "Job {job} stopped to ask something and there was nobody to ask, so I stopped it."
     ));
+}
+
+/// Stop a job that is not getting anywhere, and say why.
+///
+/// Stopped rather than left to the fifteen-minute cap, because the cap reports
+/// nothing useful: "it ran for fifteen minutes" and "it spent fifteen minutes
+/// retrying the same failed connection" are different facts, and only one of
+/// them tells anybody what to do next.
+fn give_up(app: &AppHandle, job: u64, why: &str) {
+    use crate::core::audit::Outcome;
+
+    eprintln!("supervisor: job {job} {why} -- stopping it");
+    let _ = app.state::<Background>().stop(job);
+    app.state::<Nudge>().note(format!(
+        "I stopped job {job}: it {why}. Whatever it was doing, it was not \
+         finishing -- decide what to do rather than starting it again the same way."
+    ));
+    crate::app::commands::note_stuck(app, job, why, Outcome::Refused { why: why.into() });
+    crate::app::agent::publish(app);
+}
+
+/// A job ended. Say what actually changed, not what it said about itself.
+fn finished(app: &AppHandle, job: u64) {
+    use crate::core::audit::Outcome;
+
+    let workspace = app.state::<Nudge>().workspace();
+    let changed = crate::core::tools::files::altered(&workspace);
+    eprintln!(
+        "supervisor: job {job} finished, {} things changed on disk",
+        changed.len()
+    );
+
+    // The half a person never skips. The tool's own account of what it did is
+    // already in the output; this is the part that is checkable.
+    let said = match changed.is_empty() {
+        true => format!(
+            "Job {job} finished and nothing in the workspace changed. If it was \
+             supposed to change something, it did not."
+        ),
+        false => format!(
+            "Job {job} finished. What actually changed on disk, according to git: {}.",
+            changed.join(", ")
+        ),
+    };
+    app.state::<Nudge>().note(said);
+    crate::app::commands::note_stuck(
+        app,
+        job,
+        "finished",
+        Outcome::Did {
+            detail: match changed.is_empty() {
+                true => "nothing changed on disk".into(),
+                false => changed.join(", "),
+            },
+        },
+    );
+    crate::app::agent::publish(app);
+}
+
+fn first_line(text: &str) -> &str {
+    text.lines().next().unwrap_or(text)
 }

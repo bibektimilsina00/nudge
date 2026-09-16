@@ -52,3 +52,35 @@ fn a_prompt_is_seen_answered_and_acted_on() {
     println!("after: {:?}", out.fresh.trim());
     assert!(out.fresh.contains("got:y"), "{:?}", out.fresh);
 }
+
+/// A tool going round in circles is stopped, and what it was repeating is said.
+///
+/// The value is in the reason: "it ran for fifteen minutes" and "it spent
+/// fifteen minutes retrying the same failed connection" are different facts,
+/// and only one of them tells anybody what to do next.
+#[test]
+fn a_loop_is_recognised_from_what_a_process_prints() {
+    use nudge_lib::core::stuck::looping;
+    let r = Running::default();
+    let id = r
+        .watch(
+            &std::env::temp_dir(),
+            // No `>` and no `&&`: the shell guard refuses both, and a watched
+            // process is held to the same rules as any other.
+            "node -e \"var n=0,t=setInterval(function(){console.log('waiting for lock...'),n=n+1,n===10?clearInterval(t):0},60)\"",
+        )
+        .unwrap();
+
+    let mut found = None;
+    for _ in 0..40 {
+        std::thread::sleep(std::time::Duration::from_millis(100));
+        if let Some((text, _)) = r.peek(id) {
+            if let Some(round) = looping(&text) {
+                found = Some(round);
+                break;
+            }
+        }
+    }
+    let _ = r.stop(id);
+    assert_eq!(found.as_deref(), Some("waiting for lock..."));
+}

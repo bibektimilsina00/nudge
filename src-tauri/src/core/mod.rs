@@ -31,6 +31,7 @@ pub mod risk;
 pub mod run;
 pub mod screen;
 pub mod skills;
+pub mod stuck;
 pub mod tools;
 pub mod voice;
 

@@ -759,6 +759,17 @@ pub fn note_supervision(
     );
 }
 
+/// Write down what happened to a supervised job.
+pub fn note_stuck(app: &AppHandle, job: u64, what: &str, outcome: Outcome) {
+    record(
+        app,
+        "supervised",
+        &format!("job {job} {what}"),
+        outcome,
+        Risk::External,
+    );
+}
+
 /// Does this step name a file this run wrote?
 ///
 /// The list of files a run made is background; this is the thing worth saying.
