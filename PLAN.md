@@ -246,18 +246,30 @@ not the other breaks installs silently and strands everybody on that version.
 **Verified**: a 0.1.0 build pointed at a locally served 0.2.0 manifest noticed
 it. **Not verified**: the install itself, which needs a click on a screen.
 
-### 3.3 Discovery
+### 3.3 Discovery — *started*
 
 An interface that shows nothing teaches nothing, and nobody guesses that the
 thing in the notch can refactor a repository. The answer belongs in the voice
 loop — *"what can you do?"* answered well — rather than in a menu nobody opens.
 
-The first real blocker on the second user, once there is a second user.
+The first half is done: approaching the notch now says **Hold ⌃ to ask**, which
+is the one thing somebody has to know before anything else is reachable. See
+§3.4. The voice answer is still open.
 
-### 3.4 The resting state
+### 3.4 The resting state — *in progress*
 
 The pill and the cat are what is on screen 99% of the time and have had the least
 attention of anything here. If the product is the shape, the shape is the work.
+
+The strip now says what it is for while somebody is on their way to it, on a
+wider ring than the dock's — a hint cannot be a delay before opening, because a
+dock that hesitates feels broken. It sits *inside* the strip: growing the strip
+to make room pushed the companion out past the hardware onto the menu bar and
+left a slab of nothing where the width had gone.
+
+Still open: the companion is dark on black at 28px, so at rest what reads is two
+eyes and a rim. It lives in the notch deliberately, but ignorable and invisible
+are not the same thing.
 
 ---
 
