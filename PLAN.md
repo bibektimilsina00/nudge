@@ -58,7 +58,7 @@ do. Floors, not an answer. The answer is §2.
 
 ---
 
-## 1. Risk is a property, not a list of names
+## 1. Risk is a property, not a list of names — *done*
 
 Today `Grant` names a *capability* — shell, files, http — and the gate asks which
 one a step needs. That works because every tool is one this repository wrote.
@@ -72,8 +72,13 @@ class that one `classify` reads.
 Small on its own, and §2 cannot be built without it: a judge that cannot tell a
 read from a write has nothing to judge.
 
-**Done when** a tool this repository has never seen arrives carrying a risk class,
-and the gate decides on that rather than on its name.
+**Done.** Five classes — read, egress, write, exec, external — read off a step by
+one exhaustive match, which refused to compile until two variants nobody had
+thought about were classified. Somebody else's tool is `external` always,
+whatever it is called: its effects are a stranger's claim, and a config value
+that could drop one into the never-checked tier would switch off the gate, the
+record and every future judge in one line. Every audit entry carries its class,
+and there is no recorder that can omit it.
 
 ---
 
