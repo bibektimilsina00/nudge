@@ -251,6 +251,9 @@ pub fn spawn(
 
 /// The loop. Each turn: stop? blocked? settle, step, act, report.
 async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> State {
+    // Kept, because what the task already did before this run existed is
+    // evidence about it -- see `claimed::from_memory`.
+    let carried_in = carried.clone();
     app.state::<Nudge>().begin_agent(goal, carried);
     let mut last: Option<crate::core::provider::Step> = None;
     // Every step this run performed, so a claim at the end can be held against
@@ -411,7 +414,12 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
                 skipped = crate::core::claimed::unfinished(&plan);
 
                 let made: Vec<String> = mine.made.iter().map(|m| m.path.clone()).collect();
-                unread = crate::core::claimed::unread(&made, &taken);
+                // The subagent's steps too. They are the same run doing the same
+                // work one level down, and they arrive here as recaps rather
+                // than as steps -- without them this told a run it had not read
+                // back a document its own subagent had read.
+                let below: Vec<String> = mine.ran.iter().map(|r| r.command.clone()).collect();
+                unread = crate::core::claimed::unread(&made, &taken, &below);
             }
 
             if !(skipped.is_empty() && unread.is_empty()) && !reminded {
@@ -453,8 +461,20 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         //
         // Only on the way out. Mid-run there is nothing to be recollection
         // *about* -- the sentence that matters is the one a task finishes with.
+        let elsewhere: Vec<String> = carried_in
+            .iter()
+            .cloned()
+            .chain(
+                app.state::<Agents>()
+                    .list()
+                    .into_iter()
+                    .find(|a| a.id == id)
+                    .map(|a| a.ran.iter().map(|r| r.command.clone()).collect::<Vec<_>>())
+                    .unwrap_or_default(),
+            )
+            .collect();
         let settled = match matches!(step, crate::core::provider::Step::Done { .. })
-            && crate::core::claimed::from_memory(&settled, &taken)
+            && crate::core::claimed::from_memory(&settled, &taken, &elsewhere)
         {
             true => crate::core::provider::recalled(settled),
             false => settled,

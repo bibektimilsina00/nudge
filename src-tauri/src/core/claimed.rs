@@ -63,6 +63,23 @@ pub fn looked(steps: &[Step]) -> bool {
     })
 }
 
+/// Does this recap describe a step that read something?
+///
+/// The recaps are Nudge's own sentences, so this reads a format this repository
+/// controls. The trap is `Ran` doing double duty: "Ran `wc -l x`" is a shell
+/// command and "Ran files/write_file with {...}" is a tool call, and one of
+/// those is a write that happens to name the file it wrote.
+fn recap_reads(recap: &str) -> bool {
+    let recap = recap.trim().trim_start_matches("task · ").trim_start();
+    if let Some(rest) = recap.strip_prefix("Ran ") {
+        return match rest.starts_with('`') {
+            true => true,
+            false => rest.split_whitespace().next().map(reads).unwrap_or(false),
+        };
+    }
+    recap.starts_with("Read ") || recap.starts_with("Showed ") || recap.starts_with("Waited for ")
+}
+
 /// A tool name that reads rather than writes.
 ///
 /// The name of somebody else's tool is a claim and not evidence -- which is why
@@ -122,8 +139,41 @@ pub fn acted(steps: &[Step]) -> bool {
 /// The subagent has done this since it was written: an answer from a run that
 /// consulted nothing is relabelled as recollection. This is the same rule for
 /// the main agent, with the extra condition that it did not act either.
-pub fn from_memory(say: &str, steps: &[Step]) -> bool {
-    !looked(steps) && !acted(steps) && !hedged(say)
+pub fn from_memory(say: &str, steps: &[Step], elsewhere: &[String]) -> bool {
+    // `elsewhere` is what the same task already did before this run existed or
+    // one level below it: the foreground turn that handed over, and any
+    // subagent's steps. Both arrive as recaps.
+    //
+    // Without them this marked a true report as recollection. A foreground turn
+    // ran a subagent that took thirteen steps, researched, wrote two files and
+    // read one back; the agent started with nothing left to do, said what had
+    // happened, and was told it was speaking from memory. The work was done and
+    // checked -- just not by the object holding the pen.
+    let looked_here = looked(steps) || elsewhere.iter().any(|r| recap_reads(r));
+    let acted_here = acted(steps) || elsewhere.iter().any(|r| recap_acts(r));
+    !looked_here && !acted_here && !hedged(say)
+}
+
+/// Does this recap describe a step that changed something?
+///
+/// The counterpart to [`recap_reads`], and the same format. Clicking and typing
+/// count: they teach the run nothing, and they are still the evidence for "I
+/// opened it".
+fn recap_acts(recap: &str) -> bool {
+    let recap = recap.trim().trim_start_matches("task · ").trim_start();
+    [
+        "Wrote ", "Edited ", "Clicked", "DoubleClick", "Typed ", "Pressed ", "Opened ",
+        "Launched ", "Started ", "Handed over", "Noted about ",
+    ]
+    .iter()
+    .any(|verb| recap.starts_with(verb))
+        // A tool call that is not a read is something happening.
+        || recap
+            .strip_prefix("Ran ")
+            .filter(|rest| !rest.starts_with('`'))
+            .and_then(|rest| rest.split_whitespace().next())
+            .map(|tool| !reads(tool))
+            .unwrap_or(false)
 }
 
 /// Is this already an admission?
@@ -161,8 +211,8 @@ fn hedged(say: &str) -> bool {
 /// deliberately so: a miss leaves the run exactly as it was, and the alternative
 /// -- tracking which path a tool call resolved to -- is guessing at somebody
 /// else's server.
-pub fn unread(made: &[String], steps: &[Step]) -> Vec<String> {
-    let looked_at: Vec<String> = steps
+pub fn unread(made: &[String], steps: &[Step], elsewhere: &[String]) -> Vec<String> {
+    let mut looked_at: Vec<String> = steps
         .iter()
         .filter_map(|s| match s {
             Step::Read { path, .. } | Step::Show { path, .. } => Some(path.clone()),
@@ -171,6 +221,16 @@ pub fn unread(made: &[String], steps: &[Step]) -> Vec<String> {
             _ => None,
         })
         .collect();
+
+    // What a subagent did counts. It is the same run doing the same work one
+    // level down, and its steps arrive as recaps rather than as `Step`s.
+    //
+    // Without this the check accused a run of not reading a document its own
+    // subagent had read -- which is worse than missing one. A miss leaves a
+    // sentence alone; a false correction contradicts something true, and then
+    // the model's honest account and Nudge's appended fact disagree in the same
+    // message with no way for a reader to tell which is right.
+    looked_at.extend(elsewhere.iter().filter(|r| recap_reads(r)).cloned());
 
     made.iter()
         .filter(|path| {
@@ -347,6 +407,36 @@ mod tests {
         assert!(unchecked(&[]).is_empty());
     }
 
+    /// What the same task already did counts, even from before this run.
+    ///
+    /// The bug: a foreground turn ran a subagent that took thirteen steps,
+    /// researched, wrote two files and read one back. The agent started with
+    /// nothing left to do, reported what had happened, and was told it was
+    /// speaking from memory. The work was done -- just not by the object
+    /// holding the pen.
+    #[test]
+    fn work_the_task_already_did_is_not_forgotten_at_a_boundary() {
+        let carried = vec![
+            "Read frameworks.md from line 1".to_string(),
+            "Wrote recommendation.md (546 bytes)".to_string(),
+        ];
+        assert!(!from_memory(
+            "I researched them and wrote the comparison.",
+            &[],
+            &carried
+        ));
+    }
+
+    /// But carried talk is not carried work.
+    #[test]
+    fn being_handed_a_conversation_is_not_being_handed_evidence() {
+        let carried = vec![
+            "Said: I can look that up for you".to_string(),
+            "Plan: 0 of 3 done".to_string(),
+        ];
+        assert!(from_memory("The population is 1.6 million.", &[], &carried));
+    }
+
     /// A document nobody read back is a draft described from memory.
     #[test]
     fn a_file_that_was_written_and_never_looked_at_is_named() {
@@ -358,7 +448,40 @@ mod tests {
             say: String::new(),
         }];
         // Read by its bare name, which is how a run refers to its own workspace.
-        assert_eq!(unread(&made, &steps), vec!["/w/report.md".to_string()]);
+        assert_eq!(unread(&made, &steps, &[]), vec!["/w/report.md".to_string()]);
+    }
+
+    /// What a subagent read counts. It is the same run, one level down.
+    ///
+    /// The bug this is for: a run was told it had not read back a document its
+    /// own subagent had read, so its honest sentence and Nudge's appended fact
+    /// disagreed in the same message.
+    #[test]
+    fn what_a_subagent_read_counts_as_the_run_having_read_it() {
+        let made = vec!["/w/frameworks.md".to_string()];
+        let from_below = vec!["task · Read frameworks.md from line 1".to_string()];
+        assert!(unread(&made, &[], &from_below).is_empty());
+    }
+
+    /// But a subagent *writing* it is still not reading it -- and the recap for
+    /// a tool call starts with the same word as the one for a command.
+    #[test]
+    fn a_subagent_writing_it_does_not_count_as_reading_it() {
+        let made = vec!["/w/frameworks.md".to_string()];
+        for recap in [
+            "task · Ran files/write_file with {\"path\":\"frameworks.md\"}",
+            "task · Wrote frameworks.md (2531 bytes)",
+            "task · Edited frameworks.md, replacing \"x\"",
+        ] {
+            assert_eq!(
+                unread(&made, &[], &[recap.to_string()]).len(),
+                1,
+                "counted a write as a read: {recap}"
+            );
+        }
+        // And one that genuinely reads, through a tool, does count.
+        let read = "task · Ran files/read_file with {\"path\":\"frameworks.md\"}";
+        assert!(unread(&made, &[], &[read.to_string()]).is_empty());
     }
 
     /// A command that reads it counts, and so does a tool that does.
@@ -377,7 +500,7 @@ mod tests {
             },
         ] {
             assert!(
-                unread(&made, std::slice::from_ref(&step)).is_empty(),
+                unread(&made, std::slice::from_ref(&step), &[]).is_empty(),
                 "{step:?}"
             );
         }
@@ -392,18 +515,18 @@ mod tests {
             content: "x".into(),
             say: String::new(),
         }];
-        assert_eq!(unread(&made, &wrote_again).len(), 1);
+        assert_eq!(unread(&made, &wrote_again, &[]).len(), 1);
     }
 
     #[test]
     fn a_run_that_made_nothing_owes_nothing() {
-        assert!(unread(&[], &wrote()).is_empty());
+        assert!(unread(&[], &wrote(), &[]).is_empty());
     }
 
     /// A run that neither looked nor acted is talking from memory.
     #[test]
     fn a_run_that_did_nothing_at_all_is_recollection() {
-        assert!(from_memory("The capital of France is Paris.", &[]));
+        assert!(from_memory("The capital of France is Paris.", &[], &[]));
     }
 
     /// But doing something is its own evidence. Clicking a button teaches the
@@ -415,14 +538,14 @@ mod tests {
             submit: true,
             say: String::new(),
         }];
-        assert!(!from_memory("I typed it in for you.", &clicked));
-        assert!(!from_memory("I wrote the file.", &wrote()));
+        assert!(!from_memory("I typed it in for you.", &clicked, &[]));
+        assert!(!from_memory("I wrote the file.", &wrote(), &[]));
     }
 
     /// And a run that looked is grounded, obviously.
     #[test]
     fn a_run_that_looked_is_grounded() {
-        assert!(!from_memory("It says 313 lines.", &read_back()));
+        assert!(!from_memory("It says 313 lines.", &read_back(), &[]));
     }
 
     /// A sentence that already admits it needs nothing added.
@@ -433,7 +556,7 @@ mod tests {
             "From memory, the crate is maintained by epage.",
             "I'm not sure, but it looks like 40.",
         ] {
-            assert!(!from_memory(said, &[]), "{said:?}");
+            assert!(!from_memory(said, &[], &[]), "{said:?}");
         }
     }
 
