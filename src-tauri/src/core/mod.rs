@@ -11,6 +11,8 @@
 //! - [`voice`] -- microphone, transcription, speech
 //! - [`tools`] -- commands, files and the web
 //! - [`laps`] -- where a turn's time went
+pub mod answering;
+pub mod asked;
 pub mod audit;
 pub mod claimed;
 pub mod compact;
