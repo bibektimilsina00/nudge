@@ -301,12 +301,18 @@ Agents record files they made and the card offers them. What is missing is the
 shape of a *deliverable*: the tagline promises "a polished document delivered"
 and "fixes ready to go", which is a pull request, not a file path.
 
-### E2. Attachments in — *not started*
+### E2. Attachments in — *PDFs done*
 
 `attachments.py` + `pdf_support.py` build content parts from images, PDFs and
-text files. Nudge takes a screenshot and a sentence. You cannot hand it a PDF.
+text files.
 
-**Done when** "summarise this contract" works on a file you point at.
+**PDFs work.** `read` takes one whole, through PDFKit rather than a parser or a
+Homebrew tool that is not on anybody else's Mac. A scan says so rather than
+coming back as an empty document.
+
+**Images do not.** The provider takes a screenshot, so handing it an arbitrary
+image is a small extension of a path that already exists — worth doing next time
+this comes up.
 
 ### E3. Code review with fixes ready to go — *not started*
 
