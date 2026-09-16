@@ -223,16 +223,28 @@ can create. The CSR is generated and waiting in `.signing/`. See
 Until then `make share` packs a build with instructions for clearing quarantine,
 which is fine between people who know each other and is not shipping.
 
-### 3.2 Auto-update
+### 3.2 Auto-update — *done, bar one click*
 
-Every person who downloads today is pinned to that build for ever. OpenWorker
-ships the Tauri updater plugin with a minisign key and two endpoints — their own
-CDN first, the GitHub release second — and a script that writes `latest.json`.
+Shipped before the certificate deliberately: there is no way to update somebody
+into having an updater, so whoever downloads the first build without one is
+pinned to it for good.
 
-The download API already exists and already knows the current version, so it is
-most of the endpoint already.
+The check is quiet, automatic and twenty seconds after launch; the install is a
+button that only appears when there is something to install. Nothing replaces
+its own binary while somebody is mid-sentence. Both ends compare versions — the
+server so it cannot offer a downgrade to everybody at once, the app so a wrong
+answer is still refused by the thing installing it. Every answer that is not a
+genuine newer build is a 204, which is the updater's contract rather than a
+choice.
 
-**Done when** a running app notices a newer build and can take it.
+Two artifacts per release: the `.dmg` somebody downloads once, and the
+`.app.tar.gz` plus minisign signature the updater installs — the one signature
+Apple's notarisation does not cover. A test holds the shipped public key against
+a signature from the real signing key, because a rotation that updates one and
+not the other breaks installs silently and strands everybody on that version.
+
+**Verified**: a 0.1.0 build pointed at a locally served 0.2.0 manifest noticed
+it. **Not verified**: the install itself, which needs a click on a screen.
 
 ### 3.3 Discovery
 
