@@ -536,6 +536,22 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             true => settled,
             false => format!("{settled}{}", crate::core::claimed::unchecked(&unread)),
         };
+        // Asked to find something out, and never looked outside.
+        //
+        // Told to research three languages and find real figures, a run wrote
+        // nine kilobytes in one step having searched and fetched nothing --
+        // including a page of numbers presented as fact. Every other guard
+        // passed it, because it had written a file and run a command.
+        let settled = match matches!(step, crate::core::provider::Step::Done { .. })
+            && crate::core::claimed::unresearched(&goal_said, &taken, &elsewhere)
+        {
+            false => settled,
+            true => {
+                eprintln!("agent#{id} turn {turn}: asked to look things up and never did");
+                format!("{settled}{}", crate::core::claimed::only_remembered())
+            }
+        };
+
         // And the question every other check here misses: are the files it says
         // it made actually there?
         //

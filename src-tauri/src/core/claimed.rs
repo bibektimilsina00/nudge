@@ -348,6 +348,59 @@ fn distinctive(text: &str) -> Vec<String> {
     out
 }
 
+/// Asked to find something out, and never looked outside.
+///
+/// A run was told to research how three languages manage memory, find real
+/// figures, and write a detailed report. It searched nothing, fetched nothing,
+/// and wrote nine kilobytes in one step -- including a section headed *"Runtime
+/// Overhead & Figures"* full of numbers presented as fact. Every other guard
+/// here passed it: it had written a file and run a command, so it had "acted",
+/// and `open report.html` counted as a step that brought something back.
+///
+/// The mismatch is the thing worth naming. Not "did you do anything" but "you
+/// were asked to find out about the world and never asked the world anything".
+///
+/// Only `search` and `fetch` count. Reading a local file is looking something
+/// up, but it is not what "find the current version" or "find real figures"
+/// means, and those are the asks that produce a confident page of invented
+/// numbers.
+pub fn unresearched(goal: &str, steps: &[Step], elsewhere: &[String]) -> bool {
+    const ASKED: &[&str] = &[
+        "research",
+        "find out",
+        "look up",
+        "look it up",
+        "search",
+        "investigate",
+        "current version",
+        "latest",
+        "who maintains",
+        "real figures",
+        "sources",
+        "cite",
+        "benchmark",
+    ];
+    let wanted = goal.to_lowercase();
+    if !ASKED.iter().any(|w| wanted.contains(w)) {
+        return false;
+    }
+
+    let here = steps
+        .iter()
+        .any(|s| matches!(s, Step::Search { .. } | Step::Fetch { .. }));
+    let below = elsewhere.iter().any(|r| {
+        let r = r.trim().trim_start_matches("task · ").trim_start();
+        r.starts_with("Searched for ") || r.starts_with("Read http")
+    });
+    !here && !below
+}
+
+/// The sentence to add when nothing was looked up.
+pub fn only_remembered() -> String {
+    " I did not search or fetch anything for this, so the specifics are from memory      rather than from a source."
+        .to_string()
+}
+
 /// Files a report names that are not there.
 ///
 /// The check every other one in this module misses. A run researched nothing,
@@ -548,6 +601,67 @@ mod tests {
             "a path is not what somebody wants: {said}"
         );
         assert!(unchecked(&[]).is_empty());
+    }
+
+    /// Asked to research, and never looked outside.
+    ///
+    /// The real one: told to research three languages, find real figures and
+    /// write a detailed report, a run wrote nine kilobytes in one step having
+    /// searched and fetched nothing -- including a section of numbers presented
+    /// as fact.
+    #[test]
+    fn being_asked_to_find_out_and_never_looking_is_named() {
+        let goal = "do deep research on how Rust, Swift and Go manage memory and find \
+                    real figures where you can";
+        let wrote = vec![Step::Write {
+            path: "report.html".into(),
+            content: "x".into(),
+            say: String::new(),
+        }];
+        assert!(unresearched(goal, &wrote, &[]));
+
+        // A search anywhere -- here or one level down -- settles it.
+        let searched = vec![Step::Search {
+            query: "rust ownership overhead".into(),
+            say: String::new(),
+        }];
+        assert!(!unresearched(goal, &searched, &[]));
+        assert!(!unresearched(
+            goal,
+            &wrote,
+            &["task · Searched for \"go gc pauses\"".into()]
+        ));
+        assert!(!unresearched(
+            goal,
+            &wrote,
+            &["task · Read https://doc.rust-lang.org/x".into()]
+        ));
+    }
+
+    /// A goal that asked nothing of the world is not accused of ignoring it.
+    #[test]
+    fn a_local_job_is_not_expected_to_search() {
+        for goal in [
+            "write a summary of these notes into summary.md",
+            "rename every file in the folder",
+            "open safari and go to the second tab",
+        ] {
+            assert!(!unresearched(goal, &[], &[]), "{goal}");
+        }
+    }
+
+    /// Running a command is not asking the world anything.
+    ///
+    /// This is what let the real one through: `open report.html` counted as a
+    /// step that brought something back.
+    #[test]
+    fn opening_a_file_is_not_research() {
+        let goal = "research the current version of axum";
+        let ran = vec![Step::Run {
+            command: "open report.html".into(),
+            say: String::new(),
+        }];
+        assert!(unresearched(goal, &ran, &[]));
     }
 
     /// The real one, verbatim. A run reported both files and made neither.

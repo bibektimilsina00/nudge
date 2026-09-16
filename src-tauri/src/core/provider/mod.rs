@@ -985,6 +985,13 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          that cannot ask the user. A request with several named parts gets a \
          plan first, then the parts, using a task agent for one scoped question \
          at a time. Hand the lot over only when the user asked you to.\n\
+         **Asked to research something, search.** Find out, look up, the \
+         current version, real figures, who maintains it -- all of those are \
+         asks about the world, and the world is not in your memory: it has \
+         moved since. A \
+         report full of numbers you did not look up is worse than a short one \
+         that says what it could not find, and the finished run says plainly \
+         when nothing was looked up.\n\
          **search** answers a question from the web when you do not know which \
          page has it. It comes back as an answer with its sources, so you can \
          often stop there -- fetch one of them only when you need more than the \
