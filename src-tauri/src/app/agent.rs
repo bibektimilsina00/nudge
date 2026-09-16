@@ -376,44 +376,67 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
 
         taken.push(step.clone());
 
-        // Finishing with work still on its own list.
+        // Finishing with work still owed: items on its own plan, or a document
+        // it wrote and never looked at again.
         //
-        // `Plan` existed, the card rendered it, and nothing ever read it back --
-        // so a task with four named parts that did one reported success. Handed
-        // back once, because the commonest reason is losing track rather than
-        // giving up, and a reminder costs one turn. If it says it is done again,
-        // it is done: what changes is that the sentence names what was skipped.
+        // Both were invisible. `Plan` existed and nothing read it back, so a
+        // task with four named parts that did one reported success; and writing
+        // a file was treated as evidence about the file, which it is not --
+        // "3,240 bytes and new" does not say whether it contains what was meant.
+        //
+        // One handback, covering whichever applies, because the commonest reason
+        // is losing track rather than giving up and a reminder costs a turn. If
+        // it says it is done again, it is done -- a loop between "are you sure"
+        // and "yes" is worse than a task that stopped early and said so. What
+        // changes is that its own report names what it left.
         let mut skipped: Vec<String> = Vec::new();
+        let mut unread: Vec<String> = Vec::new();
         if matches!(step, crate::core::provider::Step::Done { .. }) {
-            let plan: Vec<(String, bool)> = app
+            let mine = app
                 .state::<Agents>()
                 .list()
                 .into_iter()
-                .find(|a| a.id == id)
-                .map(|a| {
-                    a.plan
-                        .iter()
-                        .map(|t| {
-                            (
-                                t.text.clone(),
-                                matches!(t.status, crate::core::run::agent::Doing::Done),
-                            )
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            skipped = crate::core::claimed::unfinished(&plan);
+                .find(|a| a.id == id);
+            if let Some(mine) = mine {
+                let plan: Vec<(String, bool)> = mine
+                    .plan
+                    .iter()
+                    .map(|t| {
+                        (
+                            t.text.clone(),
+                            matches!(t.status, crate::core::run::agent::Doing::Done),
+                        )
+                    })
+                    .collect();
+                skipped = crate::core::claimed::unfinished(&plan);
 
-            if !skipped.is_empty() && !reminded {
+                let made: Vec<String> = mine.made.iter().map(|m| m.path.clone()).collect();
+                unread = crate::core::claimed::unread(&made, &taken);
+            }
+
+            if !(skipped.is_empty() && unread.is_empty()) && !reminded {
                 reminded = true;
+                let mut owed = String::new();
+                if !skipped.is_empty() {
+                    owed.push_str(&format!(
+                        "These are still on your plan and not done: {}. ",
+                        skipped.join("; ")
+                    ));
+                }
+                if !unread.is_empty() {
+                    owed.push_str(&format!(
+                        "You wrote {} and never read it back -- writing a file is not \
+                         evidence it says what you meant. ",
+                        unread.join(", ")
+                    ));
+                }
                 eprintln!(
-                    "agent#{id} turn {turn}: finished with {} of its own items undone",
-                    skipped.len()
+                    "agent#{id} turn {turn}: finished owing {} plan items and {} unread files",
+                    skipped.len(),
+                    unread.len()
                 );
                 app.state::<Nudge>().note(format!(
-                    "You set yourself a plan and these are not done yet: {}. Either \
-                     do them, or say you are finishing without them and why.",
-                    skipped.join("; ")
+                    "{owed}Either finish it, or say what you are leaving and why."
                 ));
                 continue;
             }
@@ -436,12 +459,16 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             true => crate::core::provider::recalled(settled),
             false => settled,
         };
+        // Named rather than counted: "two items remain" tells nobody what was
+        // skipped, and the value is in somebody noticing that the part they
+        // cared about is on the list.
         let settled = match skipped.is_empty() {
             true => settled,
-            // Named rather than counted: "two items remain" tells nobody what
-            // was skipped, and the value is in somebody noticing that the part
-            // they cared about is on the list.
             false => format!("{settled}{}", crate::core::claimed::stopped_early(&skipped)),
+        };
+        let settled = match unread.is_empty() {
+            true => settled,
+            false => format!("{settled}{}", crate::core::claimed::unchecked(&unread)),
         };
         let step = match settled == step.say() {
             true => step,

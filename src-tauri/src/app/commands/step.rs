@@ -426,6 +426,21 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         let said = app.state::<Nudge>().run_tool(tool, args).await?;
         eprintln!("mcp {tool} -> {} chars", said.len());
 
+        // Again, afterwards. `named` only reports files that exist, and it ran
+        // before the tool did -- so a file the tool *created* was invisible to
+        // every one of these: the card's list of what a run made, the judge's
+        // knowledge of which files are its own, and the check that a document
+        // was read back. A run that wrote three new notes recorded making none.
+        let touched: Vec<std::path::PathBuf> = {
+            let mut all = touched;
+            for now in crate::core::tools::files::named(&workspace, args) {
+                if !all.contains(&now) {
+                    all.push(now);
+                }
+            }
+            all
+        };
+
         // A tool server is a second way to write a file, and it used to be the
         // one with no record: Nudge's own writes are gated, diffed and logged,
         // and a call to `files/write_file` was none of those. So the same

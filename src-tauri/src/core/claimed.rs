@@ -150,6 +150,40 @@ fn hedged(say: &str) -> bool {
     .any(|h| s.contains(h))
 }
 
+/// Files this run made and never looked at again.
+///
+/// Writing is not checking, and that is the whole of it. `git` says what
+/// changed, which is worth having and is not the same question -- "the file is
+/// 3,240 bytes and new" does not say whether it contains what was meant. A
+/// document nobody read back is a draft the model is describing from memory.
+///
+/// Matched on the file's own name appearing in a step that reads. Crude and
+/// deliberately so: a miss leaves the run exactly as it was, and the alternative
+/// -- tracking which path a tool call resolved to -- is guessing at somebody
+/// else's server.
+pub fn unread(made: &[String], steps: &[Step]) -> Vec<String> {
+    let looked_at: Vec<String> = steps
+        .iter()
+        .filter_map(|s| match s {
+            Step::Read { path, .. } | Step::Show { path, .. } => Some(path.clone()),
+            Step::Run { command, .. } => Some(command.clone()),
+            Step::Mcp { tool, args, .. } if reads(tool) => Some(args.to_string()),
+            _ => None,
+        })
+        .collect();
+
+    made.iter()
+        .filter(|path| {
+            let name = std::path::Path::new(path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| (*path).clone());
+            !looked_at.iter().any(|seen| seen.contains(&name))
+        })
+        .cloned()
+        .collect()
+}
+
 /// What a run set itself and has not done.
 ///
 /// `Step::Plan` exists, the card renders it, and nothing ever looked at it
@@ -164,6 +198,26 @@ pub fn unfinished(plan: &[(String, bool)]) -> Vec<String> {
         .filter(|(_, done)| !done)
         .map(|(text, _)| text.clone())
         .collect()
+}
+
+/// The sentence to add when a run finishes without reading what it wrote.
+///
+/// Named by their last component: somebody reading this wants to know which
+/// document, not where it lives.
+pub fn unchecked(unread: &[String]) -> String {
+    if unread.is_empty() {
+        return String::new();
+    }
+    let named: Vec<String> = unread
+        .iter()
+        .map(|p| {
+            std::path::Path::new(p)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| p.clone())
+        })
+        .collect();
+    format!(" I did not read back what I wrote to {}.", named.join(", "))
 }
 
 /// The sentence to add when a run finishes with work still on its own list.
@@ -279,6 +333,71 @@ mod tests {
         assert!(looked(&tool("notes/search")));
         assert!(!looked(&tool("files/write_file")));
         assert!(!looked(&tool("mail/send_message")));
+    }
+
+    /// The sentence names the file, not its path.
+    #[test]
+    fn what_was_not_read_back_is_named_by_its_own_name() {
+        let said = unchecked(&["/Users/x/Work/report.md".to_string()]);
+        assert!(said.contains("report.md"), "{said}");
+        assert!(
+            !said.contains("/Users/x"),
+            "a path is not what somebody wants: {said}"
+        );
+        assert!(unchecked(&[]).is_empty());
+    }
+
+    /// A document nobody read back is a draft described from memory.
+    #[test]
+    fn a_file_that_was_written_and_never_looked_at_is_named() {
+        let made = vec!["/w/report.md".to_string(), "/w/notes.txt".to_string()];
+        let steps = vec![Step::Read {
+            path: "notes.txt".into(),
+            from: 1,
+            lines: 200,
+            say: String::new(),
+        }];
+        // Read by its bare name, which is how a run refers to its own workspace.
+        assert_eq!(unread(&made, &steps), vec!["/w/report.md".to_string()]);
+    }
+
+    /// A command that reads it counts, and so does a tool that does.
+    #[test]
+    fn looking_at_it_any_way_at_all_counts() {
+        let made = vec!["/w/report.md".to_string()];
+        for step in [
+            Step::Run {
+                command: "wc -l report.md".into(),
+                say: String::new(),
+            },
+            Step::Mcp {
+                tool: "files/read_file".into(),
+                args: serde_json::json!({ "path": "report.md" }),
+                say: String::new(),
+            },
+        ] {
+            assert!(
+                unread(&made, std::slice::from_ref(&step)).is_empty(),
+                "{step:?}"
+            );
+        }
+    }
+
+    /// Writing it again is not reading it.
+    #[test]
+    fn writing_it_twice_is_still_not_checking_it() {
+        let made = vec!["/w/report.md".to_string()];
+        let wrote_again = vec![Step::Write {
+            path: "report.md".into(),
+            content: "x".into(),
+            say: String::new(),
+        }];
+        assert_eq!(unread(&made, &wrote_again).len(), 1);
+    }
+
+    #[test]
+    fn a_run_that_made_nothing_owes_nothing() {
+        assert!(unread(&[], &wrote()).is_empty());
     }
 
     /// A run that neither looked nor acted is talking from memory.
