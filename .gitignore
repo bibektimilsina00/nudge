@@ -27,3 +27,4 @@ server/releases/
 server/.env
 web/.next/
 server/.pytest_cache/
+OpenExecutive/
