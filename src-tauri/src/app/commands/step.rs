@@ -107,7 +107,26 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
         // so "opening WhatsApp Web" got announced and then contradicted by "who
         // should I message?".
         if !handing_over {
-            speak(&app, step.say());
+            // Are the files it says it made actually there?
+            //
+            // The agent loop asks this, and the foreground is where more of these
+            // land: asked to write a file and then say it had, it said so with
+            // no file anywhere. The foreground reports straight to the person,
+            // out loud, so a claim nobody checked is worse here than in a run
+            // they can scroll back through.
+            let gone = crate::core::claimed::missing(step.say(), &app.state::<Nudge>().workspace());
+            let said = match gone.is_empty() {
+                true => step.say().to_string(),
+                false => {
+                    eprintln!("claimed {gone:?}, which do not exist");
+                    format!(
+                        "{}{}",
+                        step.say(),
+                        crate::core::claimed::nothing_there(&gone)
+                    )
+                }
+            };
+            speak(&app, &said);
         }
         if !handing_over {
             // Judged here as well as in an agent run.

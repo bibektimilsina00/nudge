@@ -499,6 +499,17 @@ impl Step {
             // not. The most expensive step in the program was the one nothing
             // was watching for.
             (Step::Delegate { task: a, .. }, Step::Delegate { task: b, .. }) => a == b,
+            // Two plans in a row, whatever they say.
+            //
+            // Not compared by content, because a plan is not an action -- it is
+            // a note about what the actions will be. Writing one twice with no
+            // work between them is no progress by construction, and the model
+            // rewords it every time, so comparing the lists would catch nothing.
+            //
+            // Seen: told that handing the whole job over was not doing it, a run
+            // wrote a five-item plan, then wrote it again, then again -- each
+            // slightly reworded, none of them followed by a single step of work.
+            (Step::Plan { .. }, Step::Plan { .. }) => true,
             (Step::Task { task: a, .. }, Step::Task { task: b, .. }) => a == b,
             // Same tool, same arguments. Different arguments is progress -- a
             // run reading five files calls one tool five times and is working.
@@ -968,6 +979,12 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          question and everything it needs to answer it; it cannot see your \
          screen, ask the user anything, or click. Not for a single command or \
          one page: do those yourself.\n\
+         **It is for a question, not for the job.** Handing over the whole \
+         request is passing it on rather than doing it -- nothing is visible \
+         while it happens, and every judgement call in it goes to the one thing \
+         that cannot ask the user. A request with several named parts gets a \
+         plan first, then the parts, using a task agent for one scoped question \
+         at a time. Hand the lot over only when the user asked you to.\n\
          **search** answers a question from the web when you do not know which \
          page has it. It comes back as an answer with its sources, so you can \
          often stop there -- fetch one of them only when you need more than the \
@@ -1598,6 +1615,25 @@ mod tests {
         };
         assert!(ask("find the version").same_action(&ask("find the version")));
         assert!(!ask("find the version").same_action(&ask("find the author")));
+    }
+
+    /// Planning twice in a row is no progress, however it is worded.
+    #[test]
+    fn two_plans_in_a_row_are_a_repeat() {
+        let plan = |first: &str| Step::Plan {
+            todos: vec![(first.into(), "active".into())],
+            say: String::new(),
+        };
+        // Different words, different lists, same absence of work.
+        assert!(plan("research the frameworks").same_action(&plan("look into the frameworks")));
+
+        // But a plan after doing something is an update, which is the point of
+        // keeping one.
+        let did = Step::Run {
+            command: "ls".into(),
+            say: String::new(),
+        };
+        assert!(!did.same_action(&plan("research the frameworks")));
     }
 
     /// Same tool and same arguments is a repeat; different arguments is work.

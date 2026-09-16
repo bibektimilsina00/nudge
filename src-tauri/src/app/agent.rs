@@ -254,6 +254,8 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
     // Kept, because what the task already did before this run existed is
     // evidence about it -- see `claimed::from_memory`.
     let carried_in = carried.clone();
+    // Kept for comparing a hand-off against, since `goal` moves into the session.
+    let goal_said = goal.clone();
     app.state::<Nudge>().begin_agent(goal, carried);
     let mut last: Option<crate::core::provider::Step> = None;
     // Every step this run performed, so a claim at the end can be held against
@@ -377,6 +379,48 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             }
         };
 
+        // Passing the request on is not doing the work.
+        //
+        // A run given five named parts answered by handing the request, near
+        // enough verbatim, to a subagent -- and then reported what came back.
+        // Nothing was decomposed, nothing was visible while it happened, and the
+        // plan guard never engaged because there was no plan. The subagent
+        // cannot ask the user anything either, so every judgement call in a
+        // multi-part job went to the one thing that could not check.
+        //
+        // Asked once, not refused: "get Claude to do X" is an instruction to
+        // hand X over, and only the person who wrote the goal knows which this
+        // is. Reuses the same one-reminder budget as the plan and the unread
+        // files, so a run is interrupted at most once however many of these
+        // apply.
+        if !reminded {
+            let whole = match &step {
+                crate::core::provider::Step::Task { task, .. }
+                | crate::core::provider::Step::Delegate { task, .. } => {
+                    crate::core::claimed::handed_over_wholesale(&goal_said, task)
+                }
+                _ => false,
+            };
+            if whole {
+                reminded = true;
+                eprintln!("agent#{id} turn {turn}: handed the whole goal over -- asking first");
+                // Worded as the next *action*, not as "make a plan". Told to
+                // plan, a run wrote a five-item plan, then wrote it again, then
+                // again -- each reworded, none followed by a step of work. This
+                // note stays in the history and is read every turn, so it has to
+                // point at doing something rather than at preparing to.
+                app.state::<Nudge>().note(
+                    "That is the whole job passed on rather than done. Unless the user \
+                     asked for it to be handed to another agent, do the first part \
+                     yourself now -- and use a task agent for one scoped question at a \
+                     time, never for the whole request. If handing it all over really is \
+                     right here, say so and do it."
+                        .to_string(),
+                );
+                continue;
+            }
+        }
+
         taken.push(step.clone());
 
         // Finishing with work still owed: items on its own plan, or a document
@@ -489,6 +533,28 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         let settled = match unread.is_empty() {
             true => settled,
             false => format!("{settled}{}", crate::core::claimed::unchecked(&unread)),
+        };
+        // And the question every other check here misses: are the files it says
+        // it made actually there?
+        //
+        // A run researched nothing, wrote nothing, listed an empty directory and
+        // reported creating two documents. Every guard passed it -- one saw a
+        // tool call and called that acting, another saw a directory listing and
+        // called that looking. They all ask *did you do anything*. This asks the
+        // thing a person would.
+        let settled = match matches!(step, crate::core::provider::Step::Done { .. }) {
+            false => settled,
+            true => {
+                let gone =
+                    crate::core::claimed::missing(&settled, &app.state::<Nudge>().workspace());
+                match gone.is_empty() {
+                    true => settled,
+                    false => {
+                        eprintln!("agent#{id} turn {turn}: claimed {gone:?}, which do not exist");
+                        format!("{settled}{}", crate::core::claimed::nothing_there(&gone))
+                    }
+                }
+            }
         };
         let step = match settled == step.say() {
             true => step,

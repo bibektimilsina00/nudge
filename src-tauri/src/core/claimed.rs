@@ -298,6 +298,138 @@ pub fn stopped_early(left: &[String]) -> String {
     format!(" I stopped with this still on my own list: {named}.")
 }
 
+/// Is this hand-off just the whole job again?
+///
+/// A run given a request with five named parts answered it by passing the
+/// request, near enough verbatim, to a subagent -- and then reported what came
+/// back. Nothing was decomposed, nothing was visible while it happened, and the
+/// plan guard never engaged because there was no plan.
+///
+/// Sometimes that is right: "get Claude to do X" is an instruction to hand X
+/// over. So this only recognises the shape; what to do about it is the caller's,
+/// and the answer is to ask once rather than to refuse.
+///
+/// Word overlap, because the model rewords. It almost never passes the goal
+/// character for character -- it tidies, expands the pronouns, adds "please" --
+/// and a comparison that wanted an exact match would catch nothing.
+pub fn handed_over_wholesale(goal: &str, task: &str) -> bool {
+    let mine = distinctive(goal);
+    if mine.len() < 4 {
+        // Too short to tell apart. "check the build" handed to a subagent is a
+        // scoped question, which is what a subagent is for.
+        return false;
+    }
+    let theirs = distinctive(task);
+    let shared = mine.iter().filter(|w| theirs.contains(*w)).count();
+    shared * 10 >= mine.len() * 7
+}
+
+/// The words worth comparing: long enough to mean something, lowercased.
+fn distinctive(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = text
+        .to_lowercase()
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| w.len() > 3)
+        .map(str::to_string)
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
+/// Files a report names that are not there.
+///
+/// The check every other one in this module misses. A run researched nothing,
+/// wrote nothing, listed an empty directory, and reported: *"created the
+/// comparison in frameworks.md, verified its contents, and added the
+/// recommendation to recommendation.md"*. Neither file existed.
+///
+/// Every guard here passed it. `from_memory` saw a tool call and called that
+/// acting; `settled` saw a directory listing and called that looking. They all
+/// ask *did you do anything*, and none of them asked the one question a person
+/// would: **is the file you say you made actually there?**
+///
+/// That question is free. The run names the files itself, and the filesystem
+/// answers.
+pub fn missing(say: &str, workspace: &std::path::Path) -> Vec<String> {
+    // Only when something was claimed to have been made. This is a check on
+    // *artifacts*, and a sentence that claims none has none to be missing --
+    // which is also what keeps "I fetched it from docs.rs" out of it, a word
+    // that is a hostname and a Rust filename and cannot be told apart by
+    // looking at it.
+    const MADE: &[&str] = &[
+        "created",
+        "wrote",
+        "written",
+        "writing",
+        "saved",
+        "added",
+        "generated",
+        "produced",
+        "put together",
+        "compiled the",
+        "made",
+    ];
+    let lowered = say.to_lowercase();
+    if !MADE.iter().any(|v| lowered.contains(v)) {
+        return Vec::new();
+    }
+
+    let mut gone: Vec<String> = Vec::new();
+    for word in
+        say.split(|c: char| c.is_whitespace() || matches!(c, ',' | ';' | '(' | ')' | '"' | '\''))
+    {
+        let name = word.trim_end_matches(['.', ':', '!', '?']);
+        if !looks_like_a_file(name) || gone.iter().any(|g| g == name) {
+            continue;
+        }
+        // Somewhere it read, not something it made. A short list, because these
+        // are the ones that genuinely collide -- `docs.rs` is a hostname and a
+        // Rust filename and nothing about the word says which.
+        const ELSEWHERE: &[&str] = &["docs.rs", "crates.io", "lib.rs", "play.rust-lang.org"];
+        if ELSEWHERE.contains(&name.to_lowercase().as_str()) {
+            continue;
+        }
+        // Relative to the workspace, which is how a run refers to its own
+        // files, and absolute for the rare time it spells one out.
+        let here = std::path::Path::new(name);
+        let there = workspace.join(name);
+        if !here.is_file() && !there.is_file() {
+            gone.push(name.to_string());
+        }
+    }
+    gone
+}
+
+/// Does this word name a file?
+///
+/// A short allow-list of extensions rather than "contains a dot", which would
+/// catch every version number and hostname in a sentence. Only the kinds a run
+/// produces and would claim to have produced.
+fn looks_like_a_file(word: &str) -> bool {
+    const KINDS: &[&str] = &[
+        ".md", ".txt", ".json", ".toml", ".yaml", ".yml", ".csv", ".html", ".rs", ".py", ".js",
+        ".ts", ".sh", ".pdf", ".log",
+    ];
+    let lower = word.to_lowercase();
+    KINDS.iter().any(|k| lower.ends_with(k)) && word.len() > 3
+}
+
+/// The sentence to add when a report names files that are not there.
+pub fn nothing_there(gone: &[String]) -> String {
+    match gone.len() {
+        0 => String::new(),
+        1 => format!(
+            " But {} does not exist, so that part did not happen.",
+            gone[0]
+        ),
+        _ => format!(
+            " But none of these exist, so that part did not happen: {}.",
+            gone.join(", ")
+        ),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -405,6 +537,85 @@ mod tests {
             "a path is not what somebody wants: {said}"
         );
         assert!(unchecked(&[]).is_empty());
+    }
+
+    /// The real one, verbatim. A run reported both files and made neither.
+    #[test]
+    fn a_report_naming_files_that_do_not_exist_is_caught() {
+        let empty = std::env::temp_dir().join(format!("nudge-gone-{}", std::process::id()));
+        let _ = std::fs::create_dir_all(&empty);
+
+        let said = "I have researched axum, actix-web, and rocket, created the \
+                    comparison in frameworks.md, verified its contents, and added the \
+                    small JSON API recommendation to recommendation.md.";
+        let gone = missing(said, &empty);
+        assert_eq!(gone.len(), 2, "{gone:?}");
+        assert!(gone.contains(&"frameworks.md".to_string()));
+        assert!(gone.contains(&"recommendation.md".to_string()));
+        assert!(nothing_there(&gone).contains("did not happen"));
+
+        // And once they are there, nothing is said.
+        std::fs::write(empty.join("frameworks.md"), "x").unwrap();
+        std::fs::write(empty.join("recommendation.md"), "y").unwrap();
+        assert!(missing(said, &empty).is_empty());
+
+        let _ = std::fs::remove_dir_all(&empty);
+    }
+
+    /// Ordinary prose is not a pile of filenames.
+    ///
+    /// A dot is not enough -- version numbers, hostnames and sentence ends all
+    /// have one, and accusing a run of not creating "1.4" would be worse than
+    /// saying nothing.
+    #[test]
+    fn a_sentence_is_not_mistaken_for_a_filename() {
+        let nowhere = std::path::Path::new("/nowhere/at/all");
+        for said in [
+            "axum is at version 0.8.4 and is maintained by the tokio team.",
+            // A hostname that is also a Rust filename, in a sentence that
+            // claims to have made something -- the hard case.
+            "I wrote the summary and fetched it from crates.io and docs.rs.",
+            "I fetched it from crates.io and docs.rs.",
+            "Done. It took 3.2 seconds.",
+            "The answer is 42.",
+        ] {
+            assert!(missing(said, nowhere).is_empty(), "{said:?}");
+        }
+    }
+
+    /// Passing the request on is not doing the work.
+    #[test]
+    fn handing_the_whole_job_to_a_subagent_is_recognised() {
+        let goal = "research the three most widely used Rust web frameworks, write a \
+                    comparison into frameworks.md, read it back and correct it, then \
+                    write a recommendation into recommendation.md";
+        // Reworded, as the model always rewords it.
+        let passed = "Research the three most widely used Rust web frameworks: axum, \
+                      actix-web and rocket. Write a comparison into frameworks.md, then \
+                      read it back and correct anything wrong, and write a \
+                      recommendation into recommendation.md.";
+        assert!(handed_over_wholesale(goal, passed));
+    }
+
+    /// A scoped question is what a subagent is for.
+    #[test]
+    fn a_piece_of_the_job_is_not_the_job() {
+        let goal = "research the three most widely used Rust web frameworks, write a \
+                    comparison into frameworks.md, read it back and correct it, then \
+                    write a recommendation into recommendation.md";
+        for part in [
+            "What is the current version of axum and who maintains it?",
+            "Find what actix-web routing looks like, with one example.",
+            "Read frameworks.md and list anything factually wrong in it.",
+        ] {
+            assert!(!handed_over_wholesale(goal, part), "{part}");
+        }
+    }
+
+    /// A short goal is not judged: it is too small to tell apart.
+    #[test]
+    fn a_small_ask_is_left_alone() {
+        assert!(!handed_over_wholesale("check the build", "check the build"));
     }
 
     /// What the same task already did counts, even from before this run.
