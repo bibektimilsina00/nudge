@@ -8,11 +8,18 @@ because most of these bugs were invisible from the code. They were found by
 running the thing, reading the log, and noticing that a sentence did not match
 what was on the screen.
 
-**For what to do next, see [PLAN.md](PLAN.md).** This file has no plan in it -- it
+**For what to do next, see [PLAN.md](PLAN.md).** That file has since been
+rewritten around the work that is left, so the section numbers quoted below
+("PLAN.md §2.1" and the like) point at the plan as it stood when each of these
+was written. They are left alone deliberately: this is a record of what was
+found and when, and editing it to match a newer document would make it a worse
+record.
+
+This file has no plan in it -- it
 used to, and having two documents with two sets of phase numbers meant "what is
 next" had two answers.
 
-The test passes themselves are in [results.md](results.md).
+The run log those passes came from was deleted once it stopped being read; it is in the history if it is ever wanted again.
 
 ---
 
