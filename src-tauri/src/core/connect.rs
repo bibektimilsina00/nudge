@@ -136,14 +136,16 @@ pub fn catalogue() -> Vec<Offer> {
                      calendar.events. No access to mail or files.",
             command: "npx",
             args: &["-y", "@cocal/google-calendar-mcp"],
-            env: &[],
+            // Nudge points it at the credentials itself. Asking somebody to
+            // export a variable before clicking a button is asking them to do
+            // the part that is not theirs to do.
+            env: &[("GOOGLE_OAUTH_CREDENTIALS", "~/.config/gcp-oauth.keys.json")],
             token: None,
             where_from: None,
             setup: Some(
-                "Same Desktop OAuth client, calendar scopes only. Point \
-                 GOOGLE_OAUTH_CREDENTIALS at its JSON -- \
-                 ~/.config/gcp-oauth.keys.json works -- then run: \
-                 npx @cocal/google-calendar-mcp auth",
+                "Same Desktop OAuth client as the rest of Google, calendar scopes \
+                 only. Put its JSON at ~/.config/gcp-oauth.keys.json, then sign in \
+                 once: npx @cocal/google-calendar-mcp auth",
             ),
         },
         Offer {
@@ -466,6 +468,43 @@ mod tests {
         // And what the server said it could do came back with it.
         assert_eq!(read(Some(&path))[0].tools.len(), 2);
         let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn a_server_that_needs_pointing_at_credentials_is_pointed_at_them() {
+        // The bug this exists for: Calendar declared no environment, so it was
+        // started without GOOGLE_OAUTH_CREDENTIALS, refused to start, and handed
+        // back its own setup text as a failure -- which read as "do this by
+        // hand" for something Nudge is perfectly able to do itself.
+        let spec = spec(&Made {
+            key: "google_calendar".into(),
+            extra: Vec::new(),
+            tools: Vec::new(),
+            allowed: None,
+            declined: Vec::new(),
+            at: 0,
+        })
+        .unwrap();
+        let path = spec
+            .env
+            .get("GOOGLE_OAUTH_CREDENTIALS")
+            .expect("calendar is started without being told where its credentials are");
+        assert!(
+            path.starts_with('/'),
+            "a child process does not expand ~, so this has to arrive absolute: {path}"
+        );
+        assert!(path.ends_with("/.config/gcp-oauth.keys.json"), "{path}");
+    }
+
+    #[test]
+    fn plain_environment_is_passed_through_untouched() {
+        // Only a leading `~/` means anything. A value that merely contains one is
+        // a value, not a path to rewrite.
+        let offer = offer("google_search_console").unwrap();
+        assert!(!offer.env.is_empty());
+        for (_, v) in offer.env {
+            assert!(!v.contains("~/") || v.starts_with("~/"), "{v}");
+        }
     }
 
     #[test]
