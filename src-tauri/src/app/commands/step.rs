@@ -1135,6 +1135,26 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             app.state::<Agents>()
                 .set_plan(items)
                 .map_err(crate::error::Error::Click)?;
+
+            // Back into the history, which is the only thing the next turn
+            // reads. A plan went to the card and nowhere else, so the model
+            // could not see its own -- and a model that cannot see its plan
+            // cannot mark an item done, and makes a new plan instead. Four in a
+            // row, each slightly reworded, no work between any of them, until
+            // the repeat guard ended the run. The guard was right and it was
+            // treating a symptom.
+            //
+            // Written out in full rather than as "3 of 5 done": the point is to
+            // hand back the list so the next turn can return it with one more
+            // marked, and a count cannot be edited.
+            app.state::<Nudge>().note(format!(
+                "Your plan is now:\n{}",
+                todos
+                    .iter()
+                    .map(|(text, status)| format!("- [{status}] {text}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
             crate::app::agent::publish(app);
         }
         Step::Workspace { path, .. } => {

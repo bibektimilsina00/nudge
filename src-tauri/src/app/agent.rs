@@ -471,7 +471,9 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
                 let mut owed = String::new();
                 if !skipped.is_empty() {
                     owed.push_str(&format!(
-                        "These are still on your plan and not done: {}. ",
+                        "Your plan still lists these as not done: {}. If you have \
+                         already done them, send the plan again with them marked done \
+                         -- a plan that is not kept current is worse than no plan. ",
                         skipped.join("; ")
                     ));
                 }

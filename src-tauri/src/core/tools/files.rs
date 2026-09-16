@@ -166,43 +166,63 @@ pub fn changed(path: &Path) -> Option<String> {
 /// Status rather than diff, because a new file is the commonest thing a
 /// delegated agent produces and a diff against HEAD would not mention it.
 ///
-/// Empty outside a repository. Which is a real answer and not an error: a
-/// workspace that is not a repository has nothing to compare against, and
-/// saying nothing is better than implying nothing changed.
-pub fn altered(workspace: &Path) -> Vec<String> {
+/// `None` outside a repository, and that distinction is the whole point.
+///
+/// An empty list and "I cannot tell" are different answers and only one of them
+/// is knowable here. Returning an empty `Vec` for both had a supervised job
+/// create two files in a folder that is not a repository and report **"nothing
+/// in the workspace changed"** -- which is the same defect as everything else
+/// this codebase keeps finding: asserting a fact nobody checked.
+pub fn altered(workspace: &Path) -> Option<Vec<String>> {
+    // Is this a repository at all? Asked first, because the answer decides
+    // whether an empty status means "nothing changed" or "I have no idea".
+    let inside = std::process::Command::new("git")
+        .arg("-C")
+        .arg(workspace)
+        .args(["rev-parse", "--is-inside-work-tree"])
+        .output()
+        .ok()
+        .filter(|o| o.status.success())
+        .is_some();
+    if !inside {
+        return None;
+    }
+
     let Ok(out) = std::process::Command::new("git")
         .arg("-C")
         .arg(workspace)
         .args(["status", "--porcelain"])
         .output()
     else {
-        return Vec::new();
+        return None;
     };
-    String::from_utf8_lossy(&out.stdout)
-        .lines()
-        .filter_map(|line| {
-            // "XY path", where XY is the status. Both letters matter -- " M" is
-            // changed and not staged, "??" is new -- and the model reads them
-            // the same way a person does.
-            let (state, path) = line.split_at(line.len().min(2));
-            let path = path.trim();
-            if path.is_empty() {
-                return None;
-            }
-            Some(format!(
-                "{} {path}",
-                match state.trim() {
-                    "??" => "new",
-                    "D" => "deleted",
-                    "A" => "added",
-                    "M" | "MM" => "changed",
-                    "R" => "renamed",
-                    other => other,
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .filter_map(|line| {
+                // "XY path", where XY is the status. Both letters matter -- " M" is
+                // changed and not staged, "??" is new -- and the model reads them
+                // the same way a person does.
+                let (state, path) = line.split_at(line.len().min(2));
+                let path = path.trim();
+                if path.is_empty() {
+                    return None;
                 }
-            ))
-        })
-        .take(40)
-        .collect()
+                Some(format!(
+                    "{} {path}",
+                    match state.trim() {
+                        "??" => "new",
+                        "D" => "deleted",
+                        "A" => "added",
+                        "M" | "MM" => "changed",
+                        "R" => "renamed",
+                        other => other,
+                    }
+                ))
+            })
+            .take(40)
+            .collect(),
+    )
 }
 
 /// The git remotes configured where the work is happening.
@@ -700,8 +720,10 @@ mod tests {
     fn what_changed_is_what_git_says_changed() {
         let dir = workspace("altered");
         std::fs::create_dir_all(&dir).unwrap();
-        // Not a repository: nothing to say, and saying nothing is honest.
-        assert!(altered(&dir).is_empty());
+        // Not a repository: no telling, which is a different answer from
+        // nothing having changed -- and reporting the second for the first had
+        // a job create two files and say the workspace was untouched.
+        assert_eq!(altered(&dir), None);
 
         let git = |args: &[&str]| {
             std::process::Command::new("git")
@@ -718,12 +740,13 @@ mod tests {
         git(&["add", "-A"]);
         git(&["commit", "-qm", "first"]);
 
-        // Nothing since the commit.
-        assert!(altered(&dir).is_empty(), "{:?}", altered(&dir));
+        // Nothing since the commit, which is now a real empty rather than a
+        // shrug.
+        assert_eq!(altered(&dir), Some(Vec::new()));
 
         std::fs::write(dir.join("kept.txt"), "two\n").unwrap();
         std::fs::write(dir.join("fresh.txt"), "new\n").unwrap();
-        let found = altered(&dir);
+        let found = altered(&dir).expect("a repository can always be asked");
 
         // A new file is the commonest thing a delegated agent makes, and a diff
         // against HEAD would not have mentioned it.

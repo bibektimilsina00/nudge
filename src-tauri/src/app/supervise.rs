@@ -232,20 +232,31 @@ fn finished(app: &AppHandle, job: u64) {
     let workspace = app.state::<Nudge>().workspace();
     let changed = crate::core::tools::files::altered(&workspace);
     eprintln!(
-        "supervisor: job {job} finished, {} things changed on disk",
-        changed.len()
+        "supervisor: job {job} finished, {}",
+        match &changed {
+            None =>
+                "and this folder is not a repository so there is no telling what changed".into(),
+            Some(c) => format!("{} things changed on disk", c.len()),
+        }
     );
 
-    // The half a person never skips. The tool's own account of what it did is
-    // already in the output; this is the part that is checkable.
-    let said = match changed.is_empty() {
-        true => format!(
+    // The half a person never skips -- and "nothing changed" is a claim, not the
+    // absence of one. Outside a repository there is nothing to compare against,
+    // and saying nothing changed there would be exactly the defect this file
+    // exists to catch: two files were created in such a folder and the log said
+    // the workspace was untouched.
+    let said = match &changed {
+        None => format!(
+            "Job {job} finished. This folder is not a git repository, so I cannot tell \
+             you what it changed -- check anything it was supposed to produce yourself."
+        ),
+        Some(c) if c.is_empty() => format!(
             "Job {job} finished and nothing in the workspace changed. If it was \
              supposed to change something, it did not."
         ),
-        false => format!(
+        Some(c) => format!(
             "Job {job} finished. What actually changed on disk, according to git: {}.",
-            changed.join(", ")
+            c.join(", ")
         ),
     };
     app.state::<Nudge>().note(said);
@@ -254,9 +265,10 @@ fn finished(app: &AppHandle, job: u64) {
         job,
         "finished",
         Outcome::Did {
-            detail: match changed.is_empty() {
-                true => "nothing changed on disk".into(),
-                false => changed.join(", "),
+            detail: match &changed {
+                None => "not a repository -- no telling what changed".into(),
+                Some(c) if c.is_empty() => "nothing changed on disk".into(),
+                Some(c) => c.join(", "),
             },
         },
     );

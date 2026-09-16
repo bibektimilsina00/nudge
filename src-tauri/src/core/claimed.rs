@@ -280,11 +280,22 @@ pub fn unchecked(unread: &[String]) -> String {
     format!(" I did not read back what I wrote to {}.", named.join(", "))
 }
 
-/// The sentence to add when a run finishes with work still on its own list.
+/// The sentence to add when a run finishes with items still open on its plan.
 ///
 /// Named, not counted. "Two items remain" tells nobody what was skipped, and
 /// the whole value is in somebody reading the list and noticing that the part
 /// they cared about is on it.
+///
+/// **About the list, not about the work.** Those are different claims and only
+/// one of them is knowable from here. A run did all five of its items, never
+/// marked any of them done, and was told it had stopped early -- the files were
+/// there and it had read one back. The plan was stale, not the task unfinished,
+/// and a sentence asserting the second would have been wrong.
+///
+/// So this reports the plan's own state and lets it stand beside whatever else
+/// was said. If the work really was skipped the two agree; if the plan merely
+/// went stale, a reader sees a claim and a list that disagree, which is exactly
+/// the situation and is worth seeing.
 pub fn stopped_early(left: &[String]) -> String {
     let named = match left.len() {
         0 => return String::new(),
@@ -295,7 +306,7 @@ pub fn stopped_early(left: &[String]) -> String {
             .collect::<Vec<_>>()
             .join(", "),
     };
-    format!(" I stopped with this still on my own list: {named}.")
+    format!(" My own plan still lists this as not done: {named}.")
 }
 
 /// Is this hand-off just the whole job again?
@@ -786,6 +797,10 @@ mod tests {
         let said = stopped_early(&left);
         // Named, not counted: "two items remain" tells nobody what was skipped.
         assert!(said.contains("check the file"), "{said}");
+        // About the list, not about the work -- a stale plan is not proof that
+        // nothing happened.
+        assert!(said.contains("plan still lists"), "{said}");
+        assert!(!said.to_lowercase().contains("stopped"), "{said}");
         assert!(said.contains("fix anything wrong"), "{said}");
         assert!(!said.contains('2'), "counted instead of named: {said}");
     }
