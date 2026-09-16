@@ -151,7 +151,7 @@ in the question.
 
 ---
 
-## 3. Compaction: the ceiling on how long a task can be
+## 3. Compaction: the ceiling on how long a task can be — *done*
 
 `session.done` grows one line per step and every step sends the whole thing.
 Nothing trims it. `MAX_STEPS = 40` is not a budget, it is a lid hiding the fact
@@ -163,8 +163,21 @@ provider. Older turns become a summary plus mechanically extracted state; recent
 turns and **every user message** survive. The stored transcript is never edited —
 only what is sent.
 
-**Done when** a run can exceed the context window without being cut off, and the
-user's own words are still in the prompt at step two hundred.
+**Done.** The policy lives in `core/compact` against plain strings — what to
+keep, where to cut, what survives — so every rule has a test that never touches a
+provider. The session owns *when*; the provider owns one sentence.
+
+The newest work survives by weight rather than by line count, so one enormous
+tool result cannot starve the working set. The user's own words survive verbatim.
+Files touched and commands run are extracted by code, not remembered. Tool output
+goes first.
+
+The record is never folded — only the outbound view — so a finished run still
+reports what it actually did.
+
+Found by running it: at a low threshold, folding turned 65 tokens into a block of
+115 and then did it again next turn. A block's fixed cost does not shrink with
+its span, so a span smaller than the working set is now left alone.
 
 ---
 
