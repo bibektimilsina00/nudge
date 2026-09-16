@@ -100,6 +100,40 @@ pub fn settled(say: &str, steps: &[Step]) -> String {
     format!("{}{INSTEAD}", say.trim_end())
 }
 
+/// What a run set itself and has not done.
+///
+/// `Step::Plan` exists, the card renders it, and nothing ever looked at it
+/// again. A task with four named parts that ends after one is a task that
+/// failed, and it reported success -- which is the same defect as an unbacked
+/// claim, arriving through the run's own plan instead of its own sentence.
+///
+/// Mechanical, like everything else here. The plan is a list the model wrote
+/// down; this only asks which entries are not marked done.
+pub fn unfinished(plan: &[(String, bool)]) -> Vec<String> {
+    plan.iter()
+        .filter(|(_, done)| !done)
+        .map(|(text, _)| text.clone())
+        .collect()
+}
+
+/// The sentence to add when a run finishes with work still on its own list.
+///
+/// Named, not counted. "Two items remain" tells nobody what was skipped, and
+/// the whole value is in somebody reading the list and noticing that the part
+/// they cared about is on it.
+pub fn stopped_early(left: &[String]) -> String {
+    let named = match left.len() {
+        0 => return String::new(),
+        1 => format!("{:?}", left[0]),
+        _ => left
+            .iter()
+            .map(|t| format!("{t:?}"))
+            .collect::<Vec<_>>()
+            .join(", "),
+    };
+    format!(" I stopped with this still on my own list: {named}.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -195,6 +229,38 @@ mod tests {
         assert!(looked(&tool("notes/search")));
         assert!(!looked(&tool("files/write_file")));
         assert!(!looked(&tool("mail/send_message")));
+    }
+
+    /// A run that set itself four things and did one has not finished.
+    #[test]
+    fn what_a_run_set_itself_and_skipped_is_named() {
+        let plan = vec![
+            ("research the crates".to_string(), true),
+            ("write the comparison".to_string(), true),
+            ("check the file".to_string(), false),
+            ("fix anything wrong".to_string(), false),
+        ];
+        let left = unfinished(&plan);
+        assert_eq!(left.len(), 2);
+
+        let said = stopped_early(&left);
+        // Named, not counted: "two items remain" tells nobody what was skipped.
+        assert!(said.contains("check the file"), "{said}");
+        assert!(said.contains("fix anything wrong"), "{said}");
+        assert!(!said.contains('2'), "counted instead of named: {said}");
+    }
+
+    #[test]
+    fn a_finished_plan_says_nothing() {
+        let plan = vec![("one".to_string(), true), ("two".to_string(), true)];
+        assert!(unfinished(&plan).is_empty());
+        assert!(stopped_early(&[]).is_empty());
+    }
+
+    /// No plan is not an unfinished plan.
+    #[test]
+    fn a_run_that_set_itself_nothing_is_not_accused_of_skipping_it() {
+        assert!(unfinished(&[]).is_empty());
     }
 
     /// Applied twice, it says it once.

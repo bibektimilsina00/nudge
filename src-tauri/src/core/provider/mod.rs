@@ -1000,6 +1000,10 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          add anything you discover along the way. Skip it for short work -- a \
          plan for a two-step task is ceremony, and the list is meant to mean \
          something.\n\
+         The list is held against you. Finishing with items still pending gets \
+         handed back once, and if you finish anyway your own report says which \
+         ones you skipped -- so mark them done as you do them, and do not write \
+         down work you are not going to do.\n\
          **read** returns part of a file with line numbers -- ask for a range \
          when it is long. Read before you edit: matching text you have not seen \
          is guessing. It reads a PDF too, whole rather than by line, because a \

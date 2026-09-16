@@ -256,6 +256,10 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
     // Every step this run performed, so a claim at the end can be held against
     // what actually happened rather than against what the model remembers.
     let mut taken: Vec<crate::core::provider::Step> = Vec::new();
+    // Whether this run has already been told it left its own plan unfinished.
+    // Once, and then it is taken at its word -- a loop between "are you sure"
+    // and "yes" is worse than a task that stopped early and said so.
+    let mut reminded = false;
     let mut repeats = 0usize;
     let mut failures = 0usize;
     let mut idle = 0usize;
@@ -372,15 +376,66 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
 
         taken.push(step.clone());
 
+        // Finishing with work still on its own list.
+        //
+        // `Plan` existed, the card rendered it, and nothing ever read it back --
+        // so a task with four named parts that did one reported success. Handed
+        // back once, because the commonest reason is losing track rather than
+        // giving up, and a reminder costs one turn. If it says it is done again,
+        // it is done: what changes is that the sentence names what was skipped.
+        let mut skipped: Vec<String> = Vec::new();
+        if matches!(step, crate::core::provider::Step::Done { .. }) {
+            let plan: Vec<(String, bool)> = app
+                .state::<Agents>()
+                .list()
+                .into_iter()
+                .find(|a| a.id == id)
+                .map(|a| {
+                    a.plan
+                        .iter()
+                        .map(|t| {
+                            (
+                                t.text.clone(),
+                                matches!(t.status, crate::core::run::agent::Doing::Done),
+                            )
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            skipped = crate::core::claimed::unfinished(&plan);
+
+            if !skipped.is_empty() && !reminded {
+                reminded = true;
+                eprintln!(
+                    "agent#{id} turn {turn}: finished with {} of its own items undone",
+                    skipped.len()
+                );
+                app.state::<Nudge>().note(format!(
+                    "You set yourself a plan and these are not done yet: {}. Either \
+                     do them, or say you are finishing without them and why.",
+                    skipped.join("; ")
+                ));
+                continue;
+            }
+        }
+
         // A claim nobody checked, taken back before it is spoken or written
         // down. Mechanical on both sides -- a phrase from a fixed list, and
         // whether any step in this run actually read anything -- so a miss
         // leaves the sentence exactly as it was.
-        let step = match crate::core::claimed::settled(step.say(), &taken) {
-            fixed if fixed == step.say() => step,
-            fixed => {
-                eprintln!("agent#{id} turn {turn}: took back an unbacked claim");
-                step.saying(fixed)
+        let settled = crate::core::claimed::settled(step.say(), &taken);
+        let settled = match skipped.is_empty() {
+            true => settled,
+            // Named rather than counted: "two items remain" tells nobody what
+            // was skipped, and the value is in somebody noticing that the part
+            // they cared about is on the list.
+            false => format!("{settled}{}", crate::core::claimed::stopped_early(&skipped)),
+        };
+        let step = match settled == step.say() {
+            true => step,
+            false => {
+                eprintln!("agent#{id} turn {turn}: corrected what it was about to report");
+                step.saying(settled)
             }
         };
 
