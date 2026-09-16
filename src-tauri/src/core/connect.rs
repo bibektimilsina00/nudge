@@ -43,6 +43,15 @@ pub struct Offer {
     /// Where a person gets that token. A link and a sentence, because "paste
     /// your token" is not an instruction anybody can follow.
     pub where_from: Option<&'static str>,
+    /// For the ones that are not a token at all.
+    ///
+    /// Google's server keeps its own credential file and its own account store,
+    /// and signing in means a browser and a consent screen -- which Nudge cannot
+    /// do on somebody's behalf and should not try to. So the entry says what to
+    /// run instead, and connecting still proves itself the same way: the server
+    /// is started and asked what it can do, and an unconfigured one fails there
+    /// rather than later.
+    pub setup: Option<&'static str>,
 }
 
 /// Everything on offer.
@@ -61,6 +70,7 @@ pub fn catalogue() -> Vec<Offer> {
             args: &["-y", "@modelcontextprotocol/server-filesystem"],
             token: None,
             where_from: None,
+            setup: None,
         },
         Offer {
             key: "github",
@@ -72,6 +82,7 @@ pub fn catalogue() -> Vec<Offer> {
             args: &["-y", "@modelcontextprotocol/server-github"],
             token: Some("GITHUB_PERSONAL_ACCESS_TOKEN"),
             where_from: Some("github.com → Settings → Developer settings → Personal access tokens"),
+            setup: None,
         },
         Offer {
             key: "slack",
@@ -83,6 +94,28 @@ pub fn catalogue() -> Vec<Offer> {
             args: &["-y", "@modelcontextprotocol/server-slack"],
             token: Some("SLACK_BOT_TOKEN"),
             where_from: Some("api.slack.com/apps → your app → OAuth & Permissions"),
+            setup: None,
+        },
+        Offer {
+            key: "google",
+            name: "Google Workspace",
+            about: "Docs, Sheets, Slides, Drive, Gmail, Calendar and Forms.",
+            access: "Whatever you consent to when you sign in, for the account you \
+                     sign in with. The consent screen lists it before you agree, and \
+                     that screen is Google's rather than ours.",
+            command: "npx",
+            // One server for all of it rather than seven entries. The official
+            // `server-gdrive` is deprecated and covers only Drive.
+            args: &["-y", "google-workspace-mcp", "serve"],
+            token: None,
+            where_from: None,
+            setup: Some(
+                "Google needs a browser and a consent screen, which is yours to give \
+                 rather than mine to take. In Google Cloud Console create an OAuth \
+                 client of type Desktop app — not iOS, which wants a Bundle ID this \
+                 is not — download its JSON to ~/.google-mcp/credentials.json, then \
+                 run: npx google-workspace-mcp accounts add me",
+            ),
         },
     ]
 }

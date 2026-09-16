@@ -10,6 +10,8 @@ type Listed = {
   access: string;
   needs_token: boolean;
   where_from: string | null;
+  /** For the ones signed into rather than pasted. */
+  setup: string | null;
   needs_folder: boolean;
   connected: boolean;
   /** What the server itself said it could do. */
@@ -35,6 +37,7 @@ type Listed = {
  */
 const TINT: Record<string, string> = {
   files: "#8a8f98",
+  google: "#1a73e8",
   github: "#24292f",
   slack: "#4a154b",
 };
@@ -164,7 +167,9 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
           </button>
         ) : (
           <button
-            onClick={() => (it.needs_token || it.needs_folder ? setOpen((o) => !o) : go())}
+            onClick={() =>
+              it.needs_token || it.needs_folder || it.setup ? setOpen((o) => !o) : go()
+            }
             disabled={busy}
             className="shrink-0 rounded-full bg-blue px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
           >
@@ -183,6 +188,15 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
               spellCheck={false}
               className="w-full rounded-lg bg-black/40 px-2.5 py-1.5 text-[11px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
             />
+          )}
+          {/* Not a field. Signing in happens in a browser with their own
+              account, on the provider's own consent screen -- so what is shown
+              is what to go and do, and the Connect button below checks whether
+              they did it. */}
+          {it.setup && (
+            <p className="text-[10.5px] leading-snug whitespace-pre-line text-ink-2">
+              {it.setup}
+            </p>
           )}
           {it.needs_token && (
             <>
@@ -207,7 +221,7 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
             disabled={busy}
             className="w-full rounded-lg bg-blue py-1.5 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
           >
-            {busy ? "Starting it to check…" : "Connect"}
+            {busy ? "Starting it to check…" : it.setup ? "I've done that — check" : "Connect"}
           </button>
         </div>
       )}

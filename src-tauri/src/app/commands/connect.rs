@@ -21,6 +21,8 @@ pub struct Listed {
     pub access: String,
     pub needs_token: bool,
     pub where_from: Option<String>,
+    /// For the ones signed into rather than pasted. Shown instead of a field.
+    pub setup: Option<String>,
     /// A folder or team this one needs, which the catalogue cannot know.
     pub needs_folder: bool,
     pub connected: bool,
@@ -43,6 +45,7 @@ pub fn connections(app: AppHandle) -> Vec<Listed> {
                 access: o.access.into(),
                 needs_token: o.token.is_some(),
                 where_from: o.where_from.map(Into::into),
+                setup: o.setup.map(Into::into),
                 // The filesystem server is handed the folder it may touch, and
                 // there is no sensible default for "which of your folders".
                 needs_folder: o.key == "files",
@@ -71,6 +74,26 @@ pub async fn connect(
     // The token goes in first, because the server is started with a reference to
     // it -- but it is taken back out if the server does not work, so a failed
     // attempt leaves nothing behind.
+    // Nothing to paste, and nothing Nudge can do on somebody's behalf: signing
+    // in happens in their browser, with their account, on Google's own consent
+    // screen. Said plainly rather than failing at the server with whatever that
+    // server's own words happen to be.
+    if let Some(how) = offer.setup {
+        let ready = mcp::Servers::start(std::slice::from_ref(
+            &connect::spec(&Made {
+                key: key.clone(),
+                extra: Vec::new(),
+                tools: Vec::new(),
+                at: 0,
+            })
+            .ok_or_else(|| "could not build that server".to_string())?,
+        ))
+        .await;
+        if ready.tools().is_empty() {
+            return Err(how.to_string());
+        }
+    }
+
     if offer.token.is_some() {
         let token = token
             .as_deref()
