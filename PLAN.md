@@ -80,15 +80,23 @@ the moons.md file and confirmed it lists the four largest moons"*, and what
 reached the card was that, followed by *"(I did not read it back, so this is what
 I intended rather than what it says.)"* A run that did read first was left alone.
 
-### 1.3 Writing is not checking
+### 1.3 Writing is not checking — *done*
 
 A file it just wrote is not evidence that the file is right; `git` already tells
 us what changed, and §2.2 of the last plan put that in the record. What is
 missing is the same discipline for a *new* file: reading it back is one step and
 it is the difference between "I wrote it" and "it says what I meant".
 
-**Done when** a run that produces a document is expected to read it, and says
-plainly when it did not.
+**Done.** Folded into the same handback as the unfinished plan, so a run pays one
+extra turn rather than two. If it finishes anyway, its report names the files by
+their own names.
+
+It found a real bug: `named` only reports files that exist and ran *before* the
+tool did, so a file an MCP call **created** was invisible to the card, the judge
+and this check alike. A run that wrote three notes recorded making none.
+
+Verified live: *"All three notes ... have been written. I did not read back what I
+wrote to red.md, green.md, blue.md."*
 
 ---
 
