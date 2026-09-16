@@ -213,14 +213,21 @@ same command as starting fresh.
 
 ## 3. Tasks big enough to need a plan
 
-### 3.1 Decomposing, and being held to it
+### 3.1 Decomposing, and being held to it — *done*
 
 `Step::Plan` exists and the card renders it. Nothing asks for one, and nothing
 notices when a run wanders off it. A task with four named parts that ends after
 one is a task that failed, and it currently reports success.
 
-**Done when** a run that set itself a plan is not finished while items remain
-unstarted, or says plainly that it stopped early.
+**Done.** Finishing with items pending is handed back once — losing track is the
+commonest reason and a reminder costs a turn. If it finishes anyway, its own
+report names what was skipped, because "two items remain" tells nobody what was
+missed.
+
+Verified live on a task told to plan four steps and do one: it was handed back,
+went and marked its first step done, then finished — and the card reads *"…I
+stopped with this still on my own list: "write b.txt", "write c.txt", "write
+d.txt"."*
 
 ### 3.2 Research without a shell — *done*
 
