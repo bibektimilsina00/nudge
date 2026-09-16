@@ -24,6 +24,19 @@ class Settings(BaseSettings):
     # than one more line of config now.
     web_origin: str = "http://localhost:3000"
 
+    # Where this API is reachable from outside, for URLs that have to be
+    # absolute. The updater is the one caller that needs this: it is handed a
+    # URL and fetches it from a different process, so a relative path is not
+    # something it can resolve.
+    #
+    # Not derived from the request. Uvicorn runs without `--proxy-headers`, so
+    # behind Caddy the request looks like plain HTTP to an internal host, and a
+    # download URL built from it would be an http:// address for a host that
+    # only answers https. Empty falls back to the request, which is right for
+    # running this locally and wrong in exactly one place -- so production sets
+    # it, and `/api/update` says so when it is not set.
+    public_url: str = ""
+
 
 @lru_cache
 def settings() -> Settings:

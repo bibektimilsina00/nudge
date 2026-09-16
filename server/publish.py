@@ -40,7 +40,17 @@ def main() -> int:
     ap.add_argument("--version", required=True)
     ap.add_argument("--platform", default="macos-arm64")
     ap.add_argument("--notes", default="")
+    # The in-app updater's half of a release. Optional, because a platform can
+    # have a download before it has updates -- but published together when they
+    # exist, so "the current release" stays one fact rather than two that can
+    # drift apart.
+    ap.add_argument("--update", type=Path, help="the .app.tar.gz the updater installs")
+    ap.add_argument("--signature", help="minisign signature over --update, or a path to it")
     args = ap.parse_args()
+
+    if bool(args.update) != bool(args.signature):
+        print("--update and --signature go together or not at all", file=sys.stderr)
+        return 1
 
     if not args.file.is_file():
         print(f"no such file: {args.file}", file=sys.stderr)
@@ -55,6 +65,22 @@ def main() -> int:
     filename = f"Nudge-{args.version}-{args.platform}{args.file.suffix}"
     dest = dest_dir / filename
     shutil.copy2(args.file, dest)
+
+    update_file = None
+    signature = None
+    if args.update:
+        if not args.update.is_file():
+            print(f"no such file: {args.update}", file=sys.stderr)
+            return 1
+        update_file = f"Nudge-{args.version}-{args.platform}.app.tar.gz"
+        shutil.copy2(args.update, dest_dir / update_file)
+        # Either the signature itself or the .sig file holding it. The workflow
+        # has a path; a person at a terminal has whichever is nearer.
+        sig = Path(args.signature)
+        signature = sig.read_text().strip() if sig.is_file() else args.signature.strip()
+        if not signature:
+            print("the signature is empty", file=sys.stderr)
+            return 1
 
     with Session(engine) as db:
         # Exactly one current release per platform, enforced here rather than in
@@ -74,11 +100,14 @@ def main() -> int:
                 sha256=sha256(dest),
                 notes=args.notes,
                 current=True,
+                update_file=update_file,
+                signature=signature,
             )
         )
         db.commit()
 
     print(f"published {filename} ({dest.stat().st_size / 1_000_000:.1f} MB)")
+    print(f"  update: {update_file}" if update_file else "  no update artifact -- downloads only")
     return 0
 
 

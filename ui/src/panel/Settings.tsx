@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
 import { Choice, Page, Row, Section, Toggle } from "./parts";
 import * as I from "./icons";
 import { LOOKS, DEFAULT_LOOK } from "../companions";
@@ -83,6 +84,8 @@ export function Settings({
   const [voice, setVoice] = useState<VoiceMode>("system");
   const [mic, setMic] = useState("…");
   const [version, setVersion] = useState("");
+  const [update, setUpdate] = useState<{ version: string; notes: string } | null>(null);
+  const [taking, setTaking] = useState(false);
   const [allowed, setAllowed] = useState<Allowed[]>([]);
   const [brain, setBrain] = useState<Brain | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
@@ -96,6 +99,11 @@ export function Settings({
     void invoke<VoiceMode>("voice_mode").then(setVoice);
     void invoke<string>("microphone").then(setMic);
     void invoke<string>("version").then(setVersion);
+    // Pushed rather than polled: the check happens once, twenty seconds after
+    // launch, and this page is usually not open when the answer arrives.
+    const found = listen<{ version: string; notes: string }>("update", (e) =>
+      setUpdate(e.payload),
+    );
     void invoke<Allowed[]>("reach").then(setAllowed);
     void invoke<Brain>("brain").then(setBrain);
     void invoke<string>("look").then(setLook);
@@ -117,6 +125,7 @@ export function Settings({
     return () => {
       window.clearInterval(again);
       window.clearInterval(watching);
+      void found.then((un) => un());
     };
   }, []);
 
@@ -585,6 +594,21 @@ export function Settings({
       </Section>
 
       <Section title="Nudge">
+        {/* Only when there is one. A row that says "no updates available" is a
+            row that is wrong the moment it is right, and it asks somebody to
+            care about maintenance on every visit to this page. */}
+        {update && (
+          <Row
+            icon={<I.Refresh />}
+            label={taking ? "Installing…" : `Update to ${update.version}`}
+            sub={taking ? "Nudge will restart when it is done." : update.notes || undefined}
+            onClick={() => {
+              if (taking) return;
+              setTaking(true);
+              void invoke("take_update").catch(() => setTaking(false));
+            }}
+          />
+        )}
         <Row icon={<I.Power />} label="Quit" danger onClick={() => void invoke("quit")} />
       </Section>
 

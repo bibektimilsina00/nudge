@@ -40,6 +40,18 @@ class Release(SQLModel, table=True):
     current: bool = Field(default=False, index=True)
     published_at: datetime = Field(default_factory=now)
 
+    # What the in-app updater installs, which is not what a person downloads.
+    # A .dmg is a disk image somebody mounts and drags out of once; the updater
+    # wants the .app.tar.gz and the minisign signature over it. Both are
+    # produced by the same build, and keeping them on one row is what makes
+    # "the current release" one fact rather than two that can disagree.
+    #
+    # Optional because a release published before this existed has neither, and
+    # a row with no update artifact should read as "no update offered" rather
+    # than crash the endpoint.
+    update_file: Optional[str] = None
+    signature: Optional[str] = None
+
 
 class Download(SQLModel, table=True):
     """One download, recorded as it is served.

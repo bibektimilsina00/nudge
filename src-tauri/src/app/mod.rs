@@ -6,6 +6,7 @@ pub mod commands;
 mod input;
 mod state;
 mod ui;
+pub mod update;
 
 use crate::config::Config;
 use crate::core::run::session::Nudge;
@@ -17,6 +18,7 @@ use tauri::Manager;
 
 pub fn run() {
     tauri::Builder::default()
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {
             // Menu-bar app: no Dock icon, no app switcher, no window chrome.
             //
@@ -219,6 +221,7 @@ pub fn run() {
             input::cursor::follow(handle);
             input::hotkey::install(handle)?;
             input::hotkey::bind(handle, &hotkey)?;
+            update::look(handle);
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -240,6 +243,7 @@ pub fn run() {
             commands::set_voice_mode,
             commands::microphone,
             commands::version,
+            update::take_update,
             commands::quit,
             commands::shot_for_report,
             commands::send_report,

@@ -64,10 +64,12 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
         run: |
           missing=()
           for name in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD \
-                      APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID; do
+                      APPLE_SIGNING_IDENTITY APPLE_ID APPLE_PASSWORD APPLE_TEAM_ID \
+                      TAURI_SIGNING_PRIVATE_KEY; do
             [ -n "${!name}" ] || missing+=("$name")
           done
           if [ ${#missing[@]} -ne 0 ]; then
@@ -110,6 +112,11 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          # Nothing to do with Apple. This is minisign, over the .app.tar.gz, and
+          # it is what a running copy checks before letting a download replace
+          # it -- the one signature Apple's notarisation does not cover.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: ./scripts/release.sh
 
       - uses: actions/upload-artifact@v4
@@ -141,12 +148,19 @@ jobs:
           set -euo pipefail
           version="${GITHUB_REF_NAME#v}"
           dmg=$(ls src-tauri/target/release/bundle/dmg/*.dmg | head -1)
+          # The updater's half. Named `.app.tar.gz` by the bundler, with its
+          # minisign signature beside it. Missing means the build did not
+          # produce them, and shipping a download with no update path is how a
+          # first cohort gets stranded -- so it is an error, not a warning.
+          tgz=$(ls src-tauri/target/release/bundle/macos/*.app.tar.gz | head -1)
+          sig=$(ls src-tauri/target/release/bundle/macos/*.app.tar.gz.sig | head -1)
 
           # First line only: a release note is a sentence, and a commit body
           # would arrive as a wall of text under a download button.
           notes=$(printf '%s' "$NOTES" | head -1)
 
           scp "$dmg" "$HOST:/tmp/Nudge.dmg"
+          scp "$tgz" "$HOST:/tmp/Nudge.app.tar.gz"
 
           # `ssh host VAR=x 'script'` looks like it passes an environment and
           # does not: the remote shell expands $VAR in the very command that
@@ -157,13 +171,16 @@ jobs:
           ssh "$HOST" "env \
             NUDGE_VERSION=$(printf %q "$version") \
             NUDGE_NOTES=$(printf %q "$notes") \
+            NUDGE_SIG=$(printf %q "$(cat "$sig")") \
             bash -s" <<'REMOTE'
           set -euo pipefail
           cd /opt/nudge
           docker cp /tmp/Nudge.dmg nudge-api-1:/tmp/Nudge.dmg
+          docker cp /tmp/Nudge.app.tar.gz nudge-api-1:/tmp/Nudge.app.tar.gz
           docker compose exec -T api uv run publish.py /tmp/Nudge.dmg \
-            --version "$NUDGE_VERSION" --platform macos-arm64 --notes "$NUDGE_NOTES"
-          rm -f /tmp/Nudge.dmg
+            --version "$NUDGE_VERSION" --platform macos-arm64 --notes "$NUDGE_NOTES" \
+            --update /tmp/Nudge.app.tar.gz --signature "$NUDGE_SIG"
+          rm -f /tmp/Nudge.dmg /tmp/Nudge.app.tar.gz
           REMOTE
 
           # The page has to agree it happened, or this did not ship.

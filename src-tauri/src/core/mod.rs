@@ -14,6 +14,7 @@
 pub mod audit;
 pub mod laps;
 pub mod memory;
+pub mod newer;
 pub mod offers;
 pub mod permits;
 pub mod provider;
