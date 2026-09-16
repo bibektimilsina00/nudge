@@ -16,6 +16,10 @@ type Listed = {
   connected: boolean;
   /** What the server itself said it could do. */
   tools: string[];
+  /** Which of those may be used. `null` means all of them -- never reviewed. */
+  allowed: string[] | null;
+  /** Which were looked at and turned down, as opposed to never seen. */
+  declined: string[];
 };
 
 /**
@@ -106,6 +110,7 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
   const [folder, setFolder] = useState("");
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState("");
+  const [tools, setTools] = useState(false);
 
   const go = () => {
     setBusy(true);
@@ -150,11 +155,16 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
             <span className="text-ink-2">Gets:</span> {it.access}
           </p>
           {it.connected && it.tools.length > 0 && (
-            // What the server said, not what the catalogue claimed.
-            <p className="mt-1 text-[10px] text-ink-3">
-              {it.tools.length} tools · {it.tools.slice(0, 3).join(", ")}
-              {it.tools.length > 3 ? "…" : ""}
-            </p>
+            // What the server said, not what the catalogue claimed -- and the
+            // way in to changing it, because a count nobody can act on is
+            // decoration.
+            <button
+              onClick={() => setTools((t) => !t)}
+              className="mt-1 text-[10px] text-ink-3 transition-colors duration-150 hover:text-ink-2"
+            >
+              {it.allowed ? `${it.allowed.length} of ${it.tools.length}` : it.tools.length} tools
+              allowed · {tools ? "hide" : "choose"}
+            </button>
           )}
         </div>
 
@@ -225,6 +235,119 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
           </button>
         </div>
       )}
+
+      {tools && it.connected && <Tools it={it} onChanged={onChanged} />}
+    </div>
+  );
+}
+
+/**
+ * Choosing which of a server's tools may be used.
+ *
+ * **An unchecked tool is not blocked, it is absent.** It is never collected when
+ * the server starts, so the model is never shown its name or its schema and has
+ * nothing to call, argue with, or be talked into. Taken from OpenWorker, which
+ * calls this the existence lever and is right to.
+ *
+ * Three states, not two, and the third is the one that is easy to miss: a tool
+ * that is allowed, a tool that was looked at and turned down, and a tool nobody
+ * has ever seen because the server grew it after the last review. Without the
+ * middle one, declining something makes it come back wearing a `new` badge every
+ * time the list is opened, which teaches people to ignore the badge.
+ */
+function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
+  const [checked, setChecked] = useState<Set<string>>(
+    // No list yet means everything, which is what an older connection looks like.
+    () => new Set(it.allowed ?? it.tools),
+  );
+  const [query, setQuery] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const shown = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return q ? it.tools.filter((t) => t.toLowerCase().includes(q)) : it.tools;
+  }, [query, it.tools]);
+
+  const isNew = (t: string) => it.allowed !== null && !it.allowed.includes(t) && !it.declined.includes(t);
+
+  const flip = (t: string) =>
+    setChecked((was) => {
+      const next = new Set(was);
+      next.has(t) ? next.delete(t) : next.add(t);
+      return next;
+    });
+
+  const save = () => {
+    setSaving(true);
+    void invoke("choose_tools", { key: it.key, allowed: [...checked] })
+      .then(onChanged)
+      .finally(() => setSaving(false));
+  };
+
+  return (
+    <div className="mt-2.5 space-y-2 border-t border-line pt-2.5">
+      <div className="flex items-center gap-2">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder={`Search ${it.tools.length} tools`}
+          spellCheck={false}
+          className="min-w-0 flex-1 rounded-lg bg-black/40 px-2.5 py-1.5 text-[11px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
+        />
+        <button
+          onClick={() => setChecked(new Set(it.tools))}
+          className="shrink-0 text-[10px] text-ink-3 transition-colors duration-150 hover:text-ink-2"
+        >
+          All
+        </button>
+        <button
+          onClick={() => setChecked(new Set())}
+          className="shrink-0 text-[10px] text-ink-3 transition-colors duration-150 hover:text-ink-2"
+        >
+          None
+        </button>
+      </div>
+
+      <div className="max-h-56 space-y-px overflow-y-auto">
+        {shown.map((t) => (
+          <label
+            key={t}
+            className="flex cursor-pointer items-center gap-2 rounded px-1 py-[3px] hover:bg-white/5"
+          >
+            <input
+              type="checkbox"
+              checked={checked.has(t)}
+              onChange={() => flip(t)}
+              className="size-3 shrink-0 accent-[#0a84ff]"
+            />
+            <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-ink-2">{t}</span>
+            {isNew(t) && (
+              // Only ever a name neither list has seen -- so it means "the server
+              // added this since you looked", and nothing else.
+              <span className="shrink-0 rounded bg-[#ff9f0a]/15 px-1 py-[1px] text-[9px] text-[#ff9f0a]">
+                new
+              </span>
+            )}
+          </label>
+        ))}
+        {shown.length === 0 && (
+          <p className="px-1 py-2 text-[10px] text-ink-3">Nothing matches that.</p>
+        )}
+      </div>
+
+      <p className="text-[10px] leading-snug text-ink-3">
+        {checked.size} of {it.tools.length} allowed. Unchecked tools are not hidden from the
+        assistant, they are absent — it is never told they exist. Takes effect next time this
+        server starts.
+      </p>
+
+      <button
+        onClick={save}
+        disabled={saving}
+        className="w-full rounded-lg bg-blue py-1.5 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
+      >
+        {saving ? "Saving…" : "Save"}
+      </button>
     </div>
   );
 }

@@ -127,6 +127,25 @@ pub struct Spec {
     /// carrying somebody's token with it. See [`super::secret`].
     #[serde(default)]
     pub env: std::collections::HashMap<String, String>,
+    /// Which of the server's tools may be used, or `None` for all of them.
+    ///
+    /// Enforced by *absence*: a tool left out is never collected, so it is not
+    /// in the list handed to the model and there is no name or schema for it to
+    /// invent a call from. See [`Servers::start`] and [`Servers::call`] -- both,
+    /// because this one is dispatched by name and a filtered list alone would
+    /// still answer a guessed one.
+    #[serde(default)]
+    pub allowed: Option<Vec<String>>,
+}
+
+impl Spec {
+    /// Whether this server may run `tool`.
+    fn may(&self, tool: &str) -> bool {
+        match &self.allowed {
+            None => true,
+            Some(names) => names.iter().any(|n| n == tool),
+        }
+    }
 }
 
 struct Wire {
@@ -319,7 +338,20 @@ impl Servers {
         for spec in specs {
             match Server::start(spec.clone()).await {
                 Ok((server, tools)) => {
-                    eprintln!("mcp: {} offers {} tools", spec.name, tools.len());
+                    // Filtered here rather than where the list is read, so an
+                    // excluded tool is never collected at all: nothing can show
+                    // it, count it, or hand it to a model by accident later.
+                    let offered = tools.len();
+                    let tools: Vec<Tool> =
+                        tools.into_iter().filter(|t| spec.may(&t.name)).collect();
+                    match offered == tools.len() {
+                        true => eprintln!("mcp: {} offers {offered} tools", spec.name),
+                        false => eprintln!(
+                            "mcp: {} offers {offered} tools, {} allowed",
+                            spec.name,
+                            tools.len()
+                        ),
+                    }
                     servers.tools.extend(tools);
                     servers.running.push(server);
                 }
@@ -360,6 +392,16 @@ impl Servers {
                 }
             )));
         };
+        // The second half of the same rule, and not redundant: this dispatches on
+        // a name rather than on something handed out earlier, so a filtered list
+        // alone would still answer a guessed one. A tool nobody allowed does not
+        // exist, and the error says exactly that rather than hinting it is there.
+        if !found.spec.may(tool) {
+            return Err(Error::Config(format!(
+                "no tool called {tool:?} on {server:?}"
+            )));
+        }
+
         let result = found
             .request(
                 "tools/call",
@@ -409,6 +451,50 @@ fn read_content(result: &Value) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn spec_allowing(allowed: Option<&[&str]>) -> Spec {
+        Spec {
+            name: "jirax".into(),
+            command: "npx".into(),
+            args: Vec::new(),
+            env: Default::default(),
+            allowed: allowed.map(|a| a.iter().map(|s| s.to_string()).collect()),
+        }
+    }
+
+    #[test]
+    fn no_list_at_all_allows_everything() {
+        // What every connection made before tool review looks like. It has to
+        // keep working, or upgrading Nudge silently breaks somebody's setup.
+        let s = spec_allowing(None);
+        assert!(s.may("getIssue"));
+        assert!(s.may("deleteIssue"));
+    }
+
+    #[test]
+    fn a_tool_left_out_is_not_allowed() {
+        let s = spec_allowing(Some(&["getIssue", "createIssue"]));
+        assert!(s.may("getIssue"));
+        assert!(!s.may("deleteIssue"));
+    }
+
+    #[test]
+    fn an_empty_list_allows_nothing_rather_than_everything() {
+        // The easy bug: treating "none chosen" as "not configured". Someone who
+        // unticks every box means it, and reading that as "all of them" would
+        // turn the safest possible answer into the most dangerous one.
+        let s = spec_allowing(Some(&[]));
+        assert!(!s.may("getIssue"));
+    }
+
+    #[test]
+    fn a_tool_the_server_grows_later_is_not_allowed() {
+        // Fail-closed growth. The list was agreed when the server offered two
+        // things; it ships `adminPurge` in the next version and does not get it
+        // for free.
+        let s = spec_allowing(Some(&["getIssue", "createIssue"]));
+        assert!(!s.may("adminPurge"));
+    }
 
     #[test]
     fn a_tool_is_named_by_its_server_and_itself() {
@@ -461,6 +547,74 @@ mod tests {
         assert_eq!(read_content(&r), "first\n(image omitted)\nsecond");
     }
 
+    /// The filter, against a real server rather than against `may` alone.
+    ///
+    /// `may` is four lines and obviously right; the thing worth proving is that
+    /// it is actually wired into both places -- the list the model is shown, and
+    /// the name-dispatched call that would otherwise still answer.
+    ///
+    ///     cargo test --lib mcp -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore = "needs npx and the network"]
+    async fn a_tool_left_out_is_absent_and_uncallable() {
+        let dir = std::env::temp_dir().join("nudge-mcp-filter-test");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("hello.txt"), "a line from a file\n").unwrap();
+
+        let every = Spec {
+            name: "files".into(),
+            command: "npx".into(),
+            args: vec![
+                "-y".into(),
+                "@modelcontextprotocol/server-filesystem".into(),
+                dir.display().to_string(),
+            ],
+            env: Default::default(),
+            allowed: None,
+        };
+
+        // What it offers when nothing is filtered, so the test knows the names.
+        let all = Servers::start(std::slice::from_ref(&every)).await;
+        let names: Vec<String> = all.tools().iter().map(|t| t.name.clone()).collect();
+        let read = names
+            .iter()
+            .find(|n| n.contains("read") && n.contains("file"))
+            .expect("no way to read a file")
+            .clone();
+        let write = names
+            .iter()
+            .find(|n| n.contains("write"))
+            .expect("no way to write a file")
+            .clone();
+        println!("  offered {}: {read} and {write} among them", names.len());
+
+        // Now allow only the read.
+        let restricted = Spec {
+            allowed: Some(vec![read.clone()]),
+            ..every
+        };
+        let servers = Servers::start(std::slice::from_ref(&restricted)).await;
+        let left: Vec<&str> = servers.tools().iter().map(|t| t.name.as_str()).collect();
+        println!("  allowed {}: {left:?}", left.len());
+
+        assert_eq!(left, vec![read.as_str()], "the list was not filtered");
+
+        // Absent from the list is half of it. The other half is that asking for
+        // it by name does not work either -- this dispatches on a string, so a
+        // model that guessed the name would otherwise be answered.
+        let refused = servers.call("files", &write, json!({"path": "x", "content": "y"})).await;
+        println!("  calling the excluded {write} -> {refused:?}");
+        assert!(refused.is_err(), "an excluded tool was still callable");
+
+        // And the one that is allowed still works, so this filters rather than
+        // simply breaking the server.
+        let said = servers
+            .call("files", &read, json!({"path": dir.join("hello.txt")}))
+            .await
+            .expect("the allowed tool stopped working");
+        assert!(said.contains("a line from a file"));
+    }
+
     /// Against a real server, which is the only way to find out.
     ///
     /// Ignored by default: it needs `npx`, a network on first run, and about a
@@ -483,6 +637,7 @@ mod tests {
                 dir.display().to_string(),
             ],
             env: Default::default(),
+            allowed: None,
         };
         let servers = Servers::start(std::slice::from_ref(&spec)).await;
         let tools = servers.tools();

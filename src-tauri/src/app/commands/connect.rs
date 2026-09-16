@@ -28,6 +28,12 @@ pub struct Listed {
     pub connected: bool,
     /// What the server itself said it could do. Empty until connected.
     pub tools: Vec<String>,
+    /// Which of those may be used. `None` means all of them -- a connection made
+    /// before any of this existed, which keeps working.
+    pub allowed: Option<Vec<String>>,
+    /// Which were looked at and turned down. Separate from "not allowed" so the
+    /// page can tell a decision from a tool that only appeared afterwards.
+    pub declined: Vec<String>,
 }
 
 /// Everything on offer, and what is already connected.
@@ -51,6 +57,8 @@ pub fn connections(app: AppHandle) -> Vec<Listed> {
                 needs_folder: o.key == "files",
                 connected: mine.is_some(),
                 tools: mine.map(|m| m.tools.clone()).unwrap_or_default(),
+                allowed: mine.and_then(|m| m.allowed.clone()),
+                declined: mine.map(|m| m.declined.clone()).unwrap_or_default(),
             }
         })
         .collect()
@@ -84,6 +92,11 @@ pub async fn connect(
                 key: key.clone(),
                 extra: Vec::new(),
                 tools: Vec::new(),
+                // This one only asks whether the thing starts at all, so it must
+                // see everything -- a server is not broken for offering a tool
+                // somebody later turned off.
+                allowed: None,
+                declined: Vec::new(),
                 at: 0,
             })
             .ok_or_else(|| "could not build that server".to_string())?,
@@ -107,6 +120,10 @@ pub async fn connect(
         key: key.clone(),
         extra: folder.into_iter().filter(|f| !f.is_empty()).collect(),
         tools: Vec::new(),
+        // Unreviewed while connecting, because the tools are not known until the
+        // server has answered. Filled in below, once they are.
+        allowed: None,
+        declined: Vec::new(),
         at: now_ms(),
     };
     let spec = connect::spec(&made).ok_or_else(|| "could not build that server".to_string())?;
@@ -127,12 +144,60 @@ pub async fn connect(
     all.retain(|m| m.key != key);
     all.push(Made {
         tools: tools.clone(),
+        // Everything it offered, written down rather than left as "all of them".
+        // The two look identical today and stop being identical the moment the
+        // server updates: consent was given to this list, so a tool added next
+        // month arrives switched off and asks for a fresh look.
+        allowed: Some(tools.clone()),
         ..made
     });
     connect::write(app.state::<Connections>().path.as_deref(), &all);
 
     eprintln!("connected {key}: {} tools", tools.len());
     Ok(tools)
+}
+
+/// Choose which of a connected server's tools may be used.
+///
+/// Takes only the allowed list; what was turned down is worked out from what the
+/// server offered, because the two together are the whole of it and a caller that
+/// sends both can send a pair that disagree.
+///
+/// Takes effect on the next start of that server. Nothing is re-probed here: the
+/// tools are already known, and asking a server to prove itself again to answer a
+/// checkbox would make a cheap thing slow.
+#[tauri::command]
+pub fn choose_tools(app: AppHandle, key: String, allowed: Vec<String>) -> Result<(), String> {
+    let path = app.state::<Connections>().path.clone();
+    let mut all = connect::read(path.as_deref());
+    let Some(made) = all.iter_mut().find(|m| m.key == key) else {
+        return Err(format!("{key} is not connected"));
+    };
+
+    // Only names the server actually offered. A name from anywhere else is not a
+    // permission, it is a typo or something worse, and letting it into the file
+    // would make the list disagree with the server for the rest of its life.
+    let allowed: Vec<String> = made
+        .tools
+        .iter()
+        .filter(|t| allowed.iter().any(|a| a == *t))
+        .cloned()
+        .collect();
+    made.declined = made
+        .tools
+        .iter()
+        .filter(|t| !allowed.iter().any(|a| a == *t))
+        .cloned()
+        .collect();
+    made.allowed = Some(allowed);
+
+    eprintln!(
+        "{key}: {} of {} tools allowed",
+        made.allowed.as_ref().map_or(0, Vec::len),
+        made.tools.len()
+    );
+    connect::write(path.as_deref(), &all);
+    Ok(())
 }
 
 /// Take it away: the record, and the token with it.

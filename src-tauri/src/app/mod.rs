@@ -299,6 +299,7 @@ pub fn run() {
             commands::resume_agent,
             commands::connections,
             commands::connect,
+            commands::choose_tools,
             commands::disconnect,
         ])
         .run(tauri::generate_context!())

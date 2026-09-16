@@ -148,6 +148,25 @@ pub struct Made {
     /// Tool names the server reported when it started.
     #[serde(default)]
     pub tools: Vec<String>,
+    /// Which of those tools may actually be used.
+    ///
+    /// `None` is "nobody has reviewed this yet", and means all of them -- which
+    /// is what every connection made before tool review looks like, so an older
+    /// file keeps working without being migrated.
+    ///
+    /// Once reviewed this is an **include list**, so a tool the server ships in
+    /// a later version arrives excluded rather than quietly enabled. A server
+    /// that grows a `deleteEverything` next month does not get it for free.
+    #[serde(default)]
+    pub allowed: Option<Vec<String>>,
+    /// Tools that were reviewed and turned down.
+    ///
+    /// Redundant against `allowed` for deciding what runs, and not redundant at
+    /// all for the person reading the list: without it, "I said no to this" and
+    /// "the server added this since I looked" are both merely absent, so every
+    /// tool you decline comes back wearing a `new` badge forever.
+    #[serde(default)]
+    pub declined: Vec<String>,
     /// Milliseconds since the epoch.
     #[serde(default)]
     pub at: u64,
@@ -221,6 +240,7 @@ pub fn spec(made: &Made) -> Option<crate::core::tools::mcp::Spec> {
         command: offer.command.to_string(),
         args,
         env,
+        allowed: made.allowed.clone(),
     })
 }
 
@@ -277,6 +297,8 @@ mod tests {
             key: "github".into(),
             extra: Vec::new(),
             tools: vec!["create_issue".into()],
+            allowed: None,
+            declined: Vec::new(),
             at: 0,
         };
         let spec = spec(&made).unwrap();
@@ -292,6 +314,8 @@ mod tests {
             key: "files".into(),
             extra: vec!["/Users/x/Work".into()],
             tools: Vec::new(),
+            allowed: None,
+            declined: Vec::new(),
             at: 0,
         };
         let spec = spec(&made).unwrap();
@@ -309,6 +333,8 @@ mod tests {
             key: "files".into(),
             extra: vec!["/tmp/x".into()],
             tools: vec!["read_file".into(), "write_file".into()],
+            allowed: None,
+            declined: Vec::new(),
             at: 1,
         }];
         write(Some(&path), &made);
@@ -325,6 +351,8 @@ mod tests {
             key: "nothing-like-this".into(),
             extra: Vec::new(),
             tools: Vec::new(),
+            allowed: None,
+            declined: Vec::new(),
             at: 0,
         })
         .is_none());
