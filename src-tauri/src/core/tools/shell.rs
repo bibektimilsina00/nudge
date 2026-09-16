@@ -102,6 +102,72 @@ pub(crate) const SECRETS: &[&str] = &[
     "password",
 ];
 
+/// Flags that turn a reading program into one that writes or executes.
+///
+/// `find` is on the allow-list and `find . -exec rm {} +` needs no shell syntax
+/// at all -- no pipe, no semicolon, nothing the raw-string scan looks for. The
+/// program was allowed on the understanding that it lists files, and a flag
+/// changes what it is. Checked per program because the flags are not general.
+const DANGEROUS_FLAGS: &[(&str, &[&str])] = &[
+    (
+        "find",
+        // `-exec`/`-ok` run a command per result; `-delete` removes them;
+        // `-fprintf`/`-fls`/`-fprint` write files.
+        &[
+            "-exec", "-execdir", "-ok", "-okdir", "-delete", "-fprintf", "-fls", "-fprint",
+        ],
+    ),
+    // In-place editing is the whole difference between reading a file and
+    // rewriting it, and `-f` takes a script from somewhere this never looked.
+    ("sed", &["-i", "--in-place", "-f", "--file"]),
+];
+
+/// Programs whose argument *is* a program.
+///
+/// A rule about the outer command can never vouch for the inner one: the
+/// allow-list saw `xargs`, not the `rm` it is about to run. None of these are on
+/// the read-only list today, and they are named here so that adding one later
+/// cannot quietly open this door.
+const ARG_EXECUTORS: &[&str] = &[
+    "xargs", "env", "nohup", "nice", "stdbuf", "timeout", "watch", "sudo", "doas", "ssh", "docker",
+    "podman", "kubectl", "npx", "pnpx", "bunx", "uvx", "command", "exec",
+];
+
+/// Programs that run source given to them on the command line.
+///
+/// `python3` and `node` are on the allow-list so that `python3 --version` can
+/// answer "is Python installed". With `-c` or `-e` the same program is arbitrary
+/// code execution, and it was: `python3 -c "__import__('os').system(...)"`
+/// passed every check in this file, because it contains no shell syntax.
+const INTERPRETERS: &[&str] = &[
+    "python",
+    "python3",
+    "node",
+    "deno",
+    "bun",
+    "ruby",
+    "perl",
+    "php",
+    "sh",
+    "bash",
+    "zsh",
+    "fish",
+    "osascript",
+    "swift",
+];
+
+/// The flags that make an interpreter read code from the command line.
+const INLINE_CODE: &[&str] = &["-c", "-e", "--eval", "--command", "-E", "--exec"];
+
+/// `awk` is a programming language whose program is an argument.
+///
+/// Not removed from the allow-list, because `awk '{print $2}'` is half of what a
+/// pipeline is for. Refused when the script reaches outside itself -- `system()`
+/// runs a command and `>` inside a script writes a file, neither of which the
+/// shell-syntax scan sees, because by then the redirection is inside a quoted
+/// argument.
+const AWKS: &[&str] = &["awk", "gawk", "mawk", "nawk"];
+
 /// Shell syntax that turns one command into something else.
 ///
 /// Pipes are allowed because a pipeline of readers is still a reader, and
@@ -141,6 +207,51 @@ pub(crate) fn syntax_refusal(command: &str) -> Option<String> {
     if let Some(secret) = SECRETS.iter().find(|s| lower.contains(&s.to_lowercase())) {
         return Some(format!("that path looks like a secret ({secret})"));
     }
+    None
+}
+
+/// Does this program's own arguments make it something other than a reader?
+///
+/// Separate from the syntax scan because none of these involve shell syntax.
+/// They are all the same mistake in different clothes: the allow-list vouches
+/// for a program, and an argument makes it a different program.
+fn argument_refusal(name: &str, stage: &str) -> Option<String> {
+    let args: Vec<&str> = stage.split_whitespace().skip(1).collect();
+
+    if ARG_EXECUTORS.contains(&name) {
+        return Some(format!(
+            "{name} runs whatever program it is given, so allowing it would not \
+             be allowing {name}"
+        ));
+    }
+
+    if INTERPRETERS.contains(&name) {
+        if let Some(flag) = args.iter().find(|a| INLINE_CODE.contains(*a)) {
+            return Some(format!(
+                "{name} {flag} runs code given on the command line, which is not \
+                 reading -- ask for the thing itself instead"
+            ));
+        }
+    }
+
+    if AWKS.contains(&name)
+        && args
+            .iter()
+            .any(|a| a.contains("system(") || a.contains('>'))
+    {
+        return Some(format!(
+            "that {name} script writes or runs something, which is not reading"
+        ));
+    }
+
+    if let Some((_, flags)) = DANGEROUS_FLAGS.iter().find(|(p, _)| *p == name) {
+        if let Some(bad) = args.iter().find(|a| flags.iter().any(|f| a.starts_with(f))) {
+            return Some(format!(
+                "{name} {bad} changes things rather than reporting them"
+            ));
+        }
+    }
+
     None
 }
 
@@ -206,6 +317,12 @@ pub fn refuse(command: &str, anything: bool) -> Option<String> {
                  \u{201c}Allowed to\u{201d} in the menu bar."
             ));
         }
+        // Before the subcommand check, because these are about the program
+        // being a different thing than the allow-list thought it was.
+        if let Some(why) = argument_refusal(name, stage) {
+            return Some(why);
+        }
+
         if let Some((_, verbs)) = SUBCOMMANDS.iter().find(|(p, _)| *p == name) {
             // The first word that is not a flag is the subcommand.
             let verb = words.find(|w| !w.starts_with('-'));
@@ -306,7 +423,78 @@ pub fn run(workspace: &std::path::Path, command: &str, anything: bool) -> Result
 
 #[cfg(test)]
 mod tests {
+    /// Seven ways past the read-only shell that needed no shell syntax at all.
+    ///
+    /// Every one of these was allowed by this file, and each is the same mistake:
+    /// the allow-list vouches for a program, and an argument makes it a different
+    /// program. Found by reading OpenWorker's permission engine, which handles all
+    /// of them, and confirmed against this code before it was changed -- two of
+    /// them were arbitrary code execution inside a guard whose own comment says it
+    /// does read-only work only.
+    #[test]
+    fn an_argument_cannot_turn_a_reader_into_a_writer() {
+        for attack in [
+            // `find` is a lister until a flag makes it a deleter. No pipe, no
+            // semicolon -- nothing the raw-string scan is looking for.
+            "find . -name x -exec rm {} +",
+            "find . -delete",
+            "find . -ok rm {} +",
+            "find . -fprintf /tmp/out %p",
+            // Arbitrary code execution. `python3` is on the list so that
+            // `python3 --version` can answer "is it installed".
+            "python3 -c \"__import__('os').system('rm -rf /tmp/x')\"",
+            "node -e \"require('child_process').execSync('whoami')\"",
+            "ruby -e \"system('whoami')\"",
+            // A programming language whose program is a quoted argument, so the
+            // redirection is invisible to a scan of the raw string.
+            "awk 'BEGIN{system(\"whoami\")}'",
+            "awk '{print > \"/tmp/out\"}'",
+            // Reading a file versus rewriting it.
+            "sed -i 's/a/b/' file",
+            "sed --in-place 's/a/b/' file",
+        ] {
+            assert!(super::refuse(attack, false).is_some(), "allowed: {attack}");
+        }
+    }
+
+    /// And the ordinary uses those programs were put on the list for.
+    ///
+    /// A guard that refuses the work is a guard somebody turns off, so the
+    /// refusals above have to be narrow enough to leave this alone.
+    #[test]
+    fn the_readers_still_read() {
+        for fine in [
+            "find . -name '*.rs'",
+            "python3 --version",
+            "node --version",
+            "awk '{print $2}'",
+            "sed -n '1,20p' file",
+            "grep -rn thing src | wc -l",
+            "git status",
+            "ls -la",
+        ] {
+            assert_eq!(super::refuse(fine, false), None, "refused: {fine}");
+        }
+    }
+
+    /// A program that runs another program can never be vouched for by a rule
+    /// about its own name. None are on the allow-list today; this is here so
+    /// that adding one cannot quietly open the door.
+    #[test]
+    fn programs_that_run_programs_are_refused_by_name() {
+        for attack in [
+            "xargs rm",
+            "env rm -rf x",
+            "sudo rm",
+            "npx cowsay",
+            "timeout 5 rm x",
+        ] {
+            assert!(super::refuse(attack, false).is_some(), "allowed: {attack}");
+        }
+    }
+
     use super::*;
+
     use std::ops::Not;
 
     #[test]
