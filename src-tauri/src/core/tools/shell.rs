@@ -307,6 +307,76 @@ fn argument_refusal(name: &str, stage: &str) -> Option<String> {
 /// Returns the reason it was refused, so the model is told what it did wrong and
 /// can try another way -- a silent refusal looks identical to a command that ran
 /// and printed nothing.
+/// What to do instead, when there is something.
+///
+/// A refusal that leaves the model with no route is a refusal that produces a
+/// confident guess. Asked for a crate's dependency count, a run reached for
+/// `python3 -c` to call an API, was correctly refused, and then answered from
+/// memory -- with `fetch` available the whole time and never mentioned.
+///
+/// So the sentence that says no also says where to go. Named steps, because
+/// "use the appropriate tool" is not an instruction: the model has a list of
+/// kinds and these are three of them.
+///
+/// Only where there genuinely is one. Padding every refusal with advice that
+/// does not fit teaches the model to stop reading them.
+fn instead(command: &str) -> Option<&'static str> {
+    let c = command.to_lowercase();
+
+    // Reaching the network. The commonest thing a refused command was trying to
+    // do, and the one with the most direct replacement.
+    if [
+        "curl ",
+        "wget ",
+        "http://",
+        "https://",
+        "urllib",
+        "requests.get",
+        "fetch(",
+    ]
+    .iter()
+    .any(|n| c.contains(n))
+    {
+        return Some(
+            "To read a page, use fetch. To call an API with a method, headers or a body, \
+             use request. Neither needs a shell.",
+        );
+    }
+
+    // Writing a file, usually as a redirect.
+    if c.contains('>') {
+        return Some("To put something in a file, use write, or edit to change part of one.");
+    }
+
+    // Two commands at once.
+    if c.contains("&&") || c.contains(';') || c.contains("||") {
+        return Some(
+            "Run one command per step -- you get the output of each before choosing the next.",
+        );
+    }
+
+    // Not here: pointing `cat` at `read`. `cat` is on the read-only list and is
+    // never refused for being itself, so the only time this could fire is when
+    // the path is a secret -- where "use read instead" is the worst possible
+    // advice. A route is only useful where the refusal was about capability.
+
+    None
+}
+
+/// Append it, when there is one.
+fn with_route(why: String, command: &str) -> String {
+    let Some(route) = instead(command) else {
+        return why;
+    };
+    // Punctuated, because not every refusal ends in a full stop and two
+    // sentences running together read as one long confusing one.
+    let why = why.trim_end();
+    match why.ends_with(['.', '!', '?']) {
+        true => format!("{why} {route}"),
+        false => format!("{why}. {route}"),
+    }
+}
+
 pub fn refuse(command: &str, anything: bool) -> Option<String> {
     let trimmed = command.trim();
     if trimmed.is_empty() {
@@ -335,7 +405,7 @@ pub fn refuse(command: &str, anything: bool) -> Option<String> {
         return None;
     }
     if let Some(why) = syntax_refusal(trimmed) {
-        return Some(why);
+        return Some(with_route(why, trimmed));
     }
 
     for stage in trimmed.split('|') {
@@ -356,22 +426,29 @@ pub fn refuse(command: &str, anything: bool) -> Option<String> {
             // answer when both are true. Granting a shell does not conjure
             // `ffmpeg`.
             if !super::present::installed(name) {
-                return Some(super::present::missing(name));
+                // With the route, where there is one. "wget is not on this Mac,
+                // install it" is the right answer for `ffmpeg` and the wrong one
+                // for anything Nudge can already do itself -- sending somebody
+                // to Homebrew for a page fetch is worse than not answering.
+                return Some(with_route(super::present::missing(name), trimmed));
             }
             // The sentence comes from the grant rather than from here, so the
             // same refusal reads the same way whichever tool ran into it. It
             // was written out twice once, and the two copies had already
             // drifted to naming different places to change it.
-            return Some(format!(
-                "{name} is here, but running it is not something I can do -- I \
-                 can only read. {}",
-                crate::core::reach::Grant::Shell.denied()
+            return Some(with_route(
+                format!(
+                    "{name} is here, but running it is not something I can do -- I \
+                     can only read. {}",
+                    crate::core::reach::Grant::Shell.denied()
+                ),
+                trimmed,
             ));
         }
         // Before the subcommand check, because these are about the program
         // being a different thing than the allow-list thought it was.
         if let Some(why) = argument_refusal(name, stage) {
-            return Some(why);
+            return Some(with_route(why, trimmed));
         }
 
         if let Some((_, verbs)) = SUBCOMMANDS.iter().find(|(p, _)| *p == name) {
@@ -553,6 +630,45 @@ mod tests {
         ] {
             assert!(super::refuse(attack, false).is_some(), "allowed: {attack}");
         }
+    }
+
+    /// A refusal with nowhere to go produces a confident guess.
+    ///
+    /// The real one: asked for a crate's dependency count, a run reached for
+    /// `python3 -c` to call an API, was refused, and answered from memory --
+    /// with `fetch` available the whole time and never mentioned.
+    #[test]
+    fn a_refusal_says_where_to_go_instead() {
+        let asking = [
+            // Exactly the command from that run.
+            (
+                "python3 -c \"import urllib.request; urllib.request.urlopen(url)\"",
+                "fetch",
+            ),
+            ("curl https://crates.io/api/v1/crates/toml", "fetch"),
+            ("wget https://example.com/x", "request"),
+            ("echo hi > out.txt", "write"),
+            ("ls && pwd", "one command per step"),
+        ];
+        for (command, expected) in asking {
+            let why =
+                super::refuse(command, false).unwrap_or_else(|| panic!("{command} was allowed"));
+            assert!(
+                why.contains(expected),
+                "{command}\n  said: {why}\n  wanted it to mention {expected}"
+            );
+        }
+    }
+
+    /// And a refusal with nowhere useful to point is left alone.
+    ///
+    /// Padding every one with advice that does not fit teaches the model to
+    /// stop reading them.
+    #[test]
+    fn a_refusal_with_no_better_route_stays_short() {
+        let why = super::refuse("rm -rf /tmp/x", false).unwrap();
+        assert!(!why.contains("use fetch"), "{why}");
+        assert!(!why.contains("use write"), "{why}");
     }
 
     /// And the question they are actually on the list to answer still works.
