@@ -337,9 +337,22 @@ pub fn write(path: Option<&std::path::Path>, made: &[Made]) {
 pub fn spec(made: &Made) -> Option<crate::core::tools::mcp::Spec> {
     let offer = offer(&made.key)?;
     let mut args: Vec<String> = offer.args.iter().map(|a| a.to_string()).collect();
-    args.extend(made.extra.iter().cloned());
+    // Slack is the one whose extra is not an argument. Its server wants the
+    // workspace id in the environment, and unlike a folder nobody knows theirs
+    // -- so `connect` reads it off the token rather than asking. Kept here
+    // rather than in `Offer` because one entry needing this is a special case,
+    // and a second one would be the moment to make it a field.
+    let team = matches!(made.key.as_str(), "slack");
+    if !team {
+        args.extend(made.extra.iter().cloned());
+    }
 
     let mut env = std::collections::HashMap::new();
+    if team {
+        if let Some(id) = made.extra.first() {
+            env.insert("SLACK_TEAM_ID".to_string(), id.clone());
+        }
+    }
     for (k, v) in offer.env {
         let v = match v.strip_prefix("~/") {
             Some(rest) => match dirs::home_dir() {

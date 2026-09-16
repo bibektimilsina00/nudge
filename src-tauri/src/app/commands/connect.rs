@@ -127,9 +127,25 @@ pub async fn connect(
         secret::to_keychain(&connect::keychain_item(&key), token).map_err(|e| e.to_string())?;
     }
 
+    // Slack's server needs the workspace id and nobody knows theirs by heart, so
+    // it is read off the token that was just stored rather than typed. Done here
+    // because it is the only thing standing between a valid token and a working
+    // connection, and asking for it would be asking somebody to go and look up a
+    // fact their credential already carries.
+    let extra: Vec<String> = match key.as_str() {
+        "slack" => match team_of(token.as_deref().unwrap_or_default()).await {
+            Some(id) => vec![id],
+            None => {
+                undo(&key, true);
+                return Err("Slack did not accept that token.".into());
+            }
+        },
+        _ => folder.into_iter().filter(|f| !f.is_empty()).collect(),
+    };
+
     let made = Made {
         key: key.clone(),
-        extra: folder.into_iter().filter(|f| !f.is_empty()).collect(),
+        extra,
         tools: Vec::new(),
         // Unreviewed while connecting, because the tools are not known until the
         // server has answered. Filled in below, once they are.
@@ -209,6 +225,29 @@ pub fn choose_tools(app: AppHandle, key: String, allowed: Vec<String>) -> Result
     );
     connect::write(path.as_deref(), &all);
     Ok(())
+}
+
+/// Which workspace a Slack token belongs to.
+///
+/// `auth.test` is the cheapest call Slack has and the only one that works before
+/// anything else is known, which makes it both the lookup and the proof that the
+/// token is real.
+async fn team_of(token: &str) -> Option<String> {
+    #[derive(serde::Deserialize)]
+    struct Who {
+        ok: bool,
+        team_id: Option<String>,
+    }
+    let who: Who = crate::core::http()
+        .post("https://slack.com/api/auth.test")
+        .bearer_auth(token)
+        .send()
+        .await
+        .ok()?
+        .json()
+        .await
+        .ok()?;
+    who.ok.then_some(who.team_id).flatten()
 }
 
 /// Take it away: the record, and the token with it.

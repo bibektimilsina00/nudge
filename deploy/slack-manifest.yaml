@@ -1,0 +1,50 @@
+# The Slack app Nudge connects to.
+#
+# Not an app that runs anything. Nudge is the agent; Slack is a tool it calls,
+# so this exists only to mint a bot token and say what that token may do. There
+# is no request URL, no socket mode and no event subscription, because nothing
+# here receives anything -- Nudge asks Slack questions from your Mac and Slack
+# answers. That is also why it needs no hosting.
+#
+# The six scopes are the six the MCP server actually uses, read out of the
+# package rather than copied from a tutorial:
+#
+#   conversations.list, conversations.info     -> channels:read
+#   conversations.history, conversations.replies -> channels:history
+#   chat.postMessage                           -> chat:write
+#   reactions.add                              -> reactions:write
+#   users.list                                 -> users:read
+#   users.profile.get                          -> users.profile:read
+#
+# Public channels only, and only the ones the bot is invited to. Private
+# channels and DMs would need groups:*, im:* and mpim:*; they are left out
+# because an assistant that can read every DM in a workspace is a different
+# proposition from one that can read #general.
+display_information:
+  name: Nudge
+  description: Reads channels and posts messages on your behalf, from the Nudge app on your Mac.
+  background_color: "#1e1e1e"
+
+features:
+  bot_user:
+    display_name: Nudge
+    # It is not a service sitting in the workspace waiting; it is online when the
+    # app on somebody's Mac is running and asking.
+    always_online: false
+
+oauth_config:
+  scopes:
+    bot:
+      - channels:history
+      - channels:read
+      - chat:write
+      - reactions:write
+      - users:read
+      - users.profile:read
+
+settings:
+  # Nothing to deploy, nothing to listen on, nothing to rotate against.
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  is_hosted: false
+  token_rotation_enabled: false
