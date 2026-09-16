@@ -126,17 +126,34 @@ The old plan set the test and never met it: *"can the person see afterwards what
 was done with it?"* Today the answer is no. An agent reports what it did and
 Nudge believes it.
 
-### 2.1 An audit trail
+### 2.1 An audit trail that cannot itself become the leak
 
 Every tool call, every grant used, every refusal — appended to a local SQLite
-log, with secrets stripped on the way in. OpenWorker's `audit.py` is ~100 lines
-and does exactly this.
+log. OpenWorker's `audit.py` and OpenExecutive's `audit/` are each about a
+hundred lines and do exactly this.
+
+The part to get right is not the table, it is what goes in it. Both projects
+learned the same thing and OpenExecutive says it plainly: tool inputs and outputs
+carry tokens, cookies, mail bodies and file contents, and *"persisting them
+verbatim into the audit table would turn the audit log itself into a leak
+vector"*. **Log the call, its shape and its outcome; never its contents.** Their
+clips are 140 characters of input and 300 of result — enough to recognise a call,
+not enough to carry a document.
+
+Two details worth taking with it:
+
+- **`summary` and `full` are different columns.** The list view stays small; the
+  untruncated payload is fetched only when somebody opens one row.
+- **WAL and a busy timeout**, because audit writes swallow their exceptions and
+  *"silent loss under contention would be undetectable"*. A log that quietly
+  drops rows is worse than no log, because it is trusted.
 
 This is also what makes §1 legible: a permission system whose decisions vanish is
 one nobody can check.
 
 **Done when** the agent card can show what a finished run actually did, from the
-log rather than from the model's account of itself.
+log rather than from the model's account of itself — and when a run that fetched
+a page has recorded the URL and not the page.
 
 ### 2.2 Read the diff
 
@@ -217,6 +234,15 @@ Not phases, and not allowed to rot:
   against the previous setting before anybody concludes anything from it.
 - **Widen the no-model path.** Every phrasing it learns is a turn that costs 0.3s
   instead of 4.5. Typing into a named field and launching apps by name are next.
+- **Ablation: does a feature earn its keep?** Run a suite twice with one thing
+  switched off and print the per-case delta. Both existing suites are already one
+  arm of it, and four features have never been measured this way: per-application
+  memory, the early look, skills, and the thinking level. OpenExecutive's
+  `ablation.py` is the pattern, and its two rules matter more than its code — the
+  "off" arm must be the production path with one knob at zero rather than a
+  test-only branch, and the docstring must say what a run costs, because a
+  harness that quietly doubles a bill gets run once by accident.
+  See [OPENEXECUTIVE.md](OPENEXECUTIVE.md).
 
 ---
 
