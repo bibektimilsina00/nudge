@@ -144,6 +144,7 @@ pub fn run() {
             app.manage(commands::Connections {
                 path: crate::core::connect::store(),
             });
+            app.manage(commands::SigningIn::default());
             app.manage(Hotkey(std::sync::Mutex::new(hotkey.clone())));
             app.manage(Suggesting(Flag::new(true)));
             app.manage(Look(std::sync::Mutex::new(
@@ -300,6 +301,8 @@ pub fn run() {
             commands::connections,
             commands::connect,
             commands::choose_tools,
+            commands::sign_in_begin,
+            commands::sign_in_poll,
             commands::disconnect,
         ])
         .run(tauri::generate_context!())

@@ -20,6 +20,8 @@ type Listed = {
   /** What connecting grants. Shown before consent, never after. */
   access: string;
   needs_token: boolean;
+  /** This one hands over a token instead of asking for one. */
+  signs_in: boolean;
   where_from: string | null;
   /** For the ones signed into rather than pasted. */
   setup: string | null;
@@ -150,6 +152,48 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState("");
   const [tools, setTools] = useState(false);
+  const [code, setCode] = useState<{ user_code: string; verification_uri: string } | null>(null);
+
+  /**
+   * GitHub's device flow, driven from here.
+   *
+   * The polling loop lives in the window rather than in Rust so that closing the
+   * card ends it. A loop on the other side would keep asking GitHub about a
+   * sign-in nobody is doing any more.
+   */
+  const signIn = async () => {
+    setBusy(true);
+    setFailed("");
+    try {
+      const started = await invoke<{
+        user_code: string;
+        verification_uri: string;
+        interval: number;
+        expires_in: number;
+      }>("sign_in_begin", { key: it.key });
+      setCode(started);
+      setOpen(true);
+
+      const until = Date.now() + started.expires_in * 1000;
+      for (;;) {
+        if (Date.now() > until) throw new Error("That code expired. Try again.");
+        await new Promise((r) => setTimeout(r, started.interval * 1000));
+        // null means not yet; anything else means the token is in the Keychain.
+        const done = await invoke<string | null>("sign_in_poll");
+        if (done !== null) break;
+      }
+      setCode(null);
+      // The token is stored, but a connection is still only real once the
+      // server has started and said what it can do -- same as a pasted one.
+      go();
+    } catch (e) {
+      setCode(null);
+      setFailed(String(e));
+      setOpen(true);
+    } finally {
+      setBusy(false);
+    }
+  };
 
   const go = () => {
     setBusy(true);
@@ -248,11 +292,17 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
             // A card with a field has to open. One with only instructions does
             // not: the attempt is cheap, it is the thing that actually decides,
             // and it either works or says what is missing.
-            onClick={() => (it.needs_token || it.needs_folder ? setOpen((o) => !o) : go())}
+            onClick={() =>
+              it.signs_in
+                ? void signIn()
+                : it.needs_token || it.needs_folder
+                  ? setOpen((o) => !o)
+                  : go()
+            }
             disabled={busy}
             className="shrink-0 rounded-full bg-blue px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
           >
-            {busy ? "Checking…" : "Connect"}
+            {busy ? (code ? "Waiting…" : "Checking…") : it.signs_in ? "Sign in" : "Connect"}
           </button>
         )}
       </div>
@@ -262,6 +312,19 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
           <p className="text-[10px] leading-snug text-ink-3">
             <span className="text-ink-2">Gets:</span> {it.access}
           </p>
+          {code && (
+            // The whole of the flow, as far as anybody using it is concerned:
+            // a short string to type somewhere GitHub has already opened. Big,
+            // monospaced and letter-spaced because it is going to be copied by
+            // eye, and that is where O and 0 get confused.
+            <div className="rounded-lg bg-black/40 px-2.5 py-2 text-center hairline">
+              <p className="text-[10px] text-ink-3">Enter this code on GitHub</p>
+              <p className="mt-1 font-mono text-[15px] font-semibold tracking-[0.18em] text-white select-all">
+                {code.user_code}
+              </p>
+              <p className="mt-1 text-[10px] break-all text-ink-3">{code.verification_uri}</p>
+            </div>
+          )}
           {it.needs_folder && (
             <input
               value={folder}

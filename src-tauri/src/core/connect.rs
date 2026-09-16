@@ -50,6 +50,12 @@ pub struct Offer {
     /// Where a person gets that token. A link and a sentence, because "paste
     /// your token" is not an instruction anybody can follow.
     pub where_from: Option<&'static str>,
+    /// The client id to sign in with, for services that will hand over a token
+    /// rather than make somebody go and mint one.
+    ///
+    /// Public on purpose. GitHub's device flow has no client secret, which is
+    /// exactly why it suits a program anybody can download and read.
+    pub sign_in: Option<&'static str>,
     /// For the ones that are not a token at all.
     ///
     /// Google's server keeps its own credential file and its own account store,
@@ -76,6 +82,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-filesystem"],
             env: &[],
+            sign_in: None,
             token: None,
             where_from: None,
             setup: None,
@@ -89,7 +96,11 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-github"],
             env: &[],
+            sign_in: Some("Iv23liZbf0DVYN4oVPZt"),
             token: Some("GITHUB_PERSONAL_ACCESS_TOKEN"),
+            // Still offered, because a fine-grained token you minted yourself is
+            // a narrower thing than what signing in gives, and somebody who
+            // wants that should not have to sign in to get it.
             where_from: Some("github.com → Settings → Developer settings → Personal access tokens"),
             setup: None,
         },
@@ -102,6 +113,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-slack"],
             env: &[],
+            sign_in: None,
             token: Some("SLACK_BOT_TOKEN"),
             where_from: Some("api.slack.com/apps → your app → OAuth & Permissions"),
             setup: None,
@@ -120,6 +132,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
             env: &[],
+            sign_in: None,
             token: None,
             where_from: None,
             setup: Some(
@@ -139,6 +152,7 @@ pub fn catalogue() -> Vec<Offer> {
             // export a variable before clicking a button is asking them to do
             // the part that is not theirs to do.
             env: &[("GOOGLE_OAUTH_CREDENTIALS", "~/.config/gcp-oauth.keys.json")],
+            sign_in: None,
             token: None,
             where_from: None,
             setup: Some(
@@ -166,6 +180,7 @@ pub fn catalogue() -> Vec<Offer> {
                 // this works once by hand and never again from the app.
                 ("TOKEN_PATH", "~/.mcp-google-sheets-token.json"),
             ],
+            sign_in: None,
             token: None,
             where_from: None,
             setup: Some(
@@ -185,6 +200,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "mcp-google-tasks"],
             env: &[],
+            sign_in: None,
             token: None,
             where_from: None,
             setup: Some(
@@ -204,6 +220,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "mcp-server-gsc"],
             env: &[("GOOGLE_APPLICATION_CREDENTIALS", "~/.config/gsc-service-account.json")],
+            sign_in: None,
             token: None,
             where_from: None,
             setup: Some(
@@ -224,6 +241,7 @@ pub fn catalogue() -> Vec<Offer> {
             // `server-gdrive` is deprecated and covers only Drive.
             args: &["-y", "google-workspace-mcp", "serve"],
             env: &[],
+            sign_in: None,
             token: None,
             where_from: None,
             setup: Some(

@@ -20,6 +20,8 @@ pub struct Listed {
     /// What connecting grants, shown *before* consent.
     pub access: String,
     pub needs_token: bool,
+    /// This one hands over a token instead of asking for one.
+    pub signs_in: bool,
     pub where_from: Option<String>,
     /// For the ones signed into rather than pasted. Shown instead of a field.
     pub setup: Option<String>,
@@ -50,6 +52,7 @@ pub fn connections(app: AppHandle) -> Vec<Listed> {
                 about: o.about.into(),
                 access: o.access.into(),
                 needs_token: o.token.is_some(),
+                signs_in: o.sign_in.is_some(),
                 where_from: o.where_from.map(Into::into),
                 setup: o.setup.map(Into::into),
                 // The filesystem server is handed the folder it may touch, and
@@ -225,6 +228,82 @@ pub fn choose_tools(app: AppHandle, key: String, allowed: Vec<String>) -> Result
     );
     connect::write(path.as_deref(), &all);
     Ok(())
+}
+
+/// A sign-in somebody is part way through.
+///
+/// Held here rather than handed to the window because the device code is the
+/// half that proves the sign-in is ours. The window gets the short code meant to
+/// be read aloud and nothing else.
+#[derive(Default)]
+pub struct SigningIn(pub std::sync::Mutex<Option<Pending>>);
+
+pub struct Pending {
+    key: String,
+    client_id: String,
+    device_code: String,
+}
+
+/// Start a sign-in, and give back the code to show.
+#[tauri::command]
+pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::signin::Waiting, String> {
+    let offer = connect::offer(&key).ok_or_else(|| format!("no such integration: {key}"))?;
+    let client_id = offer
+        .sign_in
+        .ok_or_else(|| format!("{} is not something you sign in to", offer.name))?;
+
+    // Empty: a GitHub App's reach is its installed permissions, decided when it
+    // is installed on a repository. Asking for scopes here would be asking for
+    // something the app does not grant that way.
+    let waiting = crate::core::signin::begin(client_id, "").await?;
+
+    // Opened here rather than in the window, because that is how every other
+    // link in this app is opened and adding a plugin to do it from JavaScript
+    // would be a dependency bought for one call.
+    let _ = std::process::Command::new("open")
+        .arg(&waiting.verification_uri)
+        .spawn();
+
+    *app.state::<SigningIn>().0.lock().unwrap() = Some(Pending {
+        key,
+        client_id: client_id.to_string(),
+        device_code: waiting.device_code.clone(),
+    });
+    Ok(waiting)
+}
+
+/// Ask once whether they have finished.
+///
+/// One step per call, so the window owns the waiting -- it can show progress,
+/// stop, and be closed without leaving a loop running behind it.
+#[tauri::command]
+pub async fn sign_in_poll(app: AppHandle) -> Result<Option<String>, String> {
+    use crate::core::signin::Poll;
+
+    let Some((key, client_id, device_code)) = ({
+        let held = app.state::<SigningIn>();
+        let held = held.0.lock().unwrap();
+        held.as_ref()
+            .map(|p| (p.key.clone(), p.client_id.clone(), p.device_code.clone()))
+    }) else {
+        return Err("nothing is signing in".into());
+    };
+
+    match crate::core::signin::poll(&client_id, &device_code).await {
+        Poll::Pending { .. } => Ok(None),
+        Poll::Stopped(why) => {
+            *app.state::<SigningIn>().0.lock().unwrap() = None;
+            Err(why)
+        }
+        Poll::Token(token) => {
+            // Straight to the Keychain, the same place a pasted one goes, so
+            // everything downstream cannot tell the difference -- and neither
+            // can GitHub, which treats both as bearer tokens.
+            secret::to_keychain(&connect::keychain_item(&key), &token).map_err(|e| e.to_string())?;
+            *app.state::<SigningIn>().0.lock().unwrap() = None;
+            Ok(Some(token))
+        }
+    }
 }
 
 /// Which workspace a Slack token belongs to.
