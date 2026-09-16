@@ -38,6 +38,13 @@ pub struct Offer {
     /// The program that speaks the protocol, and its arguments.
     pub command: &'static str,
     pub args: &'static [&'static str],
+    /// Environment that is not a secret: where a server looks for its own
+    /// credential file, mostly, which differs per server and is not something
+    /// anybody should have to discover.
+    ///
+    /// A value starting `~/` is expanded against the home directory, because
+    /// these are paths and a static string cannot know whose home.
+    pub env: &'static [(&'static str, &'static str)],
     /// The environment variable the token goes into, when one is needed.
     pub token: Option<&'static str>,
     /// Where a person gets that token. A link and a sentence, because "paste
@@ -68,6 +75,7 @@ pub fn catalogue() -> Vec<Offer> {
             access: "Everything inside the folder you pick, and nothing outside it.",
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-filesystem"],
+            env: &[],
             token: None,
             where_from: None,
             setup: None,
@@ -80,6 +88,7 @@ pub fn catalogue() -> Vec<Offer> {
                      create it are the whole of the limit.",
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-github"],
+            env: &[],
             token: Some("GITHUB_PERSONAL_ACCESS_TOKEN"),
             where_from: Some("github.com → Settings → Developer settings → Personal access tokens"),
             setup: None,
@@ -92,6 +101,7 @@ pub fn catalogue() -> Vec<Offer> {
                      it has not been added to.",
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-slack"],
+            env: &[],
             token: Some("SLACK_BOT_TOKEN"),
             where_from: Some("api.slack.com/apps → your app → OAuth & Permissions"),
             setup: None,
@@ -109,6 +119,7 @@ pub fn catalogue() -> Vec<Offer> {
                      anything else in the account.",
             command: "npx",
             args: &["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+            env: &[],
             token: None,
             where_from: None,
             setup: Some(
@@ -125,6 +136,7 @@ pub fn catalogue() -> Vec<Offer> {
                      calendar.events. No access to mail or files.",
             command: "npx",
             args: &["-y", "@cocal/google-calendar-mcp"],
+            env: &[],
             token: None,
             where_from: None,
             setup: Some(
@@ -132,6 +144,66 @@ pub fn catalogue() -> Vec<Offer> {
                  GOOGLE_OAUTH_CREDENTIALS at its JSON -- \
                  ~/.config/gcp-oauth.keys.json works -- then run: \
                  npx @cocal/google-calendar-mcp auth",
+            ),
+        },
+        Offer {
+            key: "google_sheets",
+            name: "Google Sheets",
+            about: "Read and write spreadsheets.",
+            // `drive.file` rather than `drive`: per-file access to what this app
+            // created or you opened with it, not the whole disk. The difference
+            // is the point of having a Sheets entry at all.
+            access: "Your spreadsheets, and only the Drive files this created or \
+                     you opened with it: spreadsheets and drive.file. Not the \
+                     rest of your Drive, and not mail.",
+            command: "npx",
+            args: &["-y", "mcp-google-sheets"],
+            env: &[("CREDENTIALS_PATH", "~/.config/gcp-oauth.keys.json")],
+            token: None,
+            where_from: None,
+            setup: Some(
+                "Same Desktop OAuth client as the rest of Google. Put its JSON at \
+                 ~/.config/gcp-oauth.keys.json, then sign in once in a browser: \
+                 CREDENTIALS_PATH=~/.config/gcp-oauth.keys.json npx mcp-google-sheets",
+            ),
+        },
+        Offer {
+            key: "google_tasks",
+            name: "Google Tasks",
+            about: "Read, create and complete tasks and task lists.",
+            access: "Your task lists and their contents: tasks. Nothing else in \
+                     the account.",
+            command: "npx",
+            args: &["-y", "mcp-google-tasks"],
+            env: &[],
+            token: None,
+            where_from: None,
+            setup: Some(
+                "This one wants a refresh token rather than doing the browser \
+                 flow itself, so it needs GOOGLE_TASKS_CLIENT_ID, \
+                 GOOGLE_TASKS_CLIENT_SECRET and GOOGLE_TASKS_REFRESH_TOKEN in the \
+                 environment. Note it starts and lists its tools without them and \
+                 only fails when something is actually asked of it.",
+            ),
+        },
+        Offer {
+            key: "google_search_console",
+            name: "Google Search Console",
+            about: "Search performance, indexing and sitemaps for your sites.",
+            access: "Read-only: webmasters.readonly. It cannot change anything, \
+                     and reaches only the properties the service account is added \
+                     to rather than everything you own.",
+            command: "npx",
+            args: &["-y", "mcp-server-gsc"],
+            env: &[("GOOGLE_APPLICATION_CREDENTIALS", "~/.config/gsc-service-account.json")],
+            token: None,
+            where_from: None,
+            setup: Some(
+                "The odd one out: a service account, not the Desktop OAuth client \
+                 the other Google entries use. In Cloud Console create a service \
+                 account, download its JSON key to \
+                 ~/.config/gsc-service-account.json, then in Search Console add \
+                 that account's email as a user on the property you want read.",
             ),
         },
         Offer {
@@ -145,6 +217,7 @@ pub fn catalogue() -> Vec<Offer> {
             // One server for all of it rather than seven entries. The official
             // `server-gdrive` is deprecated and covers only Drive.
             args: &["-y", "google-workspace-mcp", "serve"],
+            env: &[],
             token: None,
             where_from: None,
             setup: Some(
@@ -263,6 +336,18 @@ pub fn spec(made: &Made) -> Option<crate::core::tools::mcp::Spec> {
     args.extend(made.extra.iter().cloned());
 
     let mut env = std::collections::HashMap::new();
+    for (k, v) in offer.env {
+        let v = match v.strip_prefix("~/") {
+            Some(rest) => match dirs::home_dir() {
+                Some(home) => home.join(rest).display().to_string(),
+                // No home directory is not a reason to pass a path that means
+                // something else; leave it out and let the server say so.
+                None => continue,
+            },
+            None => v.to_string(),
+        };
+        env.insert(k.to_string(), v);
+    }
     if let Some(var) = offer.token {
         // Never the token itself. `mcp` resolves this against the Keychain when
         // it starts the child, so the value on disk names a secret rather than
