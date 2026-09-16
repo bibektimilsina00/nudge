@@ -79,7 +79,7 @@ missing grant, and the shell's refusal now composes it rather than writing its
 own. There had been two copies of that sentence and they had already drifted to
 naming different places to change the setting.
 
-### 1.2 One approval path, not one per thing
+### 1.2 One approval path, not one per thing — *done*
 
 There is already a working approval flow for a single case: replacing a file
 asks, remembers the answer per path, and resumes the turn. It is hard-wired to
@@ -89,8 +89,15 @@ Generalise it to *any* pending action, so that a `needs_user` decision from any
 gate routes to the same place: the same card, the same spoken question, the same
 resume.
 
-**Done when** a file replacement and an egress request use the same code path,
-and neither knows about the other.
+*Built.* `Pending` is a value with a question attached, the slot holds one of
+those rather than a `(PathBuf, String)`, and `put_to_the_person` is the single
+path. What "yes" *means* is decided in one place per kind, and the kinds do not
+know about each other.
+
+Also brought forward from 1.3, because an ask nobody remembers answering is an
+ask repeated on every page: `Reach::allow_host` remembers a host for the run,
+matched exactly — a suffix rule would let `evil-example.com` through on the
+strength of `example.com`, so a subdomain is its own decision.
 
 ### 1.3 Grants that expire
 
@@ -122,8 +129,26 @@ Replace it with a host allow-list that **asks** for anything new. Refusing
 outright would break the ordinary case; asking preserves it. Remember the answer
 at session or run scope per 1.3.
 
+The machinery is in place — `Pending::Reach`, the host memory, the single ask
+path. What is not decided is **when to ask**, and it is a product question rather
+than a coding one:
+
+- Asking on every new host breaks the thing fetch exists for. It is a background
+  optimisation — *"prefer the data to the picture of the data"* — and a question
+  in front of every one of those is worse than the screenshot it replaced.
+- Foreground fetches are the person's own question, seconds after they asked it.
+  There is nothing to protect them from and often nobody to ask, since
+  `put_to_the_person` needs a card to put it on.
+- **Agent runs are the opposite on both counts.** Nobody is watching, the URL may
+  have come from something on screen rather than from the person, and there is
+  always a card.
+
+So the proposed rule is: **ask when an agent is running and the host is new;
+leave the foreground alone.** That is where the danger is and where the question
+can actually be answered. It wants agreeing before it is built.
+
 **Done when** fetching a page the user named still works first time, and a host
-the model invented produces a question rather than a request.
+an agent invented produces a question rather than a request.
 
 ---
 

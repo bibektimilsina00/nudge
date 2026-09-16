@@ -102,6 +102,17 @@ pub struct Reach {
     /// restarting. Holding the ones that are off rather than the ones that are on
     /// means a server added to the config is usable without being listed twice.
     servers_off: std::sync::Mutex<std::collections::HashSet<String>>,
+    /// Hosts somebody has said yes to, this run.
+    ///
+    /// Held rather than written to the config, and that is the design: an
+    /// approval given to get one task finished is not a standing decision about
+    /// a domain, and treating it as one is how an allow-list fills up with hosts
+    /// nobody remembers agreeing to. This empties when the process does.
+    ///
+    /// The unit is the host, not the URL. A person who agreed to reach
+    /// example.com agreed to example.com; asking again for every path under it
+    /// is the approval fatigue that makes people answer "always" to everything.
+    hosts_allowed: std::sync::Mutex<std::collections::HashSet<String>>,
 }
 
 impl Reach {
@@ -154,6 +165,27 @@ impl Reach {
     /// Whether a tool server may be used right now.
     pub fn server(&self, name: &str) -> bool {
         !self.servers_off.lock().unwrap().contains(name)
+    }
+
+    /// Remember that this host was agreed to, for the rest of the run.
+    pub fn allow_host(&self, host: &str) {
+        self.hosts_allowed
+            .lock()
+            .unwrap()
+            .insert(host.trim().to_lowercase());
+    }
+
+    /// Has this host been agreed to?
+    ///
+    /// Exact match, not suffix. `evil-example.com` must not pass because
+    /// `example.com` was allowed, and a subdomain rule that got that backwards
+    /// would be worse than no rule -- so a subdomain is its own decision until
+    /// somebody asks for something cleverer.
+    pub fn host_allowed(&self, host: &str) -> bool {
+        self.hosts_allowed
+            .lock()
+            .unwrap()
+            .contains(&host.trim().to_lowercase())
     }
 
     pub fn set_server(&self, name: &str, on: bool) {
@@ -453,5 +485,137 @@ mod decision_tests {
             Some("shell")
         );
         assert_eq!(Decision::allow().rule, None);
+    }
+}
+
+/// Something waiting on a person's answer.
+///
+/// The approval path existed for exactly one question -- replacing a file -- and
+/// was shaped like it: a `(PathBuf, String)` in a mutex, with the answering code
+/// knowing it was about files. Every later question that needed a person would
+/// have arrived as a second copy of the same machinery, and two approval paths
+/// is two places for "yes" to mean something slightly different.
+///
+/// So the pending thing is a value with a question attached. What carrying it
+/// out means is decided where the answer lands, because that is the layer with
+/// the app in its hands; what it *is* lives here, with the rest of the
+/// permission vocabulary.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Pending {
+    /// Replace a file that already exists, with these exact bytes.
+    ///
+    /// The bytes are held rather than regenerated. Telling the model to write it
+    /// again costs a call and produces a different file -- one run made a
+    /// careful dark-themed page, waited for permission, then wrote a plainer
+    /// one. The person agreed to the first and would have got the second.
+    Replace {
+        path: std::path::PathBuf,
+        content: String,
+    },
+    /// Reach a host this run has not reached before.
+    Reach { host: String, url: String },
+}
+
+impl Pending {
+    /// What to put to the person, in their words rather than the tool's.
+    pub fn question(&self) -> String {
+        match self {
+            Pending::Replace { path, .. } => {
+                let name = path
+                    .file_name()
+                    .map(|n| n.to_string_lossy().to_string())
+                    .unwrap_or_else(|| path.display().to_string());
+                format!("{name} already exists. Shall I replace it?")
+            }
+            // The host, not the URL. A question is only useful if it can be
+            // answered, and nobody can weigh a two-hundred-character URL read
+            // aloud -- while "shall I fetch from example.com" is a decision.
+            Pending::Reach { host, .. } => format!("Shall I fetch something from {host}?"),
+        }
+    }
+
+    /// A line for the record, once it has been answered.
+    pub fn recorded(&self, agreed: bool) -> String {
+        let verb = if agreed { "agreed to" } else { "refused" };
+        match self {
+            Pending::Replace { path, .. } => format!("{verb} replacing {}", path.display()),
+            Pending::Reach { host, .. } => format!("{verb} reaching {host}"),
+        }
+    }
+}
+
+#[cfg(test)]
+mod pending_tests {
+    use super::*;
+
+    #[test]
+    fn a_question_is_asked_about_the_thing_not_the_path() {
+        let p = Pending::Replace {
+            path: "/Users/someone/Nudge/notes/report.html".into(),
+            content: "x".into(),
+        };
+        // The file name, because the question is read out loud and a full path
+        // is unlistenable.
+        assert_eq!(
+            p.question(),
+            "report.html already exists. Shall I replace it?"
+        );
+    }
+
+    #[test]
+    fn reaching_asks_about_the_host() {
+        let p = Pending::Reach {
+            host: "example.com".into(),
+            url: "https://example.com/a/very/long/path?with=params&more=stuff".into(),
+        };
+        let q = p.question();
+        assert!(q.contains("example.com"), "{q}");
+        // Nobody can answer a question containing a URL they cannot hold in
+        // their head.
+        assert!(!q.contains("?with="), "{q}");
+    }
+
+    #[test]
+    fn both_outcomes_are_recordable() {
+        let p = Pending::Reach {
+            host: "example.com".into(),
+            url: "https://example.com/".into(),
+        };
+        assert!(p.recorded(true).contains("agreed"));
+        assert!(p.recorded(false).contains("refused"));
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    use super::*;
+
+    #[test]
+    fn a_host_agreed_to_is_remembered_and_others_are_not() {
+        let r = Reach::default();
+        assert!(!r.host_allowed("example.com"));
+
+        r.allow_host("Example.COM");
+        // Case and spacing are how a host arrives, not what it is.
+        assert!(r.host_allowed("example.com"));
+        assert!(r.host_allowed(" EXAMPLE.com "));
+    }
+
+    /// The rule worth protecting. A suffix match here would let
+    /// `evil-example.com` through on the strength of `example.com`, and a
+    /// subdomain rule that got it backwards would be worse than no rule at all.
+    #[test]
+    fn a_lookalike_host_is_not_the_host() {
+        let r = Reach::default();
+        r.allow_host("example.com");
+
+        for other in [
+            "evil-example.com",
+            "example.com.evil.test",
+            "notexample.com",
+            "sub.example.com",
+        ] {
+            assert!(!r.host_allowed(other), "{other} passed as example.com");
+        }
     }
 }

@@ -48,14 +48,15 @@ pub type Background = crate::core::tools::running::Running;
 #[derive(Default)]
 pub struct Grants {
     pub granted: std::sync::Mutex<std::collections::HashSet<std::path::PathBuf>>,
-    /// The file being asked about, and what was going to be written to it.
+    /// The one thing currently waiting on a person, whatever kind it is.
     ///
-    /// The content is kept because otherwise a yes means "write it again", and
-    /// again is not the same: asked to replace a page, one run produced a
-    /// careful dark-themed layout, waited for permission, and then regenerated a
-    /// plainer one from scratch. The user agreed to the first page and got the
-    /// second. Holding the bytes means yes writes exactly what was offered.
-    pub asking: std::sync::Mutex<Option<(std::path::PathBuf, String)>>,
+    /// One slot rather than a queue, because a question nobody is looking at is
+    /// not a question -- the agent is blocked on this one, and a second could
+    /// not be answered until the first was anyway.
+    ///
+    /// See [`crate::core::reach::Pending`] for why the payload is held rather
+    /// than regenerated.
+    pub asking: std::sync::Mutex<Option<crate::core::reach::Pending>>,
 }
 
 /// The offer on screen, so a window that loads late can ask for it.

@@ -456,16 +456,38 @@ fn volunteer_if_it_is_ever_a_good_moment(app: &AppHandle) {
 /// Returns the error to raise when there is no agent to hold -- the foreground
 /// has nowhere to wait, so there it stays a refusal.
 fn ask_to_replace(app: &AppHandle, path: &std::path::Path, content: String) -> Result<()> {
+    put_to_the_person(
+        app,
+        crate::core::reach::Pending::Replace {
+            path: path.to_path_buf(),
+            content,
+        },
+    )
+    .map_err(|_| {
+        crate::error::Error::Click(format!(
+            "{} already exists, and replacing it needs saying so out loud.",
+            path.display()
+        ))
+    })
+}
+
+/// Put a pending thing to the person and pause on it.
+///
+/// One path for every kind of question, so that "yes" means the same thing
+/// whichever gate asked. It used to exist only for file replacement and was
+/// shaped like it; the next question that needed a person would have arrived as
+/// a second copy.
+///
+/// Fails when there is nobody to ask -- no agent is running, so there is no card
+/// to put it on and nothing to resume afterwards. The caller turns that into a
+/// sentence about its own case.
+fn put_to_the_person(app: &AppHandle, pending: crate::core::reach::Pending) -> Result<()> {
+    let question = pending.question();
     app.state::<Grants>()
         .asking
         .lock()
         .unwrap()
-        .replace((path.to_path_buf(), content));
-    let name = path
-        .file_name()
-        .map(|n| n.to_string_lossy().to_string())
-        .unwrap_or_else(|| path.display().to_string());
-    let question = format!("{name} already exists. Shall I replace it?");
+        .replace(pending);
 
     if app.state::<Agents>().ask(question.clone()) {
         // Spoken here because this question is not a `Step` and never passes
@@ -475,10 +497,10 @@ fn ask_to_replace(app: &AppHandle, path: &std::path::Path, content: String) -> R
         crate::app::agent::publish(app);
         return Ok(());
     }
-    Err(crate::error::Error::Click(format!(
-        "{} already exists, and replacing it needs saying so out loud.",
-        path.display()
-    )))
+    // Nobody to ask: clear the slot rather than leaving a question standing that
+    // no card will ever show, or the next run inherits somebody else's.
+    app.state::<Grants>().asking.lock().unwrap().take();
+    Err(crate::error::Error::Click("there is nobody to ask".into()))
 }
 
 /// Carry out one step. Shared by the foreground loop and the agent runtime, so
