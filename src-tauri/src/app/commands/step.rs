@@ -110,17 +110,39 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
             speak(&app, step.say());
         }
         if !handing_over {
-            let done = match perform(&app, step) {
-                Ok(()) => perform_async(&app, step).await,
-                Err(e) => Err(e),
-            };
-            if let Err(e) = done {
-                // Two audiences, two sentences. The person gets what it means for
-                // what they asked; the log keeps the original, which is the one
-                // worth having when somebody actually looks.
-                let goal = app.state::<Nudge>().goal();
-                eprintln!("step failed: {e}");
-                app.emit("error", crate::error::plainly(&goal, &e)).ok();
+            // Judged here as well as in an agent run.
+            //
+            // This was agent-only, on the reasoning that a foreground step is
+            // something the person asked for a second ago and is watching
+            // happen. That reasoning did not survive contact: asked to write a
+            // file holding a line count, the foreground wrote the number it read
+            // off a stale terminal -- 63, when the file had 313 lines. They were
+            // watching, and had no way to know the number came from the screen
+            // rather than the file. Being present is not the same as being able
+            // to check.
+            match reviewed(&app, step).await {
+                Some(stopped) => {
+                    // The person sees the judge's own words, which were written
+                    // for them. The model gets the sentence that teaches it
+                    // nothing -- being in the room does not make the retry loop
+                    // safe, and a reason handed back is a reason to try around.
+                    eprintln!("step stopped by the reviewer");
+                    app.emit("error", stopped).ok();
+                }
+                None => {
+                    let done = match perform(&app, step) {
+                        Ok(()) => perform_async(&app, step).await,
+                        Err(e) => Err(e),
+                    };
+                    if let Err(e) = done {
+                        // Two audiences, two sentences. The person gets what it
+                        // means for what they asked; the log keeps the original,
+                        // which is the one worth having when somebody looks.
+                        let goal = app.state::<Nudge>().goal();
+                        eprintln!("step failed: {e}");
+                        app.emit("error", crate::error::plainly(&goal, &e)).ok();
+                    }
+                }
             }
         }
     }
@@ -667,13 +689,16 @@ fn landed(
 
 /// Put one proposed action to a judge that never saw the screen.
 ///
-/// `None` means carry on: the step has no consequences worth judging, nothing is
-/// running that could be steered, or this provider does not review. Anything
-/// else is the sentence to hand back instead of doing it.
+/// `None` means carry on: the step has no consequences worth judging, or this
+/// provider does not review. Anything else is the judge's own sentence, written
+/// for a person.
 ///
-/// Consulted only inside an agent run. A foreground step is something the person
-/// asked for a second ago and is watching happen; the danger this exists for is
-/// an unattended loop reading an instruction off the screen.
+/// Consulted for foreground steps and agent steps alike. It was agent-only at
+/// first, on the reasoning that a foreground step is watched as it happens --
+/// which did not survive being tested. What differs between the two is only who
+/// reads the reason: a person can be shown it, an agent is handed
+/// [`judge::REFUSED`] instead, because a reason given to the thing that proposed
+/// the action is a reason to try around it.
 pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
     use crate::core::judge::{self, Verdict};
 
@@ -712,6 +737,7 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
     };
 
     let asked = judge::prompt(&nudge.said(), &world, step, risk);
+    let began = std::time::Instant::now();
     let verdict = match provider.review(&asked).await {
         Ok(reply) => judge::read(&reply),
         // It promised to review and could not. That is a question, not a pass:
@@ -724,16 +750,21 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
         // is a charge somebody finds on a bill -- the rest of this log prints
         // every turn and every command, so one line for a step that was checked
         // is the same density.
-        eprintln!("reviewer: agreed -- {}", judge::shown(step));
+        eprintln!(
+            "reviewer: agreed in {:.1}s -- {}",
+            began.elapsed().as_secs_f32(),
+            judge::shown(step)
+        );
         return None;
     }
 
     eprintln!(
-        "reviewer: {} -- {}",
+        "reviewer: {} in {:.1}s -- {}",
         match verdict.broken() {
             true => "unreachable",
             false => "stopped a step",
         },
+        began.elapsed().as_secs_f32(),
         verdict.why()
     );
     record(
@@ -746,9 +777,7 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
         risk,
     );
 
-    // The agent is told nothing it could iterate against. The reason went to the
-    // record, where a person reads it.
-    Some(judge::REFUSED.to_string())
+    Some(verdict.why().to_string())
 }
 
 /// Ask whether to replace a file, and hold the task until the answer comes.

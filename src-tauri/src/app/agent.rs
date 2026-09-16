@@ -478,7 +478,12 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         // something the person asked for a second ago and is watching; this is
         // the loop that runs unattended, reading a screen somebody else wrote.
         let outcome = match commands::reviewed(app, &step).await {
-            Some(stopped) => Err(crate::error::Error::Click(stopped)),
+            // Not the reason. The reason is in the record, where a person reads
+            // it; handing it to the agent that proposed the action turns the
+            // judge into an oracle -- retry, read the reason, adjust, retry.
+            Some(_) => Err(crate::error::Error::Click(
+                crate::core::judge::REFUSED.to_string(),
+            )),
             None => match commands::perform(app, &step) {
                 Ok(()) => commands::perform_async(app, &step).await,
                 Err(e) => Err(e),

@@ -115,7 +115,27 @@ is told it goes beyond that; a curl carrying `.env` during a summarising task is
 refused. The one miss is a false unsure, which is the direction Rule 1 says to
 fail in.
 
-Cost: one extra model call per consequential step.
+**Foreground too.** It was agent-only at first, on the reasoning that a
+foreground step is watched as it happens. That did not survive being tested:
+asked to write a file holding a line count, the foreground wrote `63` — read off
+a stale terminal — when the file had 313 lines. They were watching, and had no
+way to know the number came from the screen rather than the file. Being present
+is not the same as being able to check.
+
+What differs between the two is only who reads the reason. A person is shown the
+judge's own words, which were written for them; an agent is handed a sentence
+that teaches it nothing, because a reason given to the thing that proposed the
+action is a reason to try around it.
+
+**What it does not catch.** The judge is never shown contents, so it cannot see
+that a value is wrong — only that an action does not follow from the request.
+`Write out.txt (2 bytes)` is consistent with "write the line count", whatever the
+two bytes say. It catches the injection, not the arithmetic.
+
+Cost: one extra model call per consequential step, measured at **2.6–2.9s**. On
+a foreground turn that roughly doubles it, which is why there is a switch —
+`review` in the config, and a row in settings that says what turning it off
+costs.
 
 ### 2.1 Provenance
 
