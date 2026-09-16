@@ -77,6 +77,12 @@ export default function Panel() {
     setView("integrations");
   };
   const [docked, setDocked] = useState(false);
+  // Heading this way, but not here yet. Its own ring, wider than the dock's --
+  // see `is_near` in notch.rs for why this cannot be a delay before opening.
+  const [near, setNear] = useState(false);
+  // What to hold, read rather than hardcoded: the key is configurable, and a
+  // hint naming the wrong one is worse than no hint.
+  const [hold, setHold] = useState("");
 
   const dock = (next: boolean) => {
     setDocked(next);
@@ -89,8 +95,17 @@ export default function Panel() {
       listen<boolean>("notch", (e) => setOpen(e.payload)),
       listen<boolean>("docked", (e) => setDocked(e.payload)),
       listen<Status>("status", (e) => setStatus(e.payload)),
+      listen<boolean>("near", (e) => setNear(e.payload)),
     ];
     return () => subs.forEach((s) => void s.then((un) => un()));
+  }, []);
+
+  useEffect(() => {
+    // The glyph only, not "⌃ control" -- the settings page has room to spell it
+    // out and a strip in the notch does not.
+    void invoke<{ id: string; keys: string[] }[]>("shortcuts")
+      .then((all) => setHold(all.find((s) => s.id === "talk")?.keys[0]?.split(" ")[0] ?? ""))
+      .catch(() => {});
   }, []);
 
   // Closing should not leave the panel parked three screens deep.
@@ -120,6 +135,11 @@ export default function Panel() {
 
   // Busy takes over the closed pill; the open panel keeps its own header.
   const busy = status !== "idle";
+  // Only at rest. Busy already says what is happening and open has the whole
+  // panel to say it, so a hint over either would be a second caption. Not
+  // conditioned on `docked`: that decides where the companion lives, and the
+  // hint is about what the notch does, which is true either way.
+  const hint = near && !open && !busy && hold !== "";
 
   return (
     <div className="flex w-full justify-center">
@@ -154,11 +174,16 @@ export default function Panel() {
               // hardware getting wider rather than as a bar hanging below it.
               ? "h-(--notch-h) w-[300px]"
               // At rest it holds only the companion, so it needs to be barely
-              // wider than the notch rather than a bar parked across the menu bar.
+              // wider than the notch rather than a bar parked across the menu
+              // bar. The hint goes *inside* this, not beside it: the strip is
+              // already almost entirely empty black -- that emptiness is the
+              // notch -- and growing it to make room pushed the companion out
+              // past the hardware onto the menu bar, with a slab of nothing
+              // where the width had gone.
               : "h-(--notch-h) w-[220px]",
         ].join(" ")}
       >
-        {busy && !open ? <StatusPill status={status} /> : <Pill open={open} />}
+        {busy && !open ? <StatusPill status={status} /> : <Pill open={open} hint={hint ? hold : ""} />}
 
         <div
           className={[
@@ -324,7 +349,7 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
  * No label -- the point of living in the notch is reading as part of the hardware,
  * and a word beside the Apple menu reads as an app announcing itself.
  */
-function Pill({ open }: { open: boolean }) {
+function Pill({ open, hint }: { open: boolean; hint: string }) {
   return (
     <div
       // One height class, not two. Listing `h-[38px]` and `h-0` together lets CSS
@@ -332,10 +357,31 @@ function Pill({ open }: { open: boolean }) {
       // its 38px while open, pushed the panel down, and clipped exactly that much
       // off the bottom.
       className={[
-        "flex items-center justify-end pr-3 transition-opacity duration-200",
+        "flex items-center justify-end gap-2 pr-3 transition-opacity duration-200",
         open ? "pointer-events-none h-0 opacity-0" : "h-(--notch-h) opacity-100 delay-150",
       ].join(" ")}
     >
+      {/* What the notch is for, said only while somebody is on their way to it.
+          Nothing here at rest: the whole point of living in the notch is being
+          ignorable, and a permanent caption would be a toolbar.
+
+          Delayed slightly rather than arriving with the strip -- text that lands
+          before the room it sits in reads as the box growing around it. */}
+      <span
+        aria-hidden={!hint}
+        className={[
+          "flex items-center gap-1.5 overflow-hidden text-[10.5px] whitespace-nowrap text-ink-2",
+          "transition-opacity duration-200 ease-out",
+          hint ? "opacity-100 delay-100" : "opacity-0",
+        ].join(" ")}
+      >
+        Hold
+        <kbd className="rounded-[4px] bg-white/12 px-1.5 py-px font-sans text-[10px] text-white/90">
+          {hint || "\u00a0"}
+        </kbd>
+        to ask
+      </span>
+
       {/* Nudged up and in from the corner: sitting hard against the right edge
           it reads as clipped by the pill rather than resting in it. */}
       <div className="-translate-y-[6px] scale-[0.5]">

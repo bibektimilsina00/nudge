@@ -20,6 +20,19 @@ pub struct Notch {
 /// aiming at a gap between two menu bars; a little slack costs nothing.
 const SLACK: f64 = 90.0;
 
+/// How far out the hint notices you coming, horizontally.
+///
+/// A separate, wider ring rather than a delay before opening. The dock opens the
+/// instant the pointer reaches it and that is deliberate -- one that hesitates
+/// feels broken -- so the only place a hint can live is further out, where the
+/// pointer is heading this way but has not arrived.
+///
+/// Wide enough to be crossed on the way rather than aimed at, and short enough
+/// vertically that dragging a window along the top of the screen does not
+/// summon it.
+const NEAR_X: f64 = 260.0;
+const NEAR_Y: f64 = 110.0;
+
 /// How far past the open panel the pointer may stray before it counts as leaving.
 ///
 /// The controls people reach for last are in the corners -- the gear, the back
@@ -101,6 +114,18 @@ impl Notch {
         };
         y <= h && (x - self.center_x).abs() <= w / 2.0
     }
+
+    /// Is the pointer heading this way, without being here yet?
+    ///
+    /// False once it actually arrives: the hint's whole job is to say what the
+    /// notch is for *before* it opens, and leaving it true underneath would have
+    /// the strip trying to be two widths at once.
+    pub fn is_near(&self, x: f64, y: f64) -> bool {
+        if self.is_hovered(x, y, false) {
+            return false;
+        }
+        y <= NEAR_Y && (x - self.center_x).abs() <= self.width / 2.0 + NEAR_X
+    }
 }
 
 #[cfg(test)]
@@ -116,6 +141,26 @@ mod tests {
     /// One test, not three, because `OPEN` is a process-wide static and cargo
     /// runs tests in parallel -- three tests each setting their own panel size
     /// read each other's values and failed at random.
+    /// The hint's ring is wider than the dock's and stops where it begins.
+    #[test]
+    fn approaching_is_noticed_before_arriving() {
+        // Straight above, but well out to the side: on the way, not there.
+        assert!(N.is_near(756.0 - 200.0, 20.0), "should notice the approach");
+
+        // Once it arrives, the hint stands down rather than fighting the dock
+        // over how wide the strip is.
+        assert!(N.is_hovered(756.0, 20.0, false));
+        assert!(!N.is_near(756.0, 20.0), "the hint must yield to the dock");
+    }
+
+    /// Dragging a window along the top of the screen must not summon it.
+    #[test]
+    fn the_hint_does_not_reach_down_the_screen() {
+        assert!(!N.is_near(756.0 - 200.0, 400.0));
+        // Nor all the way out to the corners of a wide display.
+        assert!(!N.is_near(20.0, 20.0));
+    }
+
     #[test]
     fn the_open_region_follows_the_panel_that_is_actually_showing() {
         // The bug: the region was fixed at the tallest view, so the home panel --

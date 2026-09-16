@@ -39,6 +39,7 @@ pub fn follow(app: &AppHandle) {
         let mut ctrl_was = false;
         let mut click_was = false;
         let mut escape_was = false;
+        let mut near = false;
         let mut tick: u32 = 0;
         loop {
             std::thread::sleep(std::time::Duration::from_millis(16));
@@ -180,6 +181,15 @@ pub fn follow(app: &AppHandle) {
             // the window. So closing needs the pointer to be away and *stay* away.
             // Opening keeps no such delay -- a dock that hesitates before opening
             // feels broken, while one that hesitates before closing feels patient.
+            // The hint, on a wider ring than the dock. Emitted separately and
+            // only on change -- this runs sixty times a second, and an event per
+            // tick would be sixty React renders a second to say nothing new.
+            let close = notch.is_near(x, y);
+            if close != near {
+                near = close;
+                app.emit("near", close).ok();
+            }
+
             let over = notch.is_hovered(x, y, at_notch);
             if over {
                 away = 0;
