@@ -185,9 +185,13 @@ Two details worth taking with it:
 This is also what makes §1 legible: a permission system whose decisions vanish is
 one nobody can check.
 
-**Done when** the agent card can show what a finished run actually did, from the
-log rather than from the model's account of itself — and when a run that fetched
-a page has recorded the URL and not the page.
+**Done.** The card shows a run's refusals and questions from the log rather than
+from the model's account of itself, open by default because a refusal is the one
+thing here somebody actually needs to see. Verified live: asked to clear a
+folder, a model reached for `find -delete`, then `rm -rf *` twice; all three were
+refused and all three are on the card. A fetch records the host and how much came
+back — never the page — and a tool call records the path and byte count, never a
+word of the file.
 
 ### 2.2 Read the diff — done
 
