@@ -53,6 +53,24 @@ pub struct Config {
     /// ```
     #[serde(default)]
     pub reach: Vec<String>,
+
+    /// Have a second model check each consequential step against what was
+    /// actually asked for, before an unattended run takes it.
+    ///
+    /// ```text
+    /// review = false
+    /// ```
+    ///
+    /// On by default. It is the only thing standing between an agent that reads
+    /// an instruction off the screen and an agent that acts on one, and the
+    /// cost is one model call per consequential step -- a few per run.
+    ///
+    /// Sets the starting position, the way `reach` does. Turning it off in
+    /// settings turns it off for this session; whether it comes back is this
+    /// line's business, so a person who wants it gone says so once here rather
+    /// than every launch.
+    #[serde(default = "yes")]
+    pub review: bool,
     /// Servers speaking the Model Context Protocol, started at launch.
     ///
     /// Each one is three lines and brings its own tools, which is the point:
@@ -152,6 +170,7 @@ impl Default for Config {
             verify: false,
             mcp: Vec::new(),
             reach: Vec::new(),
+            review: true,
             api_key: None,
             // A bare modifier: hold Control to talk, tap it for the next step.
             hotkey: "ctrl".into(),
@@ -169,6 +188,11 @@ impl Default for Config {
             companion: None,
         }
     }
+}
+
+/// Serde needs a function for a default that is not `Default`.
+fn yes() -> bool {
+    true
 }
 
 impl Config {

@@ -90,6 +90,33 @@ pub fn version(app: AppHandle) -> String {
     app.package_info().version.to_string()
 }
 
+/// Is a second model checking each consequential step?
+#[tauri::command]
+pub fn reviewing(app: AppHandle) -> bool {
+    app.state::<crate::app::state::Reviewing>().0.on()
+}
+
+/// Turn that off, or back on.
+///
+/// Said out loud either way. A protection that goes quiet is one nobody
+/// remembers switching off, and this is the one standing between an agent that
+/// reads an instruction on screen and an agent that acts on it.
+#[tauri::command]
+pub fn set_reviewing(app: AppHandle, on: bool) {
+    app.state::<crate::app::state::Reviewing>().0.set(on);
+    eprintln!(
+        "reviewer: {} -- steps {} checked against what was asked",
+        match on {
+            true => "ON",
+            false => "OFF",
+        },
+        match on {
+            true => "are",
+            false => "are no longer",
+        }
+    );
+}
+
 #[tauri::command]
 pub fn quit(app: AppHandle) {
     app.exit(0);

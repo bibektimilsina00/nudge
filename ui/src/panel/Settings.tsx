@@ -85,6 +85,7 @@ export function Settings({
   const [mic, setMic] = useState("…");
   const [version, setVersion] = useState("");
   const [update, setUpdate] = useState<{ version: string; notes: string } | null>(null);
+  const [reviewing, setReviewing] = useState(true);
   const [taking, setTaking] = useState(false);
   const [allowed, setAllowed] = useState<Allowed[]>([]);
   const [brain, setBrain] = useState<Brain | null>(null);
@@ -105,6 +106,7 @@ export function Settings({
       setUpdate(e.payload),
     );
     void invoke<Allowed[]>("reach").then(setAllowed);
+    void invoke<boolean>("reviewing").then(setReviewing);
     void invoke<Brain>("brain").then(setBrain);
     void invoke<string>("look").then(setLook);
     // Polled, not asked once. The entire shape of granting one of these is that
@@ -167,6 +169,36 @@ export function Settings({
               trailing={<Toggle on={g.on} onChange={(v) => allow(g.key, v)} />}
             />
           ))}
+        </div>
+
+        {/* Below the grants and separated from them, because it is the opposite
+            kind of switch: those widen what Nudge may do, this is the check on
+            whether it should. Described by what is lost rather than by what it
+            is called -- "Review actions" tells nobody what turning it off
+            costs. */}
+        <div className="mt-4 space-y-2">
+          <p className="px-0.5 pb-1 text-[10.5px] leading-snug text-ink-3">
+            While a task runs unattended, Nudge is acting on what it reads on
+            screen — and a web page or a document can say anything.
+          </p>
+          <Row
+            icon={<I.Shield />}
+            label="Check each step against what you asked"
+            sub={
+              reviewing
+                ? "A second opinion, from something that never saw your screen. Costs a moment per step."
+                : "Off. A task will act on what it reads without anything comparing it to your request."
+            }
+            trailing={
+              <Toggle
+                on={reviewing}
+                onChange={(on) => {
+                  setReviewing(on);
+                  void invoke("set_reviewing", { on });
+                }}
+              />
+            }
+          />
         </div>
       </Page>
     );

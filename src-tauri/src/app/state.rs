@@ -161,6 +161,15 @@ impl Look {
     }
 }
 
+/// Whether a second model checks each consequential step before an unattended
+/// run takes it.
+///
+/// In memory for the session, started from `review` in the config -- the same
+/// shape as the grants, and for the same reason: a decision to loosen something
+/// should not quietly outlive the reason for it. Somebody who wants it off for
+/// good says so in the config once.
+pub struct Reviewing(pub Flag);
+
 /// Whether the companion is sitting in the panel rather than following the cursor.
 /// Undocking is how you put it to work; docking is how you get your screen back
 /// without quitting.

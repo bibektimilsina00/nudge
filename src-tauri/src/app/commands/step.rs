@@ -681,6 +681,9 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
     if !risk.consequential() {
         return None;
     }
+    if !app.state::<crate::app::state::Reviewing>().0.on() {
+        return None;
+    }
     let nudge = app.state::<Nudge>();
     let provider = nudge.answering();
     if !provider.reviews() {
@@ -717,6 +720,11 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
     };
 
     if verdict.agreed() {
+        // Said out loud. This costs a model call, and a charge nobody can see
+        // is a charge somebody finds on a bill -- the rest of this log prints
+        // every turn and every command, so one line for a step that was checked
+        // is the same density.
+        eprintln!("reviewer: agreed -- {}", judge::shown(step));
         return None;
     }
 

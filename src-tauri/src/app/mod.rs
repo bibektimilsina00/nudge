@@ -11,8 +11,8 @@ pub mod update;
 use crate::config::Config;
 use crate::core::run::session::Nudge;
 use state::{
-    Background, Docked, Flag, Grants, Hotkey, Look, Mic, Screen, Settle, Suggesting, Voice,
-    VoiceMode,
+    Background, Docked, Flag, Grants, Hotkey, Look, Mic, Reviewing, Screen, Settle, Suggesting,
+    Voice, VoiceMode,
 };
 use tauri::Manager;
 
@@ -40,6 +40,7 @@ pub fn run() {
             let cfg = Config::load()?;
             let hotkey = cfg.hotkey.clone();
             let cfg_engine = cfg.speech_engine.clone();
+            let reviewing = cfg.review;
             keep_a_log();
             // Before anything else. If the last run was killed rather than
             // closed, its pointer is still hidden and nothing else will fix it.
@@ -138,6 +139,7 @@ pub fn run() {
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));
+            app.manage(Reviewing(Flag::new(reviewing)));
             app.manage(Hotkey(std::sync::Mutex::new(hotkey.clone())));
             app.manage(Suggesting(Flag::new(true)));
             app.manage(Look(std::sync::Mutex::new(
@@ -243,6 +245,8 @@ pub fn run() {
             commands::set_voice_mode,
             commands::microphone,
             commands::version,
+            commands::reviewing,
+            commands::set_reviewing,
             update::take_update,
             commands::quit,
             commands::shot_for_report,
