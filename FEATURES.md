@@ -248,12 +248,19 @@ in the question.
 classifier accepts it. Nudge's allow-list is close, but it is a static list rather
 than something a session grant can defer to.
 
-### C9. Session facts — the known world — *not started*
+### C9. Session facts — the known world — *mostly done*
 
 `session_facts.py` renders what was already familiar when the session began and
 what arrived from outside since — deterministically, with no model involved. In
 v1 it changes no decision; it orients the reviewer. Folders and remotes only,
 never content.
+
+**Done:** the judge is given the working folder, what has been granted, the git
+remotes, files this run made, and — when the action names one of them — a line
+saying so. All of it code-derived, none of it content.
+
+**Not done:** "what arrived from outside since". Nudge has no inbox for anything
+to arrive through yet, so there is nothing to render.
 
 ---
 
