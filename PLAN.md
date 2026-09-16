@@ -181,7 +181,7 @@ its span, so a span smaller than the working set is now left alone.
 
 ---
 
-## 4. Runs that survive the process
+## 4. Runs that survive the process — *done*
 
 Quit Nudge mid-task and the run is gone. Finished runs persist to `history.json`
 for display; in-flight ones are dropped on purpose, because claiming a run is
@@ -196,7 +196,18 @@ thread back up. Plus the question the old behaviour was protecting — an
 interrupted run must come back as *interrupted*, offering to continue, never as
 though it had been running the whole time.
 
-**Done when** quitting mid-task and reopening offers to carry on.
+**Done.** A run that was going when Nudge ended comes back as `Interrupted` —
+its own state, because stopping is a decision and being killed is not, and only
+one of those deserves an offer to continue. The card says *"Stopped when Nudge
+did, N steps in"* and offers to carry on, for an hour, after which it stops
+asking and stays in the Agents tab.
+
+Carrying on starts a new run with the old one's history. The old row stays
+interrupted: it really did end, and a record that changed state after the process
+owning it died is a record nobody could trust.
+
+Verified by killing a run at step one and pressing the button: it made c, d and e
+with a and b already there.
 
 ### 4.1 Self-wake
 
