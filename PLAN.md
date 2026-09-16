@@ -219,7 +219,7 @@ green"* stops holding a turn open for eight minutes.
 
 ---
 
-## 5. Connections
+## 5. Connections — *done*
 
 A tool server is three lines in `config.toml` today. Right for the protocol,
 wrong for a person: no notion of an account, credentials in plaintext, no way to
@@ -236,8 +236,19 @@ connectable thing states what access it gets **before** consent, in plain
 statements of behaviour rather than marketing. Overclaiming there is a product
 bug.
 
-**Done when** connecting an account means picking it from a list, its token is
-not readable with `cat`, and it can be disconnected.
+**Done.** Picking from a list connects it; the token goes in the Keychain and the
+file names it; disconnecting takes both away.
+
+An entry cannot overclaim because connecting *checks* — it starts the server and
+asks what it can do, and no tools means no connection and no token left behind.
+What the page shows afterwards is what the server reported.
+
+`[[mcp]]` by hand still works and wins a name clash. A catalogue that was the
+only way in would be the hand-written-integrations trap wearing a nicer coat.
+
+Verified with no `[[mcp]]` in the config at all: a connection on disk started a
+server that reported 14 tools, and a token-bearing connection left nothing
+greppable under `~/.config/nudge`.
 
 ---
 
