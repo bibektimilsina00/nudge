@@ -117,7 +117,7 @@ six pages asks six times, and the answer people give to that is "always".
 **Done when** an approval offers "just now / this session / always", and the
 first of those is gone when the task is.
 
-### 1.4 Egress asks instead of guessing
+### 1.4 Egress asks instead of guessing — *done*
 
 With 1.1–1.3 in place, the real fix for `Grant::Http` becomes possible, and the
 current shape of it is wrong on two counts:
@@ -143,12 +143,20 @@ than a coding one:
   have come from something on screen rather than from the person, and there is
   always a card.
 
-So the proposed rule is: **ask when an agent is running and the host is new;
-leave the foreground alone.** That is where the danger is and where the question
-can actually be answered. It wants agreeing before it is built.
+So the rule is: **ask when an agent is running and the host is new; leave the
+foreground alone.** That is where the danger is and where the question can
+actually be answered.
 
-**Done when** fetching a page the user named still works first time, and a host
-an agent invented produces a question rather than a request.
+*Built.* Asked per host and remembered for the run, so a page of results does not
+ask once per page. The host comes from the same parser the refusal uses — there
+were nearly two, and two URL parsers is how `https://github.com@evil.example/`
+comes to be refused in one place and read as GitHub in the other.
+
+Not covered, and worth knowing: **search is not gated this way.** It goes to one
+fixed provider rather than a host the model chose, so there is no host to ask
+about — but the query is still data leaving the machine, and a query is a place
+something could be hidden. That is a smaller hole than the one just closed and it
+is still a hole.
 
 ---
 

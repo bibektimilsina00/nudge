@@ -375,6 +375,9 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         crate::app::agent::publish(app);
     }
     if let Step::Fetch { url, .. } = step {
+        if let Some(pause) = ask_before_reaching(app, url) {
+            return pause;
+        }
         let text = fetch::read(url).await?;
         eprintln!("fetched {url} ({} chars)", text.len());
         app.state::<Nudge>()
@@ -384,6 +387,42 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         crate::app::agent::publish(app);
     }
     Ok(())
+}
+
+/// Should a person be asked before this host is reached?
+///
+/// **Only while an agent is running**, and that is the whole of the rule.
+///
+/// A foreground fetch is the person's own question, seconds after they asked it,
+/// with a URL that came from what they said. There is nothing there to protect
+/// them from, there is often nobody to ask -- the card only exists during a run
+/// -- and a question in front of every one of them would be worse than the
+/// screenshot fetching exists to avoid.
+///
+/// An agent run is the opposite on all three counts. Nobody is watching, the URL
+/// may have come from something on screen rather than from the person, and there
+/// is always a card. That is where the exfiltration risk actually lives.
+///
+/// Asked per host and remembered for the run, so a page of results does not ask
+/// once per page. Returns `Some` only when the turn should stop and wait.
+fn ask_before_reaching(app: &AppHandle, url: &str) -> Option<Result<()>> {
+    let host = crate::core::tools::fetch::host_of(url)?;
+
+    // Already agreed to this run, or nobody to ask because nothing is running.
+    if app.state::<Nudge>().reach.host_allowed(&host) || !app.state::<Agents>().running() {
+        return None;
+    }
+
+    Some(
+        put_to_the_person(
+            app,
+            crate::core::reach::Pending::Reach {
+                host,
+                url: url.to_string(),
+            },
+        )
+        .map(|_| ()),
+    )
 }
 
 /// Put a connect offer on screen, if this is a reasonable moment for one.

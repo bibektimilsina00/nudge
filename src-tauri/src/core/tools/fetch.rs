@@ -34,30 +34,26 @@ fn refuse(url: &str) -> Option<String> {
     if url.len() > 2048 || url.chars().any(|c| c.is_whitespace() || c.is_control()) {
         return Some("that does not look like a URL".into());
     }
-    // Authority is everything after "//" and before the path, query or fragment;
-    // the host is what is left after dropping any user:pass@ and the port.
-    let rest = &lower[lower.find("//")? + 2..];
-    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-
     // Credentials in the authority, which a page fetch never needs.
     //
     // `https://user:pass@host/` is a way to put a secret on the wire while the
     // URL still reads as ordinary, and a way to make the host look like
     // something it is not -- `https://github.com@evil.example/` is a request to
     // evil.example that a person skims as GitHub.
-    if authority.contains('@') {
+    let rest = &lower[lower.find("//")? + 2..];
+    if rest
+        .split(['/', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .contains('@')
+    {
         return Some("a URL with credentials in it is not a page to read".into());
     }
-    let after_userinfo = authority.rsplit('@').next().unwrap_or("");
-    // An IPv6 literal is bracketed and full of colons, so the port cannot be
-    // found by splitting on ":" -- `[::1]:8080` would come back as "[".
-    let host = match after_userinfo.strip_prefix('[') {
-        Some(v6) => v6.split(']').next().unwrap_or(""),
-        None => after_userinfo.split(':').next().unwrap_or(""),
-    };
-    if host.is_empty() {
+
+    let Some(host) = host_of(&lower) else {
         return Some("no host in that URL".into());
-    }
+    };
+    let host = host.as_str();
     // Nothing on this machine or this network. A model that has been told to
     // "check the printer" should not be able to reach one, and `localhost` is
     // where a development server with somebody's database sits.
@@ -99,6 +95,29 @@ fn refuse(url: &str) -> Option<String> {
     }
 
     None
+}
+
+/// The host a URL is asking for, lowercased.
+///
+/// One parser, used by the refusal above and by whoever needs to name the host
+/// out loud. There were nearly two: the permission question needed a host, and
+/// the obvious thing was to split the string again where it was needed. Two URL
+/// parsers is how a `https://github.com@evil.example/` comes to be refused in one
+/// place and read as GitHub in the other.
+pub fn host_of(url: &str) -> Option<String> {
+    let lower = url.trim().to_ascii_lowercase();
+    let rest = &lower[lower.find("//")? + 2..];
+    // Authority is everything before the path, query or fragment; the host is
+    // what is left after dropping any user:pass@ and the port.
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    let after_userinfo = authority.rsplit('@').next().unwrap_or("");
+    // An IPv6 literal is bracketed and full of colons, so the port cannot be
+    // found by splitting on ":" -- `[::1]:8080` would come back as "[".
+    let host = match after_userinfo.strip_prefix('[') {
+        Some(v6) => v6.split(']').next().unwrap_or(""),
+        None => after_userinfo.split(':').next().unwrap_or(""),
+    };
+    (!host.is_empty()).then(|| host.to_string())
 }
 
 /// Fetch a page and return its readable text.
@@ -566,5 +585,27 @@ mod tests {
         let out = readable(page, "https://example.com/weather");
         assert!(out.contains("24 degrees"), "lost the answer: {out}");
         assert!(!out.contains("var tracking"), "kept the script: {out}");
+    }
+}
+
+#[cfg(test)]
+mod host_tests {
+    /// The same parser the refusal uses, so the two can never disagree about
+    /// which host a URL is asking for.
+    #[test]
+    fn the_host_is_what_the_request_will_actually_go_to() {
+        for (url, want) in [
+            ("https://example.com/page", "example.com"),
+            ("https://Example.COM:8443/page?q=1", "example.com"),
+            ("http://[::1]:8080/x", "::1"),
+            // The one that matters: a person skims this as GitHub, and the
+            // request goes to evil.example.
+            ("https://github.com@evil.example/x", "evil.example"),
+        ] {
+            assert_eq!(super::host_of(url).as_deref(), Some(want), "{url}");
+        }
+
+        assert_eq!(super::host_of("not a url"), None);
+        assert_eq!(super::host_of("https://"), None);
     }
 }
