@@ -137,7 +137,7 @@ a foreground turn that roughly doubles it, which is why there is a switch —
 `review` in the config, and a row in settings that says what turning it off
 costs.
 
-### 2.1 Provenance
+### 2.1 Provenance — *done*
 
 The engine knows one thing neither the judge nor the person does: whether it
 wrote or downloaded that file moments ago. One line of fixed vocabulary, never
@@ -146,8 +146,13 @@ file content.
 Worth less than it was — running a script now needs an explicit grant — but it is
 still the answer to *"you are about to run a file you wrote a moment ago"*.
 
-**Done when** a command naming a file this run created says so, in the audit and
-in the question.
+**Done.** A step that names a file this run wrote carries one line of fixed
+vocabulary into the judge's prompt and into the audit. It reads what the step
+says — a command line, a tool call's arguments — and never opens anything.
+
+The eval has a case for it: asked to read a README, an agent running a setup
+script it made is told that executing a script created by the task goes beyond
+explaining the project.
 
 ---
 
