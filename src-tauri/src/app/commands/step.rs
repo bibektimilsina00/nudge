@@ -536,6 +536,55 @@ fn volunteer_if_it_is_ever_a_good_moment(app: &AppHandle) {
     eprintln!("offer: raising {} unprompted", offer.name);
 }
 
+/// A write landed: say what changed, tell everyone, write it down.
+///
+/// One place rather than two near-identical copies at the write and edit sites,
+/// which is what let them drift apart: neither recorded anything in the audit,
+/// so the log that exists to answer "what did it do to my files" was the one
+/// log with no file changes in it.
+///
+/// `verb` is what the person reads ("Wrote", "Edited"); `kind` is what the
+/// record is filed under ("write", "edit").
+fn landed(
+    app: &AppHandle,
+    verb: &str,
+    kind: &str,
+    path: &std::path::Path,
+    backup: Option<&std::path::Path>,
+) {
+    // Asked once. It spawns git, and the person and the record want the same
+    // answer -- asking twice would be two subprocesses to disagree with.
+    let stat = crate::core::tools::files::changed(path);
+
+    // The diff first, because it is the part that is checked rather than
+    // claimed, and a sentence is read left to right.
+    let mut note = match &stat {
+        Some(stat) => format!("{verb} {} ({stat})", path.display()),
+        None => format!("{verb} {}", path.display()),
+    };
+    if let Some(b) = backup {
+        note.push_str(&format!(" (the previous version is at {})", b.display()));
+    }
+    eprintln!("{note}");
+    app.state::<Nudge>().note(note.clone());
+
+    // The path and how much of it moved. Never the content -- a file's contents
+    // are the whole reason this log is not allowed to copy what it sees.
+    record(
+        app,
+        kind,
+        &path.display().to_string(),
+        Outcome::Did {
+            detail: stat.unwrap_or_else(|| "untracked".into()),
+        },
+    );
+
+    let agents = app.state::<Agents>();
+    agents.record_run(format!("{kind} {}", path.display()), note);
+    agents.record_file(path.display().to_string());
+    crate::app::agent::publish(app);
+}
+
 /// Ask whether to replace a file, and hold the task until the answer comes.
 ///
 /// Returns the error to raise when there is no agent to hold -- the foreground
@@ -670,20 +719,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                 files::Wrote::Done { path, backup } => {
                     // Spent: agreeing once is not agreeing forever.
                     grants.granted.lock().unwrap().remove(&path);
-                    let note = match &backup {
-                        Some(b) => format!(
-                            "Wrote {} (the previous version is at {})",
-                            path.display(),
-                            b.display()
-                        ),
-                        None => format!("Wrote {}", path.display()),
-                    };
-                    eprintln!("{note}");
-                    app.state::<Nudge>().note(note.clone());
-                    let agents = app.state::<Agents>();
-                    agents.record_run(format!("write {}", path.display()), note);
-                    agents.record_file(path.display().to_string());
-                    crate::app::agent::publish(app);
+                    landed(app, "Wrote", "write", &path, backup.as_deref());
                 }
             }
         }
@@ -763,20 +799,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                 }
                 files::Wrote::Done { path, backup } => {
                     grants.granted.lock().unwrap().remove(&path);
-                    let note = match &backup {
-                        Some(b) => format!(
-                            "Edited {} (the previous version is at {})",
-                            path.display(),
-                            b.display()
-                        ),
-                        None => format!("Edited {}", path.display()),
-                    };
-                    eprintln!("{note}");
-                    app.state::<Nudge>().note(note.clone());
-                    let agents = app.state::<Agents>();
-                    agents.record_run(format!("edit {}", path.display()), note);
-                    agents.record_file(path.display().to_string());
-                    crate::app::agent::publish(app);
+                    landed(app, "Edited", "edit", &path, backup.as_deref());
                 }
             }
         }

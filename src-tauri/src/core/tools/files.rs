@@ -126,6 +126,36 @@ pub fn write(
     Ok(Wrote::Done { path, backup })
 }
 
+/// What actually changed on disk, according to git rather than to the model.
+///
+/// An agent that says it edited a file is making a claim, and until now Nudge
+/// repeated the claim back: "Edited main.rs" is what it *intended*, written in
+/// the past tense. `git diff --numstat` is one call away and turns that into a
+/// check -- "Edited main.rs (+12 -3)" is the same sentence with evidence in it.
+///
+/// Silent for a file that is untracked or outside a repository. There is no
+/// previous version to compare against, so there is nothing to verify, and a
+/// sentence saying as much on every write to a scratch folder is noise. Silent
+/// too when git is not installed, which is a thing that is allowed to be true.
+pub fn changed(path: &Path) -> Option<String> {
+    let dir = path.parent()?;
+    let out = std::process::Command::new("git")
+        .arg("-C")
+        .arg(dir)
+        .args(["diff", "--numstat", "--"])
+        .arg(path)
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let mut parts = text.split_whitespace();
+    let (plus, minus) = (parts.next()?, parts.next()?);
+    // Git writes "-\t-" for a binary file, where counting lines means nothing.
+    if plus == "-" || minus == "-" {
+        return Some("binary".into());
+    }
+    Some(format!("+{plus} -{minus}"))
+}
+
 /// Copy aside every existing file a tool call names, before it runs.
 ///
 /// A tool on somebody else's server is opaque: there is no way to know whether
@@ -486,6 +516,46 @@ mod tests {
     }
 
     /// Creating is additive; replacing destroys. Only the second needs asking.
+    /// The claim is checked against git, not repeated back.
+    #[test]
+    fn an_edit_to_a_tracked_file_reports_what_git_says_changed() {
+        let dir = workspace("diffstat");
+        let git = |args: &[&str]| {
+            std::process::Command::new("git")
+                .arg("-C")
+                .arg(&dir)
+                .args(args)
+                .output()
+                .expect("git");
+        };
+        git(&["init", "-q"]);
+        git(&["config", "user.email", "t@t"]);
+        git(&["config", "user.name", "t"]);
+        let file = dir.join("notes.txt");
+        std::fs::write(&file, "one\ntwo\nthree\n").unwrap();
+        git(&["add", "-A"]);
+        git(&["commit", "-qm", "first"]);
+
+        // Untracked or unchanged says nothing -- there is nothing to verify.
+        assert_eq!(changed(&file), None, "an unchanged file has no story");
+
+        std::fs::write(&file, "one\ntwo CHANGED\nthree\nfour\n").unwrap();
+        assert_eq!(changed(&file), Some("+2 -1".into()));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// Not every write lands in a repository, and that is not an error.
+    #[test]
+    fn a_file_outside_a_repository_is_silent_rather_than_loud() {
+        let dir = workspace("norepo");
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("loose.txt");
+        std::fs::write(&file, "hello").unwrap();
+        assert_eq!(changed(&file), None);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_new_file_is_written_and_an_existing_one_asks_first() {
         let w = workspace("new-vs-existing");
