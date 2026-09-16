@@ -490,6 +490,26 @@ impl Step {
                     ..
                 },
             ) => pa == pb && ca == cb,
+            // Handing the same job over twice.
+            //
+            // These fell through to `false` and so were never repeats at all,
+            // which is how a subagent came to give the identical task to a
+            // coding agent four times in a row -- four real invocations of a
+            // real tool, each paid for, each teaching it nothing the last had
+            // not. The most expensive step in the program was the one nothing
+            // was watching for.
+            (Step::Delegate { task: a, .. }, Step::Delegate { task: b, .. }) => a == b,
+            (Step::Task { task: a, .. }, Step::Task { task: b, .. }) => a == b,
+            // Same tool, same arguments. Different arguments is progress -- a
+            // run reading five files calls one tool five times and is working.
+            (
+                Step::Mcp {
+                    tool: ta, args: aa, ..
+                },
+                Step::Mcp {
+                    tool: tb, args: ab, ..
+                },
+            ) => ta == tb && aa == ab,
             _ => false,
         }
     }
@@ -1558,6 +1578,41 @@ pub(crate) fn no_point(provider: &'static str, detail: impl Into<String>) -> Err
 
 #[cfg(test)]
 mod tests {
+    /// Handing the same job over twice is the same action.
+    ///
+    /// These fell through to "not a repeat", which is how four identical
+    /// delegations to a coding agent went through unnoticed.
+    #[test]
+    fn handing_the_same_job_over_twice_is_a_repeat() {
+        let hand = |task: &str| Step::Delegate {
+            task: task.into(),
+            named: None,
+            say: String::new(),
+        };
+        assert!(hand("research it").same_action(&hand("research it")));
+        assert!(!hand("research it").same_action(&hand("write it up")));
+
+        let ask = |task: &str| Step::Task {
+            task: task.into(),
+            say: String::new(),
+        };
+        assert!(ask("find the version").same_action(&ask("find the version")));
+        assert!(!ask("find the version").same_action(&ask("find the author")));
+    }
+
+    /// Same tool and same arguments is a repeat; different arguments is work.
+    #[test]
+    fn a_tool_called_twice_the_same_way_is_a_repeat() {
+        let call = |path: &str| Step::Mcp {
+            tool: "files/read_file".into(),
+            args: serde_json::json!({ "path": path }),
+            say: String::new(),
+        };
+        assert!(call("a.md").same_action(&call("a.md")));
+        // A run reading five files calls one tool five times and is working.
+        assert!(!call("a.md").same_action(&call("b.md")));
+    }
+
     /// A model that plans ahead sends a list. The first of them is the step.
     ///
     /// Found in a real run: a finished document was written, the model sent the

@@ -19,6 +19,12 @@ use crate::error::Result;
 /// question; a subagent that needs forty turns was given the wrong question.
 const MAX_TURNS: usize = 12;
 
+/// How many times the same action may be asked for before it is a loop.
+///
+/// Three, as in the screen loop, and for a stricter reason: up there the excuse
+/// is a page that has not finished loading, and down here there is no page.
+const SAME_ACTION_LIMIT: usize = 3;
+
 /// What a finished subagent hands back.
 pub struct Found {
     /// The answer, in its own words. This is the whole point of the thing.
@@ -265,6 +271,16 @@ where
     // decides whether an answer is worth checking, this one decides whether the
     // answer came from anywhere but memory.
     let mut grounded = false;
+    // The same action over and over. The screen agent has had this guard since a
+    // run spent nineteen turns clicking the same link; a subagent had none, and
+    // went and handed the identical job to a coding agent four times in a row --
+    // four real invocations of a real tool, each one paid for.
+    //
+    // A subagent has no screen, so the excuse that makes repetition forgivable up
+    // there does not exist down here: there is no page still loading. Repeating
+    // means the last one told it nothing, and a fifth will not either.
+    let mut last: Option<Step> = None;
+    let mut repeats = 0usize;
 
     for turn in 0..MAX_TURNS {
         let ask = Ask {
@@ -322,6 +338,23 @@ where
                 })
             }
             other => {
+                if last.as_ref().is_some_and(|l| l.same_action(&other)) {
+                    repeats += 1;
+                    eprintln!("  task turn {turn}: same action again (x{repeats})");
+                    if repeats >= SAME_ACTION_LIMIT {
+                        return Ok(Found {
+                            answer: format!(
+                                "Gave up: asked for the same thing {repeats} times and \
+                                 learned nothing new from it."
+                            ),
+                            steps,
+                        });
+                    }
+                } else {
+                    repeats = 0;
+                }
+                last = Some(other.clone());
+
                 looked_up |= matches!(other, Step::Search { .. } | Step::Fetch { .. });
                 grounded |= other.consults();
                 steps.push(other.recap());
@@ -457,6 +490,73 @@ mod tests {
         .await
         .unwrap();
         assert!(found.answer.contains("refused"));
+    }
+
+    /// Asking for the identical thing over and over ends the run.
+    ///
+    /// The real one: a subagent handed the same job to a coding agent four
+    /// times in a row -- four real invocations of a real tool, each one paid
+    /// for, each teaching it nothing the last had not.
+    #[tokio::test]
+    async fn it_stops_repeating_itself() {
+        let same: Vec<Step> = (0..MAX_TURNS)
+            .map(|_| Step::Delegate {
+                task: "research the frameworks".into(),
+                named: None,
+                say: say("handing it over"),
+            })
+            .collect();
+        let p = Scripted(std::sync::Mutex::new(same));
+        let found = run(
+            &p,
+            std::path::Path::new("/tmp"),
+            "x",
+            &[],
+            "",
+            false,
+            false,
+            |_| async { Ok(String::new()) },
+        )
+        .await
+        .unwrap();
+
+        assert!(found.answer.contains("same thing"), "{}", found.answer);
+        // Stopped well short of the turn budget, which is the point: the budget
+        // would have spent all twelve.
+        assert!(
+            found.steps.len() <= SAME_ACTION_LIMIT,
+            "{}",
+            found.steps.len()
+        );
+    }
+
+    /// Different work in a row is not a loop.
+    #[tokio::test]
+    async fn doing_different_things_is_not_repeating() {
+        let varied: Vec<Step> = (0..5)
+            .map(|i| Step::Run {
+                command: format!("echo {i}"),
+                say: say("looking"),
+            })
+            .chain(std::iter::once(Step::Done {
+                say: say("found it"),
+                next: None,
+            }))
+            .collect();
+        let p = Scripted(std::sync::Mutex::new(varied));
+        let found = run(
+            &p,
+            std::path::Path::new("/tmp"),
+            "x",
+            &[],
+            "",
+            false,
+            false,
+            |_| async { Ok(String::new()) },
+        )
+        .await
+        .unwrap();
+        assert!(!found.answer.contains("same thing"), "{}", found.answer);
     }
 
     /// A model that never says done must still end.
