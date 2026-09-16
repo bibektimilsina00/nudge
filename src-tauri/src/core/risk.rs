@@ -98,6 +98,8 @@ pub fn of(step: &Step) -> Risk {
         | Step::Show { .. }
         | Step::Read { .. }
         | Step::Output { .. }
+        // Waiting is the absence of doing anything.
+        | Step::Await { .. }
         | Step::Search { .. }
         | Step::Skill { .. }
         | Step::Workspace { .. } => Risk::Read,

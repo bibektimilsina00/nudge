@@ -1009,6 +1009,37 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                 .record_run(format!("start {command}"), note);
             super::super::agent::publish(app);
         }
+        Step::Await { id, .. } => {
+            // Long, because the point is to cover the whole wait in one turn.
+            // Capped anyway by `MAX_LIFETIME` inside `running`, which kills a job
+            // that never finishes -- so this is how long an *agent* waits, not
+            // how long a process is allowed to live.
+            const PATIENCE: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+            let agents = app.state::<Agents>();
+            let p = app
+                .state::<Background>()
+                // Checked while waiting. Without it Escape would do nothing for
+                // ten minutes, which is indistinguishable from a hung app.
+                .settle(*id, PATIENCE, || agents.stopping())?;
+
+            let status = match (p.alive, p.code) {
+                (true, _) => "still going after ten minutes".to_string(),
+                (false, Some(0)) => "finished successfully".to_string(),
+                (false, Some(c)) => format!("failed with code {c}"),
+                (false, None) => "stopped".to_string(),
+            };
+            eprintln!("waited for {id}: {status}");
+            app.state::<Nudge>().note(format!(
+                "Waited for process {id}. It {status}. Its last output:\n{}",
+                match p.fresh.trim().is_empty() {
+                    true => "(nothing)",
+                    false => &p.fresh,
+                }
+            ));
+            app.state::<Agents>()
+                .record_run(format!("waited for {id}"), status);
+            crate::app::agent::publish(app);
+        }
         Step::Output { id, .. } => {
             // Waits rather than returning nothing. A turn costs a model call and
             // several seconds, so polling an agent that takes two minutes would

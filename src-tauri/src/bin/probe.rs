@@ -111,6 +111,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         provider::Step::Open { url, .. } => println!("  open:   {url}"),
         provider::Step::Press { keys, .. } => println!("  press:  {keys}"),
         provider::Step::Run { command, .. } => println!("  run:    {command}"),
+        provider::Step::Await { id, .. } => println!("  await:  {id}"),
         provider::Step::Mcp { tool, args, .. } => println!("  tool:   {tool} {args}"),
         provider::Step::Request { method, url, .. } => println!("  http:   {method} {url}"),
         provider::Step::Delegate { task, .. } => println!("  hand over: {task}"),

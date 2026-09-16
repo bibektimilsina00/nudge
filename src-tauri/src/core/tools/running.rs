@@ -297,6 +297,76 @@ impl Running {
     }
 
     /// What it has printed, and whether it is still going.
+    /// Wait for it to end, rather than for it to say something.
+    ///
+    /// [`read`](Self::read) comes back the moment there is fresh output, which
+    /// is right for watching something and wrong for waiting on it: a build that
+    /// prints a line a second answers instantly and the model spends a turn --
+    /// a model call and several seconds -- deciding to wait again. A ten-minute
+    /// build does that thirty times and runs out of budget before it finishes.
+    ///
+    /// So this ignores output and returns when the process is over. One turn for
+    /// the whole wait.
+    ///
+    /// `give_up` is checked while waiting, and it is the difference between a
+    /// long wait and an unresponsive app: without it, Escape would do nothing
+    /// until the build finished. Polled rather than pushed because the thing it
+    /// asks about is an atomic somebody else flips.
+    pub fn settle(
+        &self,
+        id: u64,
+        patience: std::time::Duration,
+        give_up: impl Fn() -> bool,
+    ) -> Result<Progress> {
+        /// Short enough that stopping feels immediate, long enough not to spin.
+        const SLICE: std::time::Duration = std::time::Duration::from_millis(250);
+        let until = std::time::Instant::now() + patience;
+        loop {
+            {
+                let mut items = self.items.lock().unwrap();
+                let Some(p) = items.iter_mut().find(|p| p.id == id) else {
+                    return Err(Error::Click(format!("nothing running with id {id}")));
+                };
+                if p.finished.is_none() {
+                    p.finished = p.child.try_wait().ok().flatten();
+                }
+                if p.finished.is_none() && p.started.elapsed() > MAX_LIFETIME {
+                    let _ = p.child.kill();
+                    let _ = p.child.wait();
+                    return Err(Error::Click(format!(
+                        "{} ran for {} minutes without finishing, so I stopped it",
+                        p.command,
+                        MAX_LIFETIME.as_secs() / 60
+                    )));
+                }
+                if let Some(status) = p.finished {
+                    return Ok(Progress {
+                        fresh: p.output.lock().unwrap().take_new(),
+                        alive: false,
+                        code: status.code(),
+                    });
+                }
+            }
+            // Outside the lock, always: sleeping while holding it would stop
+            // anything else asking about any process at all.
+            if give_up() {
+                return Err(Error::Click("stopped while waiting".into()));
+            }
+            if std::time::Instant::now() >= until {
+                let items = self.items.lock().unwrap();
+                let p = items.iter().find(|p| p.id == id);
+                return Ok(Progress {
+                    fresh: p
+                        .map(|p| p.output.lock().unwrap().take_new())
+                        .unwrap_or_default(),
+                    alive: true,
+                    code: None,
+                });
+            }
+            std::thread::sleep(SLICE);
+        }
+    }
+
     /// What it has printed since last time.
     ///
     /// Waits up to `patience` for something to happen rather than returning
@@ -419,6 +489,59 @@ impl Pipe {
 
 #[cfg(test)]
 mod tests {
+    /// Waiting covers the whole job in one go, rather than answering the moment
+    /// the job says something.
+    ///
+    /// Written with `function(){}` rather than an arrow, and a comma rather than
+    /// a semicolon: `=>` contains a `>` and `;` chains commands, and the guard
+    /// refuses both. Which is the guard working, found while writing this.
+    ///
+    /// The difference `read` cannot make: a build that prints as it works comes
+    /// back instantly, and deciding to wait again costs a model call each time.
+    #[test]
+    fn waiting_comes_back_when_it_ends_not_when_it_speaks() {
+        let r = Running::default();
+        // Talks immediately, finishes later, and fails -- so all three of
+        // "ignored the chatter", "waited for the end" and "reported how it
+        // ended" are one assertion each.
+        let id = r
+            .start(
+                &tmp(),
+                "node -e 'setTimeout(function(){console.log(\"building\"),process.exit(2)}, 600)'",
+            )
+            .unwrap();
+
+        let p = r
+            .settle(id, std::time::Duration::from_secs(10), || false)
+            .unwrap();
+        assert!(!p.alive, "came back while it was still going");
+        assert_eq!(p.code, Some(2), "did not report how it ended");
+        assert!(
+            p.fresh.contains("building"),
+            "lost the output: {:?}",
+            p.fresh
+        );
+    }
+
+    /// A long wait must not make Escape do nothing.
+    #[test]
+    fn waiting_gives_up_when_it_is_told_to() {
+        let r = Running::default();
+        let id = r
+            .start(&tmp(), "node -e 'setTimeout(function(){}, 30000)'")
+            .unwrap();
+        let began = std::time::Instant::now();
+        // Ten minutes of patience, and a stop asked for straight away.
+        let out = r.settle(id, std::time::Duration::from_secs(600), || true);
+        assert!(out.is_err(), "kept waiting after being told to stop");
+        assert!(
+            began.elapsed() < std::time::Duration::from_secs(5),
+            "took {:?} to notice",
+            began.elapsed()
+        );
+        let _ = r.stop(id);
+    }
+
     /// The job is a sentence, and a sentence has apostrophes in it.
     #[test]
     fn the_job_survives_being_put_in_a_command() {

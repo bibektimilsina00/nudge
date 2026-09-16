@@ -155,6 +155,14 @@ pub enum Step {
     Start { command: String, say: String },
     /// What a running process has printed so far.
     Output { id: u64, say: String },
+    /// Wait for one to finish, and only then come back.
+    ///
+    /// Separate from `Output`, which returns the moment there is anything to
+    /// read. That is right for watching and wrong for waiting: a build printing
+    /// a line a second answers instantly, and deciding to wait again costs a
+    /// model call and several seconds each time. Ten minutes of that is thirty
+    /// turns and the budget is forty.
+    Await { id: u64, say: String },
     /// Stop one.
     Kill { id: u64, say: String },
     /// A whole task rather than a next click: Nudge takes it away and finishes
@@ -306,6 +314,9 @@ impl Step {
             | Step::Fetch { .. }
             | Step::Search { .. }
             | Step::Output { .. }
+            // Waiting ends with the job's exit code and its last output, which
+            // is as grounded as an answer gets.
+            | Step::Await { .. }
             | Step::Task { .. }
             // Some of these act rather than look -- creating an issue learns
             // nothing. But every one of them comes back with what the server
@@ -350,6 +361,7 @@ impl Step {
             | Step::Type { say, .. }
             | Step::Press { say, .. }
             | Step::Run { say, .. }
+            | Step::Await { say, .. }
             | Step::Write { say, .. }
             | Step::Fetch { say, .. }
             | Step::Read { say, .. }
@@ -460,6 +472,7 @@ impl Step {
             Step::Run { command, .. } => format!("Ran `{command}`"),
             Step::Start { command, .. } => format!("Started `{command}`"),
             Step::Output { id, .. } => format!("Read what {id} has printed"),
+            Step::Await { id, .. } => format!("Waited for {id} to finish"),
             Step::Kill { id, .. } => format!("Stopped {id}"),
             Step::Fetch { url, .. } => format!("Read {url}"),
             Step::Search { query, .. } => format!("Searched for {query:?}"),
@@ -913,7 +926,14 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          second.\n\
          **start** launches something that keeps going -- a dev server, a build, \
          a watcher, another agent -- and hands back an id. **output** reads what \
-         it has printed since it began, and **kill** stops it. Use these when a \
+         it has printed since it began, **await** waits for it to finish and \
+         comes back with how it ended, and **kill** stops it.\n\
+         Prefer **await** to polling: a build that prints as it works answers \
+         **output** straight away, so asking repeatedly spends a turn each time \
+         on saying it is still going. Use **output** to watch something that \
+         never ends -- a \
+         server, a watcher -- and **await** for anything with a finish, which is \
+         builds, tests, installs and downloads. Use these when a \
          command will not finish: run waits for twenty seconds and then gives \
          up, which is right for counting files and wrong for everything that \
          serves, watches or streams. Start it, do something else, come back and \
@@ -1392,6 +1412,10 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
         }),
         "start" => Some(Step::Start {
             command: v["command"].as_str().unwrap_or_default().to_string(),
+            say,
+        }),
+        "await" => Some(Step::Await {
+            id: v["id"].as_u64()?,
             say,
         }),
         "output" => Some(Step::Output {
