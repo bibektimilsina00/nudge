@@ -224,11 +224,12 @@ completely differently, so it is two ports wearing one name.
 
 Not phases, and not allowed to rot:
 
-- **The four unanswerable questions.** `make truth` scored 41/48 with four wrong,
-  and all four are one bug: asked something that cannot be known — a future
-  price, next year's weather, what somebody had for breakfast — it answers
-  anyway. Three other cases prove it *can* say it does not know. See
-  [FINDINGS.md](FINDINGS.md); this is the highest-value fix in the list.
+- **One unanswerable question, not four.** The truth suite scored 41/48 with four
+  wrong; reading the answers showed two of those four were correct refusals the
+  harness could not recognise, and a third was borderline. The hedge list is
+  wider now. What is left is 020-bitcoin, which answered *"between $80,000 and
+  $98,000"* with no admission anywhere — one real failure, and worth fixing.
+  See [FINDINGS.md](FINDINGS.md).
 - **The bench is at 57%** (4/7 pointed at, 3 misses, one of them 8px). First
   measurement since thinking moved to `low`, and it is owed a controlled re-run
   against the previous setting before anybody concludes anything from it.

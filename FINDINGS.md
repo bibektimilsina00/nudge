@@ -1127,10 +1127,8 @@ click lands, not whether the answer is true.
 double-quoted shell string, which executed it. An expensive way to find out, and
 the number is the number.
 
-**41/48 right · 3 said they did not know · 4 wrong.**
-
-Saying "I do not know" is the correct answer to three of these, so the honest
-reading is 44 of 48 handled correctly and **four failures of one kind**:
+**41/48 right · 3 said they did not know · 4 wrong** — as the harness scored it.
+The real number is better, and the gap is the point of this entry.
 
 | Case | What it did |
 |---|---|
@@ -1139,20 +1137,31 @@ reading is 44 of 48 handled correctly and **four failures of one kind**:
 | 025-my-breakfast | Answered a question that has no answer |
 | 026-agi-date | Answered a question that has no answer |
 
-Every one is the same failure: **asked something unknowable, it answers anyway.**
-It is not hallucinating facts — 027 through 048 are all correct, including the
-ones answered from memory with no call. It is failing to recognise that a
-question about the future, or about something private to the person, cannot be
-answered by looking it up.
+**That first reading was wrong, and reading the actual answers said so.**
 
-That is one bug with four witnesses, and it is a prompt-level fix rather than a
-model change: cases 022–024 prove the model *can* say it does not know, because
-on those three it did. What separates them is not difficulty but framing.
+Two of the four were correct answers scored as failures. The verdict for an
+unanswerable case is decided by `hedged()`, a list of phrases that mean "I do not
+know", and two phrasings the model actually used were not in it:
 
-Worth noting what this does *not* say. The four wrong answers are all
-confidently phrased — "forecasts range from $80,000 to $98,000" — which is the
-shape that makes a wrong answer expensive. §1.3 of the old plan built
-`Unsure`, and these four never reached for it.
+| Case | What it said | Why it was marked wrong |
+|---|---|---|
+| 025-my-breakfast | *"I **do not have access to** your personal notes"* | the list had `no access to`, which does not match — there is a "t" in the way |
+| 021-far-future-weather | *"exact future weather **cannot be forecast** years in advance"* | the list had `cannot predict`, not `cannot be forecast` |
+
+Both are refusals. Both were graded as confident answers. 026-agi opened with
+*"There is no single year"* and was marked the same way.
+
+So the real score is **one genuine failure, not four**: 020-bitcoin, which gave
+*"conservative estimates sit between $80,000 and $98,000"* with no admission
+anywhere in it. That one is real, and it is the shape that makes a wrong answer
+expensive.
+
+The lesson is about the harness rather than the product. **A missing phrase in
+the hedge list scores a correct answer as a wrong one**, which is the worse
+direction of the two: it sends somebody looking for a bug in the product when
+the bug is in the ruler — which is exactly what happened here, in this file, for
+about an hour. The list is wider now and tested in both directions, because a
+list that counts everything as a refusal would hide the one real failure.
 
 ## And the bench, on the same accidental run
 
