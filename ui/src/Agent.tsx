@@ -520,9 +520,16 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
     // shadow on a dark card over a dark screen is a smudge -- the ring is what
     // separates it from the desktop, and the ring is enough.
     //
-    // The surface is the panel's, not one of its own: `#1e1e1e` with a hairline
-    // inset ring is the language everything else in Nudge is already written in.
-    <div className="w-[326px] rounded-2xl bg-raise text-white hairline">
+    // The surface is the panel's, not one of its own -- the same material, so
+    // the two floating things in Nudge are made of one substance.
+    //
+    // `bg-raise` is what this used to say, and it is the token for *a thing
+    // sitting on a window*: seven percent white, which is right over an opaque
+    // panel and is a seven percent wash over the desktop when the card is its
+    // own transparent window. A card over an editor had the code legible
+    // straight through it -- exactly the "should never show the rocks" that the
+    // material is written to prevent.
+    <div className="material w-[326px] rounded-2xl text-white hairline">
       <header className="flex items-center gap-2.5 px-3 pt-2.5 pb-2">
         <Face state={agent.state} step={agent.step} size={26} hue={hue(agent.id)} />
         <div className="min-w-0 flex-1">
