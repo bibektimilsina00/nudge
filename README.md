@@ -9,8 +9,12 @@ Whether the pointing is *accurate enough to be a product* is still an open quest
 
 ## The documents
 
-Every other markdown file in this repository, and what it is for. If something is
-not on this list it should not exist.
+Every document in this repository and what it is for. If a document is not on
+this list it should not exist.
+
+Not documents, and not on it: `.claude/skills/*/SKILL.md` are tooling, and
+`web/AGENTS.md` is written by `next dev` — deleting it only re-creates it as an
+uncommitted change.
 
 | | |
 |---|---|
