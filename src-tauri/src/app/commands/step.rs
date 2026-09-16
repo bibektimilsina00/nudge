@@ -355,12 +355,22 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         // The chosen agent is in the log, where somebody debugging this needs it,
         // and nowhere a user will meet it.
         eprintln!("delegating: {command}");
+        // On a terminal, with somebody watching it.
+        //
+        // This used to be `start`, on pipes, which is why the invocation above
+        // has to pick a permission mode that never asks: a tool run with its
+        // output piped takes its non-interactive path, and one that stopped to
+        // ask would hang for ever because nobody was there. Now somebody is.
         let id = app
             .state::<Background>()
-            .start(&app.state::<Nudge>().workspace(), &command)?;
+            .watch(&app.state::<Nudge>().workspace(), &command)?;
+        crate::app::supervise::over(app, id, task.clone());
         app.state::<Nudge>().note(format!(
-            "The job was handed over and is running as {id}. Read what it has \
-             printed with output, and report what was done rather than who did it."
+            "The job was handed over and is running as {id}, and I am watching it \
+             -- anything it stops to ask is being answered or put to the user, so \
+             do not try to answer it yourself. Read what it has printed with \
+             output, or wait for it to finish with await, and report what was done \
+             rather than who did it."
         ));
         app.state::<Agents>()
             .record_run(format!("working: {task}"), String::new());
@@ -685,6 +695,68 @@ fn landed(
     agents.record_run(format!("{kind} {}", path.display()), note);
     agents.record_file(path.display().to_string());
     crate::app::agent::publish(app);
+}
+
+/// Ask the judge about something that is not a step.
+///
+/// `Some(true)` only when it plainly agreed. Everything else -- unsure, refused,
+/// unreachable, no judge configured -- is `None`, and every caller treats that
+/// as "decide this some other way". A judge that cannot be reached must not
+/// become a yes.
+pub async fn seconded(app: &AppHandle, asked: &str) -> Option<bool> {
+    use crate::core::judge;
+
+    if !app.state::<crate::app::state::Reviewing>().0.on() {
+        return None;
+    }
+    let provider = app.state::<Nudge>().answering();
+    if !provider.aside() {
+        return None;
+    }
+    let nudge = app.state::<Nudge>();
+    let world = judge::World {
+        workspace: nudge.workspace().display().to_string(),
+        granted: nudge
+            .reach
+            .granted()
+            .into_iter()
+            .map(|g| g.told().to_string())
+            .collect(),
+        remotes: crate::core::tools::files::remotes(&nudge.workspace()),
+        made: Vec::new(),
+        note: None,
+    };
+    let prompt = judge::prompt_for(&nudge.said(), &world, asked, Risk::External);
+    match provider.ask_aside(&prompt).await {
+        Ok(reply) => match judge::read(&reply).agreed() {
+            true => Some(true),
+            false => None,
+        },
+        Err(e) => {
+            eprintln!("reviewer: could not be reached ({e})");
+            None
+        }
+    }
+}
+
+/// Write down what a supervised tool asked and what happened about it.
+///
+/// The tool's own line is kept, clipped and redacted by the audit like anything
+/// else. This is a record of a conversation somebody may need to check, and a
+/// record that paraphrased the question would be no use for that.
+pub fn note_supervision(
+    app: &AppHandle,
+    job: u64,
+    question: &crate::core::asked::Asked,
+    outcome: Outcome,
+) {
+    record(
+        app,
+        "supervised",
+        &format!("job {job} asked: {}", question.line),
+        outcome,
+        Risk::External,
+    );
 }
 
 /// Does this step name a file this run wrote?

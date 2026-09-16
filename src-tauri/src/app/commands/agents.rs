@@ -134,6 +134,7 @@ pub fn resume_agent(app: AppHandle, id: u64) {
 /// thrown that away by the time it arrives here.
 fn carry_out(app: &AppHandle, pending: crate::core::reach::Pending, said: &str) {
     let yes = files::is_yes(said);
+    use crate::app::state::Background;
     use crate::core::reach::Pending;
 
     match pending {
@@ -187,6 +188,49 @@ fn carry_out(app: &AppHandle, pending: crate::core::reach::Pending, said: &str) 
                         "They agreed to replace {}. Do it now.",
                         path.display()
                     ));
+                }
+            }
+        }
+
+        // Typed straight back into the tool that asked. The person's words, not
+        // a paraphrase: they were shown the tool's own options and picked one,
+        // and turning "2. Merge" back into "yes" would be answering for them.
+        Pending::Supervising { job, options, .. } => {
+            let typed = match options.is_empty() {
+                // A yes/no. What the tool wants is a letter.
+                true => match yes {
+                    true => "y".to_string(),
+                    false => "n".to_string(),
+                },
+                // A menu. The number they picked, taken from the front of the
+                // label it was rendered with.
+                false => said
+                    .split(['.', ' '])
+                    .next()
+                    .filter(|n| n.parse::<u32>().is_ok())
+                    .unwrap_or("1")
+                    .to_string(),
+            };
+
+            if said.trim().eq_ignore_ascii_case("stop it") {
+                eprintln!("supervisor: stopping job {job} at the user's word");
+                let _ = app.state::<Background>().stop(job);
+                app.state::<Nudge>().note(format!(
+                    "They stopped job {job} rather than answering what it asked."
+                ));
+                return;
+            }
+
+            match app.state::<Background>().answer(job, &typed) {
+                Ok(()) => {
+                    eprintln!("supervisor: answered job {job} with {typed:?} (the user decided)");
+                    app.state::<Nudge>()
+                        .note(format!("They answered job {job}: {said}"));
+                }
+                Err(e) => {
+                    eprintln!("supervisor: could not answer job {job}: {e}");
+                    app.state::<Nudge>()
+                        .note(format!("Job {job} could not be answered: {e}"));
                 }
             }
         }

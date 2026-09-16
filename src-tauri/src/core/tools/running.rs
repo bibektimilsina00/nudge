@@ -424,6 +424,22 @@ impl Running {
         Ok(id)
     }
 
+    /// Everything it has printed, and whether it is still going.
+    ///
+    /// Without moving the cursor that `read` uses. A supervisor looks at the
+    /// tail constantly and must not eat the output the agent is going to be
+    /// shown -- those are two different readers of one stream, and only one of
+    /// them is consuming it.
+    pub fn peek(&self, id: u64) -> Option<(String, bool)> {
+        let mut items = self.items.lock().unwrap();
+        let p = items.iter_mut().find(|p| p.id == id)?;
+        if p.finished.is_none() {
+            p.finished = p.child.done();
+        }
+        let text = p.output.lock().unwrap().text.clone();
+        Some((text, p.finished.is_none()))
+    }
+
     /// Type something into one that is watching for it.
     ///
     /// A newline is added unless one is already there: every prompt this exists

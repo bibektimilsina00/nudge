@@ -632,6 +632,24 @@ pub enum Pending {
     },
     /// Reach a host this run has not reached before.
     Reach { host: String, url: String },
+    /// A supervised tool has stopped to ask something nothing else could
+    /// decide.
+    ///
+    /// `line` is the tool's own words and is carried *only* to be shown to a
+    /// person. It is the one place in this program where text from another
+    /// program is put in front of somebody -- which is safe, because a person
+    /// reading a sentence is not a system that can be instructed by it, and
+    /// because the alternative is asking them to approve something unnamed.
+    ///
+    /// It goes nowhere else. Not to the judge, which already decided on facts
+    /// and declined; not into the session history; not back into any prompt.
+    Supervising {
+        /// Which running process is waiting.
+        job: u64,
+        line: String,
+        /// What it offered, when it offered a list.
+        options: Vec<String>,
+    },
 }
 
 impl Pending {
@@ -654,6 +672,21 @@ impl Pending {
                 "Always".into(),
                 "No".into(),
             ],
+            // The tool's own options, as it wrote them, plus a way out.
+            //
+            // Its words rather than ours: a person choosing between "Rebase"
+            // and "Merge" needs the words the tool used, and paraphrasing them
+            // into Yes and No would be answering for them. Numbered to match
+            // what is on the tool's screen.
+            Pending::Supervising { options, .. } => match options.is_empty() {
+                true => vec!["Yes".into(), "No".into(), "Stop it".into()],
+                false => options
+                    .iter()
+                    .enumerate()
+                    .map(|(i, o)| format!("{}. {o}", i + 1))
+                    .chain(std::iter::once("Stop it".into()))
+                    .collect(),
+            },
         }
     }
 }
@@ -673,6 +706,12 @@ impl Pending {
             // answered, and nobody can weigh a two-hundred-character URL read
             // aloud -- while "shall I fetch from example.com" is a decision.
             Pending::Reach { host, .. } => format!("Shall I fetch something from {host}?"),
+            // Named as theirs, because it is. Somebody deciding this needs to
+            // know they are answering another program rather than Nudge, or
+            // "yes" means something different than they think.
+            Pending::Supervising { line, .. } => {
+                format!("The tool I handed this to is asking: {line}")
+            }
         }
     }
 
@@ -680,6 +719,7 @@ impl Pending {
     pub fn recorded(&self, agreed: bool) -> String {
         let verb = if agreed { "agreed to" } else { "refused" };
         match self {
+            Pending::Supervising { job, .. } => format!("{verb} what job {job} asked"),
             Pending::Replace { path, .. } => format!("{verb} replacing {}", path.display()),
             Pending::Reach { host, .. } => format!("{verb} reaching {host}"),
         }
