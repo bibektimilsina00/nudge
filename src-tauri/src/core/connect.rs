@@ -158,13 +158,22 @@ pub fn catalogue() -> Vec<Offer> {
                      rest of your Drive, and not mail.",
             command: "npx",
             args: &["-y", "mcp-google-sheets"],
-            env: &[("CREDENTIALS_PATH", "~/.config/gcp-oauth.keys.json")],
+            env: &[
+                ("CREDENTIALS_PATH", "~/.config/gcp-oauth.keys.json"),
+                // Its default is `token.json` *relative to the working
+                // directory*, so signing in from a terminal puts the token
+                // somewhere the server Nudge starts will never look. Pinned, or
+                // this works once by hand and never again from the app.
+                ("TOKEN_PATH", "~/.mcp-google-sheets-token.json"),
+            ],
             token: None,
             where_from: None,
             setup: Some(
                 "Desktop OAuth client JSON at ~/.config/gcp-oauth.keys.json, then \
-                 sign in once:\nCREDENTIALS_PATH=~/.config/gcp-oauth.keys.json npx \
-                 mcp-google-sheets",
+                 sign in once:\npython3 scripts/google-sheets-token.py\n\n\
+                 The server itself cannot do this. It checks for a token file and, \
+                 if there is none, raises an error telling you to sign in through \
+                 a browser it has no code to open.",
             ),
         },
         Offer {

@@ -86,7 +86,7 @@ pub async fn connect(
     // in happens in their browser, with their account, on Google's own consent
     // screen. Said plainly rather than failing at the server with whatever that
     // server's own words happen to be.
-    if let Some(how) = offer.setup {
+    if offer.setup.is_some() {
         let ready = mcp::Servers::start(std::slice::from_ref(
             &connect::spec(&Made {
                 key: key.clone(),
@@ -103,7 +103,18 @@ pub async fn connect(
         ))
         .await;
         if ready.tools().is_empty() {
-            return Err(how.to_string());
+            // Not the setup text. That is already on the card, and returning it
+            // here printed the same paragraph twice -- once as instructions and
+            // once, in red, as the reason. What belongs here is which of the two
+            // things went wrong, so the instructions beside it mean something.
+            //
+            // The server's own words would be better still and are not available:
+            // stderr is inherited rather than piped, so "OAuth2 token not found"
+            // goes to Nudge's log and not into this string.
+            return Err(match ready.failed(&key) {
+                Some(why) => format!("{} did not start: {why}", offer.name),
+                None => format!("{} has not been signed in to yet.", offer.name),
+            });
         }
     }
 
