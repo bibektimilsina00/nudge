@@ -101,7 +101,7 @@ The reasoning is written in the code and was right when it was written —
 — and the answer is not to keep choosing flags that avoid questions. It is to
 **put somebody at that terminal**.
 
-### 2.1 A real terminal
+### 2.1 A real terminal — *done*
 
 These tools behave differently when their output is a pipe: no prompts, no
 progress, sometimes no colour and a different code path entirely. Supervising one
@@ -110,8 +110,13 @@ means giving it a pseudo-terminal, not a pipe.
 `running.rs` uses piped stdio. This is the foundation the rest of §2 sits on, and
 it is the part with no way around it.
 
-**Done when** `claude` run under Nudge behaves as it does in a terminal, and what
-it prints arrives as it is printed rather than in blocks when its buffer fills.
+**Done.** `watch` starts a process on a pty and `answer` types back into it.
+Proven rather than assumed: `process.stdout.isTTY` is false through a pipe and
+true through this.
+
+Both kinds stay. A dev server has nothing to say to anybody and a pty would buy
+it a pile of escape codes. The same refusals apply either way — a pty is a way of
+watching something, not a way round what may be watched.
 
 ### 2.2 Noticing that it asked something
 
