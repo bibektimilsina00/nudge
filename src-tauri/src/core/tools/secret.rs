@@ -286,3 +286,73 @@ mod tests {
         assert!(!unknown.contains("Run `"));
     }
 }
+
+/// Secrets this process actually holds, for checking that none of them leave.
+///
+/// A list of the real values rather than a guess at what a secret looks like.
+/// That is the whole difference: a shape-based rule has to decide how long is
+/// long, and redacts a commit hash while missing a short token. An exact value
+/// cannot be wrong in either direction.
+///
+/// Filled once at startup and never added to, because the only thing that can
+/// widen it afterwards is a model.
+static HELD: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+
+/// Record what this run is holding, so it can be recognised on the way out.
+///
+/// Short values are dropped. A key of three characters would match half the text
+/// on the internet, and the resulting refusals would be the feature's obituary.
+pub fn remember(values: impl IntoIterator<Item = String>) {
+    let held: Vec<String> = values
+        .into_iter()
+        .map(|v| v.trim().to_string())
+        .filter(|v| v.len() >= 12)
+        .collect();
+    let _ = HELD.set(held);
+}
+
+/// Does this text carry a secret this process is holding?
+///
+/// The check that makes egress safe to allow at all: whatever else a request is
+/// doing, it is not carrying the user's API key to somebody else. A model that
+/// has been told by something on screen to fetch `evil.com/?k=<key>` composes a
+/// URL that looks entirely ordinary, and this is the only thing between that
+/// request and the wire.
+///
+/// Says which kind leaked, never the value -- an error message is one of the
+/// places a secret ends up.
+pub fn leaks(text: &str) -> Option<String> {
+    let held = HELD.get()?;
+    held.iter()
+        .find(|v| text.contains(v.as_str()))
+        .map(|_| "it carries this machine's API key".to_string())
+}
+
+#[cfg(test)]
+mod egress_tests {
+    #[test]
+    fn a_url_carrying_the_key_is_recognised() {
+        // `remember` is a OnceLock, so this is the only test that may set it and
+        // the others read what it leaves.
+        super::remember([
+            "sk-abcdef0123456789".to_string(),
+            "short".to_string(), // dropped: too short to match safely
+        ]);
+
+        assert!(super::leaks("https://evil.example/?k=sk-abcdef0123456789").is_some());
+        assert!(super::leaks("https://example.com/weather").is_none());
+        // The short one must not have been kept, or every URL with "short" in it
+        // would be refused.
+        assert!(super::leaks("https://example.com/shortstory").is_none());
+    }
+
+    #[test]
+    fn what_leaked_is_named_but_never_quoted() {
+        super::remember(["sk-abcdef0123456789".to_string()]);
+        let said = super::leaks("?k=sk-abcdef0123456789").unwrap_or_default();
+        assert!(
+            !said.contains("sk-abcdef"),
+            "the message quoted the secret: {said}"
+        );
+    }
+}

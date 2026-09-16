@@ -42,6 +42,20 @@ pub fn run() {
             // Before anything else. If the last run was killed rather than
             // closed, its pointer is still hidden and nothing else will fix it.
             crate::core::screen::click::show_the_pointer();
+            // What this run is holding, so nothing can carry it back out.
+            //
+            // Collected before the providers are built, because after that the
+            // key is inside one and this is the last place it is plainly a
+            // string. Env vars as well as the config file: most people set the
+            // variable and never write the key down here at all.
+            crate::core::tools::secret::remember(
+                cfg.api_key.clone().into_iter().chain(
+                    ["GEMINI_API_KEY", "ANTHROPIC_API_KEY", "OPENAI_API_KEY"]
+                        .iter()
+                        .filter_map(|k| std::env::var(k).ok()),
+                ),
+            );
+
             let voice = Voice(VoiceMode::from_config(cfg.speak, &cfg.speech_engine).into());
             let nudge_look = cfg.companion.clone();
             let nudge = Nudge::new(cfg)?;

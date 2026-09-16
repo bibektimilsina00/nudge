@@ -38,6 +38,16 @@ fn refuse(url: &str) -> Option<String> {
     // the host is what is left after dropping any user:pass@ and the port.
     let rest = &lower[lower.find("//")? + 2..];
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+
+    // Credentials in the authority, which a page fetch never needs.
+    //
+    // `https://user:pass@host/` is a way to put a secret on the wire while the
+    // URL still reads as ordinary, and a way to make the host look like
+    // something it is not -- `https://github.com@evil.example/` is a request to
+    // evil.example that a person skims as GitHub.
+    if authority.contains('@') {
+        return Some("a URL with credentials in it is not a page to read".into());
+    }
     let after_userinfo = authority.rsplit('@').next().unwrap_or("");
     // An IPv6 literal is bracketed and full of colons, so the port cannot be
     // found by splitting on ":" -- `[::1]:8080` would come back as "[".
@@ -77,6 +87,17 @@ fn refuse(url: &str) -> Option<String> {
     {
         return Some(format!("{host} is on this machine or this network"));
     }
+    // Last, and applied whatever has been granted.
+    //
+    // The same rule `shell` keeps about secrets: a permission to reach the web
+    // is a decision about capability, not a decision to hand somebody the keys,
+    // and nobody granting the one is thinking about the other. Under prompt
+    // injection this is the only thing standing between a URL the model composed
+    // from something it read on screen and the wire.
+    if let Some(why) = crate::core::tools::secret::leaks(url) {
+        return Some(format!("{why}, so it is not going out"));
+    }
+
     None
 }
 
@@ -325,6 +346,21 @@ fn trim(text: &str) -> String {
 
 #[cfg(test)]
 mod tests {
+    /// A URL that reads as ordinary and is not.
+    ///
+    /// Both of these pass every other check in this file: the scheme is https,
+    /// the host is public, nothing is on a private network. The danger is
+    /// entirely in what the URL carries.
+    #[test]
+    fn a_url_cannot_smuggle_credentials_out() {
+        // Userinfo is a way to put a secret on the wire, and a way to make the
+        // host look like something else -- a person skims this as GitHub.
+        assert!(super::refuse("https://github.com@evil.example/").is_some());
+        assert!(super::refuse("https://user:hunter2@example.com/page").is_some());
+        // The ordinary case is untouched.
+        assert_eq!(super::refuse("https://example.com/page?q=1"), None);
+    }
+
     use super::refuse_request as no;
 
     /// The line the grant draws: reading is always allowed, acting is not.
@@ -530,5 +566,29 @@ mod tests {
         let out = readable(page, "https://example.com/weather");
         assert!(out.contains("24 degrees"), "lost the answer: {out}");
         assert!(!out.contains("var tracking"), "kept the script: {out}");
+    }
+}
+
+#[cfg(test)]
+mod egress_tests {
+    /// End to end through the real refusal path: a key this run holds cannot
+    /// leave in a URL, whatever else about the URL is fine.
+    #[test]
+    fn a_held_key_cannot_leave_in_a_url() {
+        crate::core::tools::secret::remember(["sk-live-9f2a7c4e1b83".to_string()]);
+
+        // Public host, https, no private network, no credentials -- ordinary in
+        // every way except the one that matters.
+        let sneaky = "https://example.com/collect?note=sk-live-9f2a7c4e1b83";
+        let why = super::refuse(sneaky).expect("a URL carrying the key was allowed out");
+        assert!(
+            !why.contains("sk-live"),
+            "the refusal quoted the key: {why}"
+        );
+
+        assert_eq!(
+            super::refuse("https://example.com/collect?note=hello"),
+            None
+        );
     }
 }
