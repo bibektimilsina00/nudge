@@ -191,7 +191,7 @@ changed, which is the case worth catching: a tool that ran happily and changed
 nothing has not done the job. Status rather than diff, because a new file is the
 commonest thing a delegated agent produces.
 
-### 2.7 The flags people actually use
+### 2.7 The flags people actually use — *done*
 
 `--continue` and `--resume` to carry on a session rather than starting a new one;
 choosing a model; pointing at a directory. Today one invocation per tool is
@@ -199,8 +199,15 @@ hard-coded, checked by running it, and that is the right instinct — every form
 written from memory here has been wrong. Extending it means extending the same
 table, and checking each addition the same way.
 
-**Done when** a second delegation to the same tool continues the first rather
-than starting again, and the table still only contains forms that have been run.
+**Done.** A second delegation to the same tool in the same run carries on its
+conversation. Every form was checked by running it — `claude -p --continue`
+answered from the previous turn rather than the new prompt, and Codex turned out
+to need a subcommand (`exec resume --last`) rather than a flag, which is exactly
+what writing it from memory gets wrong.
+
+OpenCode and Aider are not installed here and carry no continue form. A test
+asserts one exists exactly where one was run, and that carrying on is not the
+same command as starting fresh.
 
 ---
 
