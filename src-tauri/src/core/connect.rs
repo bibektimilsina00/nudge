@@ -123,9 +123,8 @@ pub fn catalogue() -> Vec<Offer> {
             token: None,
             where_from: None,
             setup: Some(
-                "Uses the same Desktop OAuth client as the rest of Google, and asks \
-                 only for mail. Put its JSON at ~/.gmail-mcp/gcp-oauth.keys.json, \
-                 then run: npx @gongrzhe/server-gmail-autoauth-mcp auth",
+                "Desktop OAuth client JSON at ~/.gmail-mcp/gcp-oauth.keys.json, then:\n\
+                 npx @gongrzhe/server-gmail-autoauth-mcp auth",
             ),
         },
         Offer {
@@ -143,9 +142,8 @@ pub fn catalogue() -> Vec<Offer> {
             token: None,
             where_from: None,
             setup: Some(
-                "Same Desktop OAuth client as the rest of Google, calendar scopes \
-                 only. Put its JSON at ~/.config/gcp-oauth.keys.json, then sign in \
-                 once: npx @cocal/google-calendar-mcp auth",
+                "Desktop OAuth client JSON at ~/.config/gcp-oauth.keys.json, then:\n\
+                 npx @cocal/google-calendar-mcp auth",
             ),
         },
         Offer {
@@ -164,9 +162,9 @@ pub fn catalogue() -> Vec<Offer> {
             token: None,
             where_from: None,
             setup: Some(
-                "Same Desktop OAuth client as the rest of Google. Put its JSON at \
-                 ~/.config/gcp-oauth.keys.json, then sign in once in a browser: \
-                 CREDENTIALS_PATH=~/.config/gcp-oauth.keys.json npx mcp-google-sheets",
+                "Desktop OAuth client JSON at ~/.config/gcp-oauth.keys.json, then \
+                 sign in once:\nCREDENTIALS_PATH=~/.config/gcp-oauth.keys.json npx \
+                 mcp-google-sheets",
             ),
         },
         Offer {
@@ -181,11 +179,10 @@ pub fn catalogue() -> Vec<Offer> {
             token: None,
             where_from: None,
             setup: Some(
-                "This one wants a refresh token rather than doing the browser \
-                 flow itself, so it needs GOOGLE_TASKS_CLIENT_ID, \
-                 GOOGLE_TASKS_CLIENT_SECRET and GOOGLE_TASKS_REFRESH_TOKEN in the \
-                 environment. Note it starts and lists its tools without them and \
-                 only fails when something is actually asked of it.",
+                "Wants a refresh token rather than doing the browser flow itself.\n\
+                 Set GOOGLE_TASKS_CLIENT_ID, GOOGLE_TASKS_CLIENT_SECRET and \
+                 GOOGLE_TASKS_REFRESH_TOKEN.\nIt connects without them and fails \
+                 only when asked to do something.",
             ),
         },
         Offer {
@@ -201,11 +198,9 @@ pub fn catalogue() -> Vec<Offer> {
             token: None,
             where_from: None,
             setup: Some(
-                "The odd one out: a service account, not the Desktop OAuth client \
-                 the other Google entries use. In Cloud Console create a service \
-                 account, download its JSON key to \
-                 ~/.config/gsc-service-account.json, then in Search Console add \
-                 that account's email as a user on the property you want read.",
+                "A service account, not the OAuth client the others use.\n\
+                 Key JSON at ~/.config/gsc-service-account.json, then add that \
+                 account's email as a user on the property in Search Console.",
             ),
         },
         Offer {
@@ -223,11 +218,9 @@ pub fn catalogue() -> Vec<Offer> {
             token: None,
             where_from: None,
             setup: Some(
-                "Google needs a browser and a consent screen, which is yours to give \
-                 rather than mine to take. In Google Cloud Console create an OAuth \
-                 client of type Desktop app — not iOS, which wants a Bundle ID this \
-                 is not — download its JSON to ~/.google-mcp/credentials.json, then \
-                 run: npx google-workspace-mcp accounts add me",
+                "Create an OAuth client of type Desktop app — not iOS, which wants \
+                 a Bundle ID this is not.\nIts JSON at ~/.google-mcp/credentials.json, \
+                 then:\nnpx google-workspace-mcp accounts add me",
             ),
         },
     ]

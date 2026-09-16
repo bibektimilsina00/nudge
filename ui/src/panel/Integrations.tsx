@@ -155,7 +155,12 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
         setToken("");
         onChanged();
       })
-      .catch((e) => setFailed(String(e)))
+      .catch((e) => {
+        // Opened here rather than before the attempt: somebody who has already
+        // done the setup should not have to read it to get past it.
+        setFailed(String(e));
+        setOpen(true);
+      })
       .finally(() => setBusy(false));
   };
 
@@ -218,9 +223,10 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
           </button>
         ) : (
           <button
-            onClick={() =>
-              it.needs_token || it.needs_folder || it.setup ? setOpen((o) => !o) : go()
-            }
+            // A card with a field has to open. One with only instructions does
+            // not: the attempt is cheap, it is the thing that actually decides,
+            // and it either works or says what is missing.
+            onClick={() => (it.needs_token || it.needs_folder ? setOpen((o) => !o) : go())}
             disabled={busy}
             className="shrink-0 rounded-full bg-blue px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
           >
@@ -240,12 +246,13 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
               className="w-full rounded-lg bg-black/40 px-2.5 py-1.5 text-[11px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
             />
           )}
-          {/* Not a field. Signing in happens in a browser with their own
-              account, on the provider's own consent screen -- so what is shown
-              is what to go and do, and the Connect button below checks whether
-              they did it. */}
-          {it.setup && (
-            <p className="text-[10.5px] leading-snug whitespace-pre-line text-ink-2">
+          {/* Not a field. Signing in happens in a browser with their own account,
+              on the provider's own consent screen, so what is shown is what to go
+              and do. Only once something has actually failed, or alongside a field
+              that needs filling in -- before that it is an answer to a question
+              nobody asked. */}
+          {it.setup && (failed || it.needs_token || it.needs_folder) && (
+            <p className="font-mono text-[10px] leading-relaxed whitespace-pre-line text-ink-2">
               {it.setup}
             </p>
           )}
@@ -272,7 +279,7 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
             disabled={busy}
             className="w-full rounded-lg bg-blue py-1.5 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
           >
-            {busy ? "Starting it to check…" : it.setup ? "I've done that — check" : "Connect"}
+            {busy ? "Starting it to check…" : failed ? "Try again" : "Connect"}
           </button>
         </div>
       )}
