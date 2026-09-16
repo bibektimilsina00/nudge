@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+import { Label } from "../components/controls";
+
 import gcalLogo from "../assets/logos/google_calendar.svg?url";
 import githubLogo from "../assets/logos/github.svg?url";
 import gmailLogo from "../assets/logos/gmail.svg?url";
@@ -215,13 +217,6 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
               lives one click in, on both panels, so it is still reachable before
               anybody agrees to anything rather than only after something fails. */}
           <p className="text-[10.5px] leading-snug text-ink-2">{it.about}</p>
-          {it.connected && it.tools.length > 0 && (
-            // What the server said, not what the catalogue claimed.
-            <p className="text-[10px] text-ink-3">
-              {it.allowed ? `${it.allowed.length} of ${it.tools.length}` : it.tools.length} tools
-              allowed
-            </p>
-          )}
         </div>
 
         {it.connected ? (
@@ -346,7 +341,15 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
     return q ? it.tools.filter((t) => t.toLowerCase().includes(q)) : it.tools;
   }, [query, it.tools]);
 
-  const isNew = (t: string) => it.allowed !== null && !it.allowed.includes(t) && !it.declined.includes(t);
+  const isNew = (t: string) =>
+    it.allowed !== null && !it.allowed.includes(t) && !it.declined.includes(t);
+
+  // Saving an unchanged list is a write nobody asked for, and a button that is
+  // always live gives no sign of whether anything was actually altered.
+  const saved = useMemo(() => new Set(it.allowed ?? it.tools), [it.allowed, it.tools]);
+  const dirty =
+    checked.size !== saved.size || [...checked].some((t) => !saved.has(t));
+  const fresh = it.tools.filter(isNew).length;
 
   const flip = (t: string) =>
     setChecked((was) => {
@@ -363,77 +366,100 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
   };
 
   return (
-    <div className="mt-2.5 space-y-2 border-t border-line pt-2.5">
-      <p className="text-[10px] leading-snug text-ink-3">
-        <span className="text-ink-2">Gets:</span> {it.access}
-      </p>
-      <div className="flex items-center gap-2">
-        <input
-          value={query}
-          onChange={(e) => setQuery(e.target.value)}
-          placeholder={`Search ${it.tools.length} tools`}
-          spellCheck={false}
-          className="min-w-0 flex-1 rounded-lg bg-black/40 px-2.5 py-1.5 text-[11px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
-        />
-        <button
-          onClick={() => setChecked(new Set(it.tools))}
-          className="shrink-0 text-[10px] text-ink-3 transition-colors duration-150 hover:text-ink-2"
-        >
-          All
-        </button>
-        <button
-          onClick={() => setChecked(new Set())}
-          className="shrink-0 text-[10px] text-ink-3 transition-colors duration-150 hover:text-ink-2"
-        >
-          None
-        </button>
-      </div>
+    <div className="mt-2.5 border-t border-line pt-2.5">
+      {/* Three sections, in the order somebody works through them: what this
+          reaches, which of its tools are on, and the way out. Each is labelled,
+          because an unlabelled block of checkboxes under a row of buttons is a
+          thing to decode rather than read. */}
+      <Group label="Access">
+        <p className="text-[10px] leading-snug text-ink-3">{it.access}</p>
+      </Group>
 
-      <div className="max-h-56 space-y-px overflow-y-auto">
-        {shown.map((t) => (
-          <label
-            key={t}
-            className="flex cursor-pointer items-center gap-2 rounded px-1 py-[3px] hover:bg-white/5"
-          >
-            <input
-              type="checkbox"
-              checked={checked.has(t)}
-              onChange={() => flip(t)}
-              className="size-3 shrink-0 accent-[#0a84ff]"
-            />
-            <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-ink-2">{t}</span>
-            {isNew(t) && (
-              // Only ever a name neither list has seen -- so it means "the server
-              // added this since you looked", and nothing else.
-              <span className="shrink-0 rounded bg-[#ff9f0a]/15 px-1 py-[1px] text-[9px] text-[#ff9f0a]">
-                new
-              </span>
-            )}
-          </label>
-        ))}
-        {shown.length === 0 && (
-          <p className="px-1 py-2 text-[10px] text-ink-3">Nothing matches that.</p>
+      <Group label={`Tools — ${checked.size} of ${it.tools.length} on`}>
+        {fresh > 0 && (
+          // Worth saying out loud: these arrived switched off, and the reason
+          // somebody is looking at this panel at all may be that they appeared.
+          <p className="text-[10px] leading-snug text-[#ff9f0a]">
+            {fresh} new since you last looked, off until you say otherwise.
+          </p>
         )}
-      </div>
 
-      <p className="text-[10px] leading-snug text-ink-3">
-        {checked.size} of {it.tools.length} allowed. Unchecked tools are not hidden from the
-        assistant, they are absent — it is never told they exist. Takes effect next time this
-        server starts.
-      </p>
+        <div className="flex items-center gap-1.5">
+          <input
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search"
+            spellCheck={false}
+            className="min-w-0 flex-1 rounded-lg bg-black/40 px-2 py-1 text-[11px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
+          />
+          <button
+            onClick={() => setChecked(new Set(it.tools))}
+            disabled={checked.size === it.tools.length}
+            className="shrink-0 rounded px-1.5 py-1 text-[10px] text-ink-3 transition-colors duration-150 hover:bg-raise hover:text-ink-2 disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            All
+          </button>
+          <button
+            onClick={() => setChecked(new Set())}
+            disabled={checked.size === 0}
+            className="shrink-0 rounded px-1.5 py-1 text-[10px] text-ink-3 transition-colors duration-150 hover:bg-raise hover:text-ink-2 disabled:opacity-30 disabled:hover:bg-transparent"
+          >
+            None
+          </button>
+        </div>
 
-      <button
-        onClick={save}
-        disabled={saving}
-        className="w-full rounded-lg bg-blue py-1.5 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
-      >
-        {saving ? "Saving…" : "Save"}
-      </button>
+        <div className="max-h-48 overflow-y-auto rounded-lg bg-black/20">
+          {shown.map((t) => (
+            <label
+              key={t}
+              className="flex cursor-pointer items-center gap-2 px-2 py-1 transition-colors duration-150 hover:bg-white/5"
+            >
+              <input
+                type="checkbox"
+                checked={checked.has(t)}
+                onChange={() => flip(t)}
+                className="size-3 shrink-0 accent-[#0a84ff]"
+              />
+              <span
+                className={`min-w-0 flex-1 truncate font-mono text-[10px] ${
+                  checked.has(t) ? "text-ink-2" : "text-ink-3 line-through decoration-ink-3/40"
+                }`}
+              >
+                {t}
+              </span>
+              {isNew(t) && (
+                // Only ever a name neither list has seen, so it means "the server
+                // added this since you looked" and nothing else.
+                <span className="shrink-0 rounded bg-[#ff9f0a]/15 px-1 py-[1px] text-[9px] text-[#ff9f0a]">
+                  new
+                </span>
+              )}
+            </label>
+          ))}
+          {shown.length === 0 && (
+            <p className="px-2 py-3 text-center text-[10px] text-ink-3">
+              Nothing matches “{query.trim()}”.
+            </p>
+          )}
+        </div>
+
+        <p className="text-[10px] leading-snug text-ink-3">
+          An unticked tool is not blocked, it is absent — the assistant is never
+          told it exists. Applies next time this server starts.
+        </p>
+
+        <button
+          onClick={save}
+          disabled={saving || !dirty}
+          className="w-full rounded-lg bg-blue py-1.5 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:bg-raise disabled:text-ink-3"
+        >
+          {saving ? "Saving…" : dirty ? "Save" : "Saved"}
+        </button>
+      </Group>
 
       {/* Last, and quiet until you mean it. Taking the connection away is the one
           thing here that cannot be undone with another click -- the token goes
-          from the Keychain with it -- so it is at the bottom, behind the arrow,
-          and does not look like the Save above it. */}
+          from the Keychain with it -- so it does not look like the Save above. */}
       <button
         onClick={() => void invoke("disconnect", { key: it.key }).then(onChanged)}
         className="w-full rounded-lg py-1.5 text-[11px] font-medium text-ink-3 transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
@@ -441,5 +467,15 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
         Disconnect {it.name}
       </button>
     </div>
+  );
+}
+
+/** A labelled block, so the panel reads as sections rather than a pile. */
+function Group({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <section className="mb-3">
+      <Label>{label}</Label>
+      <div className="space-y-1.5">{children}</div>
+    </section>
   );
 }
