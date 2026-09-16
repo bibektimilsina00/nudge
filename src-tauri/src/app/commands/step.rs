@@ -966,13 +966,20 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         Step::Read {
             path, from, lines, ..
         } => {
-            let text = files::read(
-                &app.state::<Nudge>().workspace(),
-                path,
-                *from,
-                *lines,
-                permits(app, Grant::Files).allowed(),
-            )?;
+            let workspace = app.state::<Nudge>().workspace();
+            let anywhere = permits(app, Grant::Files).allowed();
+            // Resolved first either way, so a document outside the workspace is
+            // refused by the same rule as a text file outside it. Being a PDF is
+            // not a way round the boundary.
+            let target = files::resolve(&workspace, path, anywhere)?;
+
+            let text = match crate::core::tools::paper::is_paper(&target) {
+                // Whole, and not by line. A PDF has pages rather than lines, and
+                // `from`/`lines` mean nothing in one -- honouring them would be
+                // inventing a coordinate system the document does not have.
+                true => crate::core::tools::paper::read(&target)?,
+                false => files::read(&workspace, path, *from, *lines, anywhere)?,
+            };
             eprintln!("read {path} @{from} ({} chars)", text.len());
             app.state::<Nudge>().note(format!("Read {path}:\n{text}"));
         }

@@ -957,7 +957,9 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          something.\n\
          **read** returns part of a file with line numbers -- ask for a range \
          when it is long. Read before you edit: matching text you have not seen \
-         is guessing.\n\
+         is guessing. It reads a PDF too, whole rather than by line, because a \
+         document has pages and not lines: point it at a contract or an invoice \
+         and ask about what it says.\n\
          **edit** replaces one exact piece of text in a file, which is what most \
          changes actually are. What you give must appear EXACTLY ONCE, so \
          include enough around it to be unique; you are told how many matches \
