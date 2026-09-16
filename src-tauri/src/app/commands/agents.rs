@@ -27,8 +27,11 @@ pub fn answer_agent(app: AppHandle, id: u64, text: String) {
     app.state::<Agents>().answer(id, text.clone());
     // The running session is what the next turn reads, so the answer has to land
     // there as well as in the agent's own record.
+    // `note_said`, not `note`: this is the user's own words, and the whole point
+    // of the second channel is that something which must not read the screen can
+    // still learn what was asked for.
     app.state::<Nudge>()
-        .note(format!("The user answered: {text}"));
+        .note_said(format!("The user answered: {text}"));
     crate::app::agent::publish(&app);
 }
 
