@@ -385,6 +385,51 @@ impl Step {
         }
     }
 
+    /// The same sentence, replaced.
+    ///
+    /// Used where something outside the model has to correct what it said --
+    /// see [`crate::core::claimed`]. A method rather than a rebuild at the call
+    /// site, because every variant carries a `say` and a match that forgot one
+    /// would silently drop a correction.
+    pub fn saying(mut self, said: String) -> Self {
+        *self.say_mut() = said;
+        self
+    }
+
+    fn say_mut(&mut self) -> &mut String {
+        match self {
+            Step::Point { say, .. }
+            | Step::Done { say, .. }
+            | Step::Unsure { say, .. }
+            | Step::Launch { say, .. }
+            | Step::Open { say, .. }
+            | Step::Type { say, .. }
+            | Step::Press { say, .. }
+            | Step::Run { say, .. }
+            | Step::Await { say, .. }
+            | Step::Write { say, .. }
+            | Step::Fetch { say, .. }
+            | Step::Read { say, .. }
+            | Step::Edit { say, .. }
+            | Step::Plan { say, .. }
+            | Step::Search { say, .. }
+            | Step::Task { say, .. }
+            | Step::Show { say, .. }
+            | Step::Workspace { say, .. }
+            | Step::Start { say, .. }
+            | Step::Output { say, .. }
+            | Step::Kill { say, .. }
+            | Step::Agent { say, .. }
+            | Step::Question { question: say }
+            | Step::Mcp { say, .. }
+            | Step::Request { say, .. }
+            | Step::Delegate { say, .. }
+            | Step::Remember { say, .. }
+            | Step::Skill { say, .. }
+            | Step::Reply { say } => say,
+        }
+    }
+
     /// Are these two steps the same *action*, regardless of wording?
     ///
     /// The model rephrases constantly -- "Heading straight to YouTube" and

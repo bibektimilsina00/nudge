@@ -253,6 +253,9 @@ pub fn spawn(
 async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> State {
     app.state::<Nudge>().begin_agent(goal, carried);
     let mut last: Option<crate::core::provider::Step> = None;
+    // Every step this run performed, so a claim at the end can be held against
+    // what actually happened rather than against what the model remembers.
+    let mut taken: Vec<crate::core::provider::Step> = Vec::new();
     let mut repeats = 0usize;
     let mut failures = 0usize;
     let mut idle = 0usize;
@@ -364,6 +367,20 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             Err(e) => {
                 eprintln!("agent#{id} turn {turn}: FAILED {e}");
                 return State::Failed { why: e.to_string() };
+            }
+        };
+
+        taken.push(step.clone());
+
+        // A claim nobody checked, taken back before it is spoken or written
+        // down. Mechanical on both sides -- a phrase from a fixed list, and
+        // whether any step in this run actually read anything -- so a miss
+        // leaves the sentence exactly as it was.
+        let step = match crate::core::claimed::settled(step.say(), &taken) {
+            fixed if fixed == step.say() => step,
+            fixed => {
+                eprintln!("agent#{id} turn {turn}: took back an unbacked claim");
+                step.saying(fixed)
             }
         };
 

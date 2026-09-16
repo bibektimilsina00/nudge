@@ -12,6 +12,7 @@
 //! - [`tools`] -- commands, files and the web
 //! - [`laps`] -- where a turn's time went
 pub mod audit;
+pub mod claimed;
 pub mod compact;
 pub mod connect;
 pub mod judge;
