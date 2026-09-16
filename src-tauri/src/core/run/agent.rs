@@ -135,6 +135,14 @@ pub struct Agent {
     pub ran: Vec<Ran>,
     /// Files it created or replaced, newest last, one entry per path.
     pub made: Vec<Made>,
+    /// Coding agents this run has already handed work to.
+    ///
+    /// So a second job goes to the same conversation rather than to a stranger.
+    /// Per run rather than per session: a new task is a new subject, and
+    /// carrying the last one's context into it is how an agent ends up
+    /// confidently answering a question nobody asked.
+    #[serde(default)]
+    pub handed: Vec<String>,
     /// What it plans to do, if it said. Empty for work short enough not to need
     /// a plan, which is most of it.
     pub plan: Vec<Todo>,
@@ -354,6 +362,7 @@ impl Agents {
             background,
             ran: Vec::new(),
             made: Vec::new(),
+            handed: Vec::new(),
             plan: Vec::new(),
         });
         id
@@ -615,6 +624,32 @@ impl Agents {
                     .collect()
             })
             .unwrap_or_default()
+    }
+
+    /// Has this run already given work to this tool?
+    pub fn handed_to(&self, tool: &str) -> bool {
+        self.items
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|a| !a.finished())
+            .map(|a| a.handed.iter().any(|h| h == tool))
+            .unwrap_or(false)
+    }
+
+    /// Remember that it did.
+    pub fn note_handed(&self, tool: &str) {
+        if let Some(a) = self
+            .items
+            .lock()
+            .unwrap()
+            .iter_mut()
+            .find(|a| !a.finished())
+        {
+            if !a.handed.iter().any(|h| h == tool) {
+                a.handed.push(tool.to_string());
+            }
+        }
     }
 
     pub fn record_file(&self, path: String) {

@@ -2090,7 +2090,7 @@ mod tests {
 
         // The invocation is the unambiguous half: if no command form appears
         // anywhere, the model cannot be composing one.
-        for (name, _, form) in &here {
+        for (name, _, form, _) in &here {
             assert!(!p.contains(form), "the prompt carries {name}'s invocation");
         }
 
@@ -2103,7 +2103,7 @@ mod tests {
                 // legitimate: `Claude Code URL Handler` is a real application and
                 // the apps list is right to name it -- which is what caught the
                 // first version of this test.
-                for (_, known_as, _) in &here {
+                for (_, known_as, ..) in &here {
                     assert!(
                         !section.contains(known_as),
                         "handing a job over names {known_as}"

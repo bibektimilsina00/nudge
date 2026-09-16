@@ -350,8 +350,26 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         app.state::<Nudge>().note(said);
     }
     if let Step::Delegate { task, named, .. } = step {
-        let (_, _, form) = crate::core::tools::running::choose(named.as_deref())?;
+        let (tool, known_as, fresh, carry_on) =
+            crate::core::tools::running::choose(named.as_deref())?;
+
+        // The same conversation, when there already is one.
+        //
+        // Handing a tool a second job used to mean it had forgotten the first,
+        // so every follow-up re-explained the whole context and re-derived what
+        // it had already worked out. Per run, not per session: a new task is a
+        // new subject, and carrying the last one's context into it is how an
+        // agent answers a question nobody asked.
+        let again = !carry_on.is_empty() && app.state::<Agents>().handed_to(tool);
+        let form = match again {
+            true => carry_on,
+            false => fresh,
+        };
+        app.state::<Agents>().note_handed(tool);
         let command = crate::core::tools::running::command_for(form, task);
+        if again {
+            eprintln!("delegating: carrying on the {known_as} conversation");
+        }
         // The chosen agent is in the log, where somebody debugging this needs it,
         // and nowhere a user will meet it.
         eprintln!("delegating: {command}");

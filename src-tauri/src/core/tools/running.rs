@@ -42,16 +42,25 @@ const STARTABLE: &[&str] = &[
 /// Named individually because the flag that means "just do it" is different for
 /// every one of them, and guessing it wrong looks identical to the tool being
 /// broken.
-/// `(binary, what people call it, how to run it unattended)`.
+/// `(binary, what people call it, how to run it, how to carry one on)`.
+///
+/// The fourth is what a person reaches for constantly and Nudge could not:
+/// **carrying on the conversation instead of starting a new one.** Handing a
+/// tool a second job used to mean it had forgotten the first, so every follow-up
+/// re-explained the whole context and re-derived what it had already worked out.
+/// Empty where the tool has no such thing, and the fresh form is used.
 ///
 /// The middle one matters as much as the others. Nobody asks for "agy" -- they
 /// ask for Antigravity, and a list carrying only the binary name gives the model
 /// nothing to match that against. It also survives mishearing: one run turned
 /// "agy" into "edu" and went off to contact somebody called Edu, where a list
 /// naming both would have had something to recognise.
-const AGENTS: &[(&str, &str, &str)] = &[
+const AGENTS: &[(&str, &str, &str, &str)] = &[
     // Checked by running each one on a machine that has it. Not from memory --
-    // every form written from memory here has been wrong so far.
+    // every form written from memory here has been wrong so far, and the
+    // continue forms were checked the same way: `claude -p --continue` was asked
+    // what it had just been told to say and answered from the previous turn
+    // rather than from the new prompt, which is the only proof that matters.
     //
     // `claude -p` alone is not enough: print mode still needs a permission mode,
     // so it stops dead the first time it wants to edit a file. `acceptEdits`
@@ -62,16 +71,31 @@ const AGENTS: &[(&str, &str, &str)] = &[
         "claude",
         "Claude Code",
         "claude -p --permission-mode acceptEdits {task}",
+        "claude -p --continue --permission-mode acceptEdits {task}",
     ),
-    ("codex", "Codex", "codex exec {task}"),
+    // `exec resume --last` rather than a flag on `exec`: resume is its own
+    // subcommand and `--last` is what picks the most recent instead of an id.
+    (
+        "codex",
+        "Codex",
+        "codex exec {task}",
+        "codex exec resume --last {task}",
+    ),
     // agy takes the prompt attached to the flag. Given `-p {task}` it swallows
     // whatever comes next as the prompt and ignores the real one -- which
     // reads, from the outside, exactly like the agent doing nothing.
-    ("agy", "Antigravity", "agy --mode accept-edits -p={task}"),
+    (
+        "agy",
+        "Antigravity",
+        "agy --mode accept-edits -p={task}",
+        "agy --mode accept-edits --continue -p={task}",
+    ),
     // Not verified: not installed here, so these come from documentation. If one
-    // behaves oddly, this is the first place to look.
-    ("opencode", "OpenCode", "opencode run {task}"),
-    ("aider", "Aider", "aider --yes --message {task}"),
+    // behaves oddly, this is the first place to look -- and neither carries a
+    // continue form, because writing one from memory is the mistake this table
+    // exists to have stopped making.
+    ("opencode", "OpenCode", "opencode run {task}", ""),
+    ("aider", "Aider", "aider --yes --message {task}", ""),
 ];
 
 /// Which agent to hand a coding job to, and the exact command for it.
@@ -85,7 +109,9 @@ const AGENTS: &[(&str, &str, &str)] = &[
 /// `named` honours a person who did ask for one by name, because they picked it
 /// for a reason. `Err` when the one they named is not here: the 3.2 rule, since
 /// quietly using a different agent is the one thing worse than saying so.
-pub fn choose(named: Option<&str>) -> Result<(&'static str, &'static str, &'static str)> {
+pub fn choose(
+    named: Option<&str>,
+) -> Result<(&'static str, &'static str, &'static str, &'static str)> {
     let here = agents_installed();
     let Some(named) = named.map(str::trim).filter(|n| !n.is_empty()) else {
         return here.into_iter().next().ok_or_else(|| {
@@ -106,22 +132,22 @@ pub fn choose(named: Option<&str>) -> Result<(&'static str, &'static str, &'stat
     };
     if let Some(found) = here
         .iter()
-        .find(|(name, known_as, _)| matches(name) || matches(known_as))
+        .find(|(name, known_as, ..)| matches(name) || matches(known_as))
     {
         return Ok(*found);
     }
     let known = AGENTS
         .iter()
-        .find(|(name, known_as, _)| matches(name) || matches(known_as));
+        .find(|(name, known_as, ..)| matches(name) || matches(known_as));
     Err(Error::Click(match known {
-        Some((_, known_as, _)) => format!(
+        Some((_, known_as, ..)) => format!(
             "{known_as} is not on this Mac.{}",
             match here.is_empty() {
                 true => String::new(),
                 false => format!(
                     " {} is, if that would do.",
                     here.iter()
-                        .map(|(_, k, _)| *k)
+                        .map(|(_, k, ..)| *k)
                         .collect::<Vec<_>>()
                         .join(" and ")
                 ),
@@ -150,16 +176,17 @@ pub fn command_for(form: &str, task: &str) -> String {
 /// The same problem as applications, one layer up: without asking, a model
 /// invents one. Told to use whatever is installed and finding nothing, it should
 /// say so rather than reach for a name it half-remembers.
-pub fn agents_installed() -> Vec<(&'static str, &'static str, &'static str)> {
-    static FOUND: std::sync::OnceLock<Vec<(&'static str, &'static str, &'static str)>> =
-        std::sync::OnceLock::new();
+pub fn agents_installed() -> Vec<(&'static str, &'static str, &'static str, &'static str)> {
+    static FOUND: std::sync::OnceLock<
+        Vec<(&'static str, &'static str, &'static str, &'static str)>,
+    > = std::sync::OnceLock::new();
     FOUND
         .get_or_init(|| {
             AGENTS
                 .iter()
                 // Was six `which` processes at startup, on the path where
                 // somebody is waiting. `present::installed` walks the PATH.
-                .filter(|(name, _, _)| super::present::installed(name))
+                .filter(|(name, ..)| super::present::installed(name))
                 .copied()
                 .collect()
         })
@@ -798,11 +825,41 @@ mod tests {
         assert!(!out.contains("'fix Bibek's parser'"), "unescaped: {out}");
     }
 
+    /// Every continue form was checked by running it, and the table says which
+    /// were not.
+    ///
+    /// The rule this table exists to enforce: nothing here is written from
+    /// memory. `claude -p --continue` was asked what it had just been told to
+    /// say and answered from the previous turn rather than from the new prompt;
+    /// `codex exec resume --last` reached a trust check, past flag parsing;
+    /// `agy --continue` answered. The two that are not installed here carry no
+    /// continue form at all, because guessing one is the mistake.
+    #[test]
+    fn a_continue_form_exists_only_where_it_was_verified() {
+        for (name, _, fresh, carry_on) in super::AGENTS {
+            assert!(!fresh.is_empty(), "{name} has no way to be run");
+            assert!(fresh.contains("{task}"), "{name}: the job goes nowhere");
+
+            let verified = matches!(*name, "claude" | "codex" | "agy");
+            assert_eq!(
+                !carry_on.is_empty(),
+                verified,
+                "{name}: a continue form must exist exactly where one was run"
+            );
+            if !carry_on.is_empty() {
+                assert!(carry_on.contains("{task}"), "{name}: the job goes nowhere");
+                // Carrying on and starting fresh must not be the same command,
+                // or the whole thing is a no-op that reads as working.
+                assert_ne!(fresh, carry_on, "{name}");
+            }
+        }
+    }
+
     /// Nobody is presented with a list. If one is here, it is used.
     #[test]
     fn it_picks_without_being_asked() {
         match choose(None) {
-            Ok((name, _, form)) => {
+            Ok((name, _, form, _)) => {
                 assert!(!name.is_empty());
                 assert!(form.contains("{task}"), "the form must take the job");
             }
@@ -919,7 +976,7 @@ mod tests {
     /// one thing this list exists for is refused at the door.
     #[test]
     fn every_agent_form_is_startable() {
-        for (name, _known_as, form) in agents_installed() {
+        for (name, _known_as, form, _) in agents_installed() {
             let command = form.replace("{task}", "'fix the failing test'");
             assert_eq!(
                 Running::refuse(&command),
