@@ -7,6 +7,27 @@ Status: **skeleton**. It builds, the loop is wired, the coordinate math is teste
 Whether the pointing is *accurate enough to be a product* is still an open question
 — see [Is this even possible?](#is-this-even-possible) before building on it.
 
+## The documents
+
+Every other markdown file in this repository, and what it is for. If something is
+not on this list it should not exist.
+
+| | |
+|---|---|
+| [PLAN.md](PLAN.md) | What is being built next, and why. The live one |
+| [FEATURES.md](FEATURES.md) | Every feature between here and "gets your everyday tasks done" |
+| [FINDINGS.md](FINDINGS.md) | What the accuracy and truth suites actually measured |
+| [SPEED.md](SPEED.md) | Where the seconds go |
+| [OPENWORKER.md](OPENWORKER.md) | A reading of OpenWorker — the source of most of the plan |
+| [OPENEXECUTIVE.md](OPENEXECUTIVE.md) | A reading of OpenExecutive — ablation, mostly |
+| [RELEASING.md](RELEASING.md) | Signing and notarising. Read this before cutting a tag |
+| [DEPLOY.md](DEPLOY.md) | The site, the API, and how they ship |
+| [PORTING.md](PORTING.md) | Which calls to suspect first on Windows and Linux |
+| [truth/README.md](truth/README.md) | The truth suite |
+| [picks/README.md](picks/README.md) | The accuracy suite |
+| [ui/src/assets/README.md](ui/src/assets/README.md) | What is inside each `.riv` |
+| [src-tauri/icons/README.md](src-tauri/icons/README.md) | How the app icon is made |
+
 ## Run it
 
 ```sh
