@@ -190,7 +190,7 @@ one is a task that failed, and it currently reports success.
 **Done when** a run that set itself a plan is not finished while items remain
 unstarted, or says plainly that it stopped early.
 
-### 3.2 Research without a shell
+### 3.2 Research without a shell — *done*
 
 Asked for a crate's dependency count, the model reached for `python3 -c` to call
 an API. The shell refused, correctly — that is arbitrary code execution — and the
@@ -201,8 +201,10 @@ A refusal that leaves the model with no route is a refusal that produces a
 confident guess. The prompt should route an API call to `fetch` and `request` by
 name, in the same place the refusal is explained.
 
-**Done when** a refused shell command hands back what to use instead, where one
-exists.
+**Done.** A refused command names the step to use: `fetch` and `request` for
+anything reaching the network, `write` and `edit` for a redirect, one-command-per-
+step for a chain. Only where a route exists — padding every refusal with advice
+that does not fit teaches the model to stop reading them.
 
 ### 3.3 Room to be long
 
