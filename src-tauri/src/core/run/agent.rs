@@ -105,6 +105,10 @@ pub const MAX_TODOS: usize = 20;
 pub struct Made {
     /// Absolute, so it can be opened. The UI shows only the last component.
     pub path: String,
+    /// Which step wrote it, so "two steps ago" can be said rather than "at some
+    /// point". Defaults for rows written before this was recorded.
+    #[serde(default)]
+    pub step: usize,
 }
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -310,8 +314,8 @@ impl Agents {
                     Todo { text: "Report what changed".into(), status: Doing::Pending },
                 ];
                 a.made = vec![
-                    Made { path: "/Users/you/Downloads/Invoices/march.pdf".into() },
-                    Made { path: "/Users/you/Downloads/report.html".into() },
+                    Made { path: "/Users/you/Downloads/Invoices/march.pdf".into(), step: 2 },
+                    Made { path: "/Users/you/Downloads/report.html".into(), step: 2 },
                 ];
                 a.ran = vec![
                     Ran {
@@ -622,7 +626,8 @@ impl Agents {
             .find(|a| !a.finished())
         {
             if !a.made.iter().any(|m| m.path == path) {
-                a.made.push(Made { path });
+                let step = a.step;
+                a.made.push(Made { path, step });
             }
         }
     }

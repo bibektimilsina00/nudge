@@ -687,6 +687,47 @@ fn landed(
     crate::app::agent::publish(app);
 }
 
+/// Does this step name a file this run wrote?
+///
+/// The list of files a run made is background; this is the thing worth saying.
+/// "setup.py exists" and "the command you are judging runs a file this task
+/// wrote one step ago" are different claims, and only the second is worth
+/// interrupting anybody over.
+///
+/// Looks at what the step *says*, not at what it does: the command line for a
+/// shell step, the arguments for a tool call. Nothing here opens a file.
+fn ours(app: &AppHandle, step: &Step) -> Option<String> {
+    use crate::core::provenance::{names_ours, Ours};
+
+    let said = match step {
+        Step::Run { command, .. } | Step::Start { command, .. } => command.clone(),
+        Step::Delegate { task, .. } => task.clone(),
+        // The values, not the keys -- a path arrives as an argument's value.
+        Step::Mcp { args, .. } => args.to_string(),
+        Step::Read { path, .. } | Step::Show { path, .. } => path.clone(),
+        _ => return None,
+    };
+
+    let agents = app.state::<Agents>();
+    let id = agents.doing()?;
+    let made: Vec<Ours> = agents
+        .list()
+        .into_iter()
+        .find(|a| a.id == id)
+        .map(|a| {
+            a.made
+                .iter()
+                .map(|m| Ours {
+                    path: m.path.clone(),
+                    step: m.step,
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    let now = agents.list().iter().find(|a| a.id == id).map(|a| a.step)?;
+    names_ours(&said, &made, now)
+}
+
 /// Put one proposed action to a judge that never saw the screen.
 ///
 /// `None` means carry on: the step has no consequences worth judging, or this
@@ -734,7 +775,24 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
             .doing()
             .map(|id| app.state::<Agents>().files_of(id))
             .unwrap_or_default(),
+        // The observation, when there is one: this action names one of them.
+        note: ours(app, step),
     };
+
+    // Written down whether or not the judge minds. The record is what somebody
+    // reads afterwards to understand a run, and "it ran a file it had written
+    // itself" is one of the few facts that changes how everything else reads.
+    if let Some(note) = &world.note {
+        record(
+            app,
+            "wrote-then-ran",
+            &judge::shown(step),
+            Outcome::Did {
+                detail: note.clone(),
+            },
+            risk,
+        );
+    }
 
     let asked = judge::prompt(&nudge.said(), &world, step, risk);
     let began = std::time::Instant::now();

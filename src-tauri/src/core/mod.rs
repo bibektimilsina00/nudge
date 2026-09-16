@@ -20,6 +20,7 @@ pub mod memory;
 pub mod newer;
 pub mod offers;
 pub mod permits;
+pub mod provenance;
 pub mod provider;
 pub mod reach;
 pub mod report;
