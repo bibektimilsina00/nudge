@@ -129,7 +129,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
         </div>
       </div>
 
-      <div className="min-h-0 flex-1 divide-y divide-line overflow-y-auto px-3 pb-3">
+      <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
         {shown.map((s) => (
           <Card key={s.key} it={s} onChanged={load} />
         ))}
@@ -172,17 +172,17 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
   };
 
   return (
-    <div className="py-2">
+    <div className="rounded-xl bg-raise p-2.5 hairline">
       <div className="flex items-center gap-2.5">
         {LOGO[it.key] ? (
-          // White, and the mark inset inside it rather than filling it. These are
-          // drawn for light backgrounds -- their colours are picked against white
-          // and several have white *in* them -- so a tile is what makes a set of
-          // marks from different brands sit together instead of each fighting the
-          // panel on its own terms.
+          // White, with the mark inset rather than filling it. Not decoration:
+          // these SVGs are drawn for light backgrounds -- their colours are
+          // picked against white and several have white *in* them -- so on a dark
+          // panel some of them lose parts of themselves.
           //
-          // It also flips which GitHub variant is right, for the second time:
-          // white mark on a dark card, dark mark on a white tile.
+          // It is also why GitHub uses their `light.svg`, which is the
+          // dark-coloured one. The name describes the background it is for, not
+          // the ink.
           <span className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-white">
             {/* `contain`: not all square. Gmail's viewBox is a wide envelope. */}
             <img
@@ -202,10 +202,10 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <h3 className="truncate text-[12px] font-semibold">{it.name}</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-[12px] font-semibold">{it.name}</h3>
             {it.connected && (
-              <span className="shrink-0 rounded bg-[#30d158]/15 px-1.5 py-[1px] text-[9px] text-[#30d158]">
+              <span className="rounded bg-[#30d158]/15 px-1.5 py-[1px] text-[9px] text-[#30d158]">
                 Connected
               </span>
             )}
@@ -216,7 +216,7 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
               anybody agrees to anything rather than only after something fails. */}
           <button
             onClick={() => (it.connected ? setTools((t) => !t) : setOpen((o) => !o))}
-            className="block w-full truncate text-left text-[10.5px] leading-snug text-ink-3 transition-colors duration-150 hover:text-ink-2"
+            className="mt-1 text-left text-[10.5px] leading-snug text-ink-2 transition-colors duration-150 hover:text-ink"
           >
             {it.about}
           </button>
@@ -248,7 +248,7 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
             // and it either works or says what is missing.
             onClick={() => (it.needs_token || it.needs_folder ? setOpen((o) => !o) : go())}
             disabled={busy}
-            className="shrink-0 rounded-full bg-raise px-3 py-[5px] text-[11px] font-medium text-blue transition-colors duration-150 hover:bg-raise-hi disabled:opacity-50"
+            className="shrink-0 rounded-full bg-blue px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
           >
             {busy ? "Checking…" : "Connect"}
           </button>
