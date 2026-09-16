@@ -6,6 +6,7 @@
 //! ask-before-replacing hold everywhere rather than in whichever caller
 //! remembered them.
 use crate::app::state::{permits, Background, Grants, Screen, Settle, Voice};
+use crate::core::audit::Outcome;
 use crate::core::provider::{Act, Step};
 use crate::core::reach::Grant;
 use crate::core::run::agent::Agents;
@@ -378,7 +379,26 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         if let Some(pause) = ask_before_reaching(app, url) {
             return pause;
         }
-        let text = fetch::read(url).await?;
+        let text = match fetch::read(url).await {
+            Ok(text) => {
+                // The host and a measurement. Never the page -- that is the
+                // whole rule, and a fetched page is the largest untrusted thing
+                // this program handles.
+                record(
+                    app,
+                    "fetch",
+                    url,
+                    Outcome::Did {
+                        detail: format!("{} chars", text.len()),
+                    },
+                );
+                text
+            }
+            Err(e) => {
+                record(app, "fetch", url, Outcome::Refused { why: e.to_string() });
+                return Err(e);
+            }
+        };
         eprintln!("fetched {url} ({} chars)", text.len());
         app.state::<Nudge>()
             .note(format!("Read {url}, which says:\n{text}"));
@@ -387,6 +407,27 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         crate::app::agent::publish(app);
     }
     Ok(())
+}
+
+/// Write down one thing that happened, against the run it happened in.
+///
+/// A free function so a call site is one line and cannot forget the run id --
+/// the entries worth having are the ones nobody remembered to add by hand.
+fn record(app: &AppHandle, kind: &str, said: &str, outcome: Outcome) {
+    record_by(app, kind, said, outcome, None);
+}
+
+/// The same, naming the grant that allowed it.
+fn record_by(app: &AppHandle, kind: &str, said: &str, outcome: Outcome, rule: Option<String>) {
+    use crate::core::audit::{Audit, Entry};
+    let entry = Entry::new(kind, said, outcome).allowed_by(rule);
+    // Attributed to whichever run is going, so a finished agent can be read back
+    // as a story rather than as lines scattered through everything else.
+    let entry = match app.state::<Agents>().list().iter().find(|a| !a.finished()) {
+        Some(a) => entry.during(a.id),
+        None => entry,
+    };
+    app.state::<Audit>().note(entry);
 }
 
 /// Should a person be asked before this host is reached?
@@ -413,16 +454,19 @@ fn ask_before_reaching(app: &AppHandle, url: &str) -> Option<Result<()>> {
         return None;
     }
 
-    Some(
-        put_to_the_person(
-            app,
-            crate::core::reach::Pending::Reach {
-                host,
-                url: url.to_string(),
-            },
-        )
-        .map(|_| ()),
-    )
+    let pending = crate::core::reach::Pending::Reach {
+        host,
+        url: url.to_string(),
+    };
+    record(
+        app,
+        "fetch",
+        url,
+        Outcome::Asked {
+            question: pending.question(),
+        },
+    );
+    Some(put_to_the_person(app, pending).map(|_| ()))
 }
 
 /// Put a connect offer on screen, if this is a reasonable moment for one.
@@ -781,11 +825,35 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             // The output is the point, so it goes into the session's history
             // where the next turn reads it -- the same channel a screenshot uses
             // to report what happened.
-            let out = shell::run(
-                &app.state::<Nudge>().workspace(),
-                command,
-                permits(app, Grant::Shell).allowed(),
-            )?;
+            let gate = permits(app, Grant::Shell);
+            let out = match shell::run(&app.state::<Nudge>().workspace(), command, gate.allowed()) {
+                Ok(out) => {
+                    // The command and how much it printed. Never the output --
+                    // a command's output is a file's contents by another route.
+                    record_by(
+                        app,
+                        "shell",
+                        command,
+                        Outcome::Did {
+                            detail: format!("{} chars", out.len()),
+                        },
+                        gate.rule.clone(),
+                    );
+                    out
+                }
+                Err(e) => {
+                    // The refusals are the entries worth having. This is the
+                    // record of a model trying something it was not allowed to,
+                    // which is the thing nobody could see before.
+                    record(
+                        app,
+                        "shell",
+                        command,
+                        Outcome::Refused { why: e.to_string() },
+                    );
+                    return Err(e);
+                }
+            };
             eprintln!("$ {command}\n{out}");
             app.state::<Nudge>()
                 .note(format!("Ran `{command}`, which printed:\n{out}"));

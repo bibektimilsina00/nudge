@@ -128,6 +128,8 @@ pub fn run() {
             app.manage(voice);
             app.manage(Settle(std::sync::Mutex::new(None)));
             app.manage(Grants::default());
+            // What it actually did, beside everything else it keeps.
+            app.manage(crate::core::audit::Audit::open());
             app.manage(crate::app::state::Offering::default());
             app.manage(crate::core::offers::Offers::load());
             app.manage(Background::default());

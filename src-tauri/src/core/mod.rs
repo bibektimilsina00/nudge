@@ -11,6 +11,7 @@
 //! - [`voice`] -- microphone, transcription, speech
 //! - [`tools`] -- commands, files and the web
 //! - [`laps`] -- where a turn's time went
+pub mod audit;
 pub mod laps;
 pub mod memory;
 pub mod offers;
