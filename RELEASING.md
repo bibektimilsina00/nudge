@@ -100,14 +100,43 @@ a person being available. It needs five repository secrets:
 | `APPLE_TEAM_ID` | `ABCDE12345` |
 
 Export the certificate from Keychain Access (right-click → Export, as `.p12`),
-then:
+then set all six in one go:
 
 ```sh
-base64 -i Certificates.p12 | pbcopy
+gh secret set APPLE_CERTIFICATE          < <(base64 -i Certificates.p12)
+gh secret set APPLE_CERTIFICATE_PASSWORD               # the export password
+gh secret set APPLE_SIGNING_IDENTITY                   # Developer ID Application: … (TEAMID)
+gh secret set APPLE_ID                                 # your Apple ID
+gh secret set APPLE_PASSWORD                           # the app-specific password
+gh secret set APPLE_TEAM_ID                            # TEAMID
 ```
+
+Check with `gh secret list` — the workflow refuses to start until all six are
+there, and says which are missing rather than failing later inside `security
+import` with `Unknown format`.
 
 Run the workflow by hand once, from the Actions tab, **before** cutting a tag. A
 signing pipeline that has only ever run once has never really run.
+
+## Until then, the download page stays empty
+
+Deliberately. A build signed *Apple Development* is not a weaker release, it is a
+file that other Macs refuse to open — `spctl` says `rejected`, and there is no
+"open anyway" past it. One was published to the download page on 2026-09-15 and
+has been taken down; `current` was flipped rather than the row deleted, so
+restoring it is one flag if that is ever wanted.
+
+`publish.py` makes a build current. Nothing makes it un-current, which is why
+this was done by hand:
+
+```sh
+ssh <box> "cd /opt/nudge && docker compose exec -T api uv run python -c '
+from app.db import engine; from app.models import Release
+from sqlmodel import Session, select
+with Session(engine) as s:
+    r = s.exec(select(Release).where(Release.current)).first()
+    r.current = False; s.add(r); s.commit()'"
+```
 
 ## Three things worth knowing
 
