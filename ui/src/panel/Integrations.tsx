@@ -39,10 +39,17 @@ type Listed = {
  * What is here now is whatever `core::connect` offers, and connecting one
  * actually starts its server.
  *
- * **Access before consent.** Every card states what connecting grants, in the
- * same words whether or not anybody clicks. That is the rule OpenWorker's
- * catalogue enforces with a test, and this one enforces it too -- an offer with
- * nothing to say about its access does not compile.
+ * **Access before consent.** What connecting grants is always available before
+ * anybody agrees to it, and in the catalogue's words rather than a summary. It
+ * sat on the face of every card until there were nine of them and the list read
+ * as a wall of scope names; it is now one click in -- the description opens it --
+ * and appears on both panels, so it is still there at the moment of the decision
+ * and still there afterwards.
+ *
+ * What did not move is the rule underneath: an offer with nothing to say about
+ * its access does not compile, which is the test OpenWorker's catalogue enforces
+ * and this one does too. Where the sentence is shown is a layout question; that
+ * there is one is not.
  *
  * The real brand marks, from thesvg.org, with a coloured monogram behind any
  * key that has no logo yet.
@@ -194,12 +201,16 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
               </span>
             )}
           </div>
-          <p className="mt-1 text-[10.5px] leading-snug text-ink-2">{it.about}</p>
-          {/* Always, not only while deciding. What something can reach is not a
-              detail that stops mattering once it is connected. */}
-          <p className="mt-1 text-[10px] leading-snug text-ink-3">
-            <span className="text-ink-2">Gets:</span> {it.access}
-          </p>
+          {/* The description opens the card. Access used to sit on the face of
+              every one, which made nine cards into a wall of scope names; it now
+              lives one click in, on both panels, so it is still reachable before
+              anybody agrees to anything rather than only after something fails. */}
+          <button
+            onClick={() => (it.connected ? setTools((t) => !t) : setOpen((o) => !o))}
+            className="mt-1 text-left text-[10.5px] leading-snug text-ink-2 transition-colors duration-150 hover:text-ink"
+          >
+            {it.about}
+          </button>
           {it.connected && it.tools.length > 0 && (
             // What the server said, not what the catalogue claimed -- and the
             // way in to changing it, because a count nobody can act on is
@@ -237,6 +248,9 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
 
       {open && !it.connected && (
         <div className="mt-2.5 space-y-2 border-t border-line pt-2.5">
+          <p className="text-[10px] leading-snug text-ink-3">
+            <span className="text-ink-2">Gets:</span> {it.access}
+          </p>
           {it.needs_folder && (
             <input
               value={folder}
@@ -334,6 +348,9 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
 
   return (
     <div className="mt-2.5 space-y-2 border-t border-line pt-2.5">
+      <p className="text-[10px] leading-snug text-ink-3">
+        <span className="text-ink-2">Gets:</span> {it.access}
+      </p>
       <div className="flex items-center gap-2">
         <input
           value={query}
