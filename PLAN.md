@@ -1,317 +1,222 @@
-# Plan
+# Plan — doing the job the way somebody would
 
-The last plan is finished. Every section of it is done or blocked on somebody
-else: the gate says three things, a yes lasts as long as was agreed, what was
-done is written down and readable, and the app can update itself. What is left
-there needs a certificate only the Nuddg Inc Account Holder can create, and a
-Windows build that cannot be compiled from a Mac.
+The last plan is finished. This one comes from watching Nudge attempt a real
+multi-step research task and reading what actually happened, rather than from
+reading somebody else's repository.
 
-So this one is about the sentence Nudge is actually aiming at:
+Two things are wrong, and they are the same thing twice: **Nudge reports rather
+than checks, and it hands work away rather than supervising it.**
 
-> AI that gets your everyday tasks done. It works in the tools you use every
-> day, **carries tasks through from start to finish**, and **checks in before
-> important actions**, so you stay in charge.
+## What the test showed
 
-Checking in is largely built. Carrying a task through is not started at all — a
-run lives inside one process and dies with it. That is the gap this plan closes.
+One task — *research three Rust TOML crates, compare them, write the comparison,
+then check your own file* — produced a good document in five turns and forty-five
+seconds, and four defects on the way:
 
-[FEATURES.md](FEATURES.md) is the full inventory — every feature, what exists,
-what done would mean. This is the near work drawn from it, in dependency order.
-
-## Where this actually is
-
-Built and working: the screen loop, agents that finish a task, MCP servers,
-skills, memory, the notch interface, settings, bug reports, a marketing site
-serving its own downloads, CI/CD that deploys only what changed, a permission
-gate with scopes, an audit trail, and an updater.
-
-Not working: **the app cannot be opened by anybody else.** `spctl` says
-`rejected`, and that is a certificate, not code.
-
-Measurements live in [FINDINGS.md](FINDINGS.md) and [SPEED.md](SPEED.md); neither
-is a plan and both are still true. The reading of OpenWorker that this plan and
-FEATURES.md come from is in [OPENWORKER.md](OPENWORKER.md).
+| | |
+|---|---|
+| A finished document was thrown away | The model sent its `write` alongside its plan, as a JSON array, and the parser took the span from the first `{` to the last `}` — which for a list is not JSON. **Fixed.** |
+| It said it had verified the file | It had not read it. Fifth instance today of a claim nobody checked. |
+| It handed the whole job to `claude -p` | One shot, `acceptEdits`, no supervision, no check of what came back. |
+| It answered from memory when the shell refused | It reached for `python3 -c` to call an API, was correctly refused, and fell back to recollection rather than to `fetch`. |
 
 ---
 
-## The through-line: the screen is untrusted input
+## The rule that governs all of it
 
-Nudge looks at a screenshot and acts on what it sees. Everything in that
-screenshot was written by somebody else — a web page, an email, a terminal
-someone else's program is printing to. There is no boundary in the product
-between *what the user asked for* and *what the screen says*, and that is the
-whole of the risk.
+**A terminal's output is untrusted input, exactly as a screenshot is.**
 
-It has happened four times now. Three were a suggestion read off a Claude Code
-transcript and acted on as an instruction. The fourth was this month: a run read
-its own goal text out of a terminal, decided the file had already been written,
-and reported success having done nothing.
-
-OpenWorker's answer is one sentence, and it is the spine of §2:
+Everything in §2 involves reading what another program printed and deciding what
+to do about it. That program may be printing an attacker's text — a file it was
+asked to summarise, a web page it fetched, a commit message. The discipline that
+already holds for the screen holds here without exception:
 
 > The attacker can address the agent, never the judge.
 
-Floors already in: the shell cannot be argued into writing, a version check
-cannot be handed a program to run, a URL carrying this machine's API key never
-leaves, and a write reports what `git` says changed rather than what it meant to
-do. Floors, not an answer. The answer is §2.
+So: what a terminal prints is never handed to a judge as prose. The supervisor
+extracts **structured facts** from it — is this a question, what kind, which file
+or command does it name — and only those facts are judged. A prompt that argues,
+claims prior approval, or instructs the reader is not information; it is the
+thing being defended against.
 
 ---
 
-## 1. Risk is a property, not a list of names — *done*
+## 1. A claim is not a check
 
-Today `Grant` names a *capability* — shell, files, http — and the gate asks which
-one a step needs. That works because every tool is one this repository wrote.
+Five times today an agent reported something it had not done. Twice it wrote a
+wrong value it had read off a screen; three times it announced a verification
+that never happened. Every one of those is the same shape: the model's account
+of itself, believed.
 
-It stops working at the first tool Nudge has never heard of. An MCP server
-arrives with thirty tools and the gate has no way to know which of them write to
-the outside world, so they are all treated alike. OpenWorker hit this and
-replaced hardcoded `WRITE_TOOLS` / `SHELL_TOOL` name sets with a declared risk
-class that one `classify` reads.
+The machinery already exists and is pointed at the wrong thing. `Step::consults`
+answers *did this turn learn anything from outside?*, and `subagent.rs` uses it —
+an answer from a run that consulted nothing is relabelled as recollection. The
+main agent has no such check.
 
-Small on its own, and §2 cannot be built without it: a judge that cannot tell a
-read from a write has nothing to judge.
+### 1.1 A finished run says whether it looked
 
-**Done.** Five classes — read, egress, write, exec, external — read off a step by
-one exhaustive match, which refused to compile until two variants nobody had
-thought about were classified. Somebody else's tool is `external` always,
-whatever it is called: its effects are a stranger's claim, and a config value
-that could drop one into the never-checked tier would switch off the gate, the
-record and every future judge in one line. Every audit entry carries its class,
-and there is no recorder that can omit it.
+**Done when** a run that finishes without having consulted anything says so, in
+the same words a subagent's answer already does — and the card shows it.
 
----
+### 1.2 A run that says it checked, checked
 
-## 2. The reviewer, and the invariant that makes it safe — *done*
+Stronger than 1.1 and narrower. When a run's final message claims a check —
+*verified*, *confirmed*, *made sure*, *double-checked* — and no step in that run
+read the artifact it is talking about, the claim is removed and the run says what
+it actually did instead.
 
-A second model call judges **one proposed action** against what the user actually
-asked for. Routine actions run; only genuinely questionable ones interrupt.
+Not a language model judging language: a mechanical match on the claim, and a
+mechanical check of whether the file was read. A miss leaves the message as it
+is, so partial coverage only ever moves towards honesty.
 
-This is not a nicety. OpenWorker built it from measured pain — *~15
-hand-approvals per run* in security scans — and Nudge meets the same wall the
-moment agents get longer than forty steps. Asking about everything and asking
-about nothing are both failures, and today Nudge can only do one or the other.
+**Done when** "I verified the file" cannot appear in a run that never read it.
 
-**The invariant is the whole feature.** The reviewer never reads untrusted
-content. Its input is the instructions, the known world (folders and remotes,
-never contents), the user's own messages, and the proposed action. Page text,
-mail bodies, file contents and **screenshots** never reach it.
+### 1.3 Writing is not checking
 
-That last one is Nudge's version and it is not in OpenWorker, because OpenWorker
-has no screen. Nudge's agent sees a screenshot every turn; the judge must not.
-If the judge can see the screen, the attacker is addressing the judge.
+A file it just wrote is not evidence that the file is right; `git` already tells
+us what changed, and §2.2 of the last plan put that in the record. What is
+missing is the same discipline for a *new* file: reading it back is one step and
+it is the difference between "I wrote it" and "it says what I meant".
 
-**Done.** Consulted in one place — the agent runtime, before a consequential step
-— and never in the foreground, where the person is watching. The invariant is a
-type signature: `prompt` takes the user's words as an argument, so there is no
-parameter that could carry the screen. The tests smuggle a 4,000-character
-payload through an MCP argument and a pasted wall of text through the user's own
-channel, and assert neither reaches the judge.
-
-Measured, because a prompt with no measurement cannot be changed safely:
-`cargo run --bin judge` runs ten fixed cases through the real model. **9 right,
-nothing waved through.** Asked to read a file, an agent proposing `ls -la /Users`
-is told it goes beyond that; a curl carrying `.env` during a summarising task is
-refused. The one miss is a false unsure, which is the direction Rule 1 says to
-fail in.
-
-**Foreground too.** It was agent-only at first, on the reasoning that a
-foreground step is watched as it happens. That did not survive being tested:
-asked to write a file holding a line count, the foreground wrote `63` — read off
-a stale terminal — when the file had 313 lines. They were watching, and had no
-way to know the number came from the screen rather than the file. Being present
-is not the same as being able to check.
-
-What differs between the two is only who reads the reason. A person is shown the
-judge's own words, which were written for them; an agent is handed a sentence
-that teaches it nothing, because a reason given to the thing that proposed the
-action is a reason to try around it.
-
-**What it does not catch.** The judge is never shown contents, so it cannot see
-that a value is wrong — only that an action does not follow from the request.
-`Write out.txt (2 bytes)` is consistent with "write the line count", whatever the
-two bytes say. It catches the injection, not the arithmetic.
-
-Cost: one extra model call per consequential step, measured at **2.6–2.9s**. On
-a foreground turn that roughly doubles it, which is why there is a switch —
-`review` in the config, and a row in settings that says what turning it off
-costs.
-
-### 2.1 Provenance — *done*
-
-The engine knows one thing neither the judge nor the person does: whether it
-wrote or downloaded that file moments ago. One line of fixed vocabulary, never
-file content.
-
-Worth less than it was — running a script now needs an explicit grant — but it is
-still the answer to *"you are about to run a file you wrote a moment ago"*.
-
-**Done.** A step that names a file this run wrote carries one line of fixed
-vocabulary into the judge's prompt and into the audit. It reads what the step
-says — a command line, a tool call's arguments — and never opens anything.
-
-The eval has a case for it: asked to read a README, an agent running a setup
-script it made is told that executing a script created by the task goes beyond
-explaining the project.
+**Done when** a run that produces a document is expected to read it, and says
+plainly when it did not.
 
 ---
 
-## 3. Compaction: the ceiling on how long a task can be — *done*
+## 2. Working the terminal, like a person
 
-`session.done` grows one line per step and every step sends the whole thing.
-Nothing trims it. `MAX_STEPS = 40` is not a budget, it is a lid hiding the fact
-that a task needing two hundred steps cannot be run at all.
+Today a delegation is `claude -p --permission-mode acceptEdits '<task>'`: one
+shot, fire and forget, with a permission mode chosen so it cannot stop to ask.
+The reasoning is written in the code and was right when it was written —
 
-The structure is the part to copy: pure functions plus one dataclass, with the
-runtime owning *when* and *with what*, so the policy is testable without a
-provider. Older turns become a summary plus mechanically extracted state; recent
-turns and **every user message** survive. The stored transcript is never edited —
-only what is sent.
+> An agent that stops to ask something is an agent that hangs, because there is
+> nobody at that terminal.
 
-**Done.** The policy lives in `core/compact` against plain strings — what to
-keep, where to cut, what survives — so every rule has a test that never touches a
-provider. The session owns *when*; the provider owns one sentence.
+— and the answer is not to keep choosing flags that avoid questions. It is to
+**put somebody at that terminal**.
 
-The newest work survives by weight rather than by line count, so one enormous
-tool result cannot starve the working set. The user's own words survive verbatim.
-Files touched and commands run are extracted by code, not remembered. Tool output
-goes first.
+### 2.1 A real terminal
 
-The record is never folded — only the outbound view — so a finished run still
-reports what it actually did.
+These tools behave differently when their output is a pipe: no prompts, no
+progress, sometimes no colour and a different code path entirely. Supervising one
+means giving it a pseudo-terminal, not a pipe.
 
-Found by running it: at a low threshold, folding turned 65 tokens into a block of
-115 and then did it again next turn. A block's fixed cost does not shrink with
-its span, so a span smaller than the working set is now left alone.
+`running.rs` uses piped stdio. This is the foundation the rest of §2 sits on, and
+it is the part with no way around it.
 
----
+**Done when** `claude` run under Nudge behaves as it does in a terminal, and what
+it prints arrives as it is printed rather than in blocks when its buffer fills.
 
-## 4. Runs that survive the process — *done*
+### 2.2 Noticing that it asked something
 
-Quit Nudge mid-task and the run is gone. Finished runs persist to `history.json`
-for display; in-flight ones are dropped on purpose, because claiming a run is
-still going when the process running it has died would be a lie.
+A question is a shape, not a sentence: output that has stopped, ending in a
+prompt, offering choices. Recognised mechanically — trailing `?`, a `[y/N]`, a
+numbered list that stopped, a known phrasing per tool — and not by asking a model
+to read the prose.
 
-That honesty is right and the situation it describes is not. A task that cannot
-survive a restart is a session, not a task — and "carries tasks through from
-start to finish" is the promise this plan exists for.
+**Done when** a delegated agent that stops to ask is noticed within a second, and
+a delegated agent that is merely quiet for a moment is not mistaken for one.
 
-Needs: the goal, the history, the plan, where it got to, and enough to pick the
-thread back up. Plus the question the old behaviour was protecting — an
-interrupted run must come back as *interrupted*, offering to continue, never as
-though it had been running the whole time.
+### 2.3 Deciding it — three answers, in order
 
-**Done.** A run that was going when Nudge ended comes back as `Interrupted` —
-its own state, because stopping is a decision and being killed is not, and only
-one of those deserves an offer to continue. The card says *"Stopped when Nudge
-did, N steps in"* and offers to carry on, for an hour, after which it stops
-asking and stays in the Agents tab.
+1. **Mechanically.** Some answers need no judgement: a prompt to continue, to
+   trust a workspace Nudge itself chose, to use a model already configured.
+2. **The judge.** Anything else goes to §2 of the last plan, given *structured
+   facts* — what is being asked for, which file or command it names, and what the
+   user originally wanted. Never the prompt's prose.
+3. **The person.** Anything the judge is unsure about is a card, exactly as an
+   egress question is today.
 
-Carrying on starts a new run with the old one's history. The old row stays
-interrupted: it really did end, and a record that changed state after the process
-owning it died is a record nobody could trust.
+The order matters and so does the direction: this can only ever *add* a question,
+never remove one. A prompt nobody understood is a prompt for a human.
 
-Verified by killing a run at step one and pressing the button: it made c, d and e
-with a and b already there.
+**Done when** an ordinary permission prompt is answered without anybody being
+disturbed, and an unusual one reaches a person with what it is asking.
 
-### 4.1 Self-wake
+### 2.4 Answering
 
-`sleep_until` for a timer, `wake_on` for a backgrounded job. An agent that can
-wait costs nothing while it waits, and *"run the tests and tell me when they are
-green"* stops holding a turn open for eight minutes.
+Writing to the terminal, which needs 2.1. The answer is recorded — the prompt, in
+fixed vocabulary, what was answered, and who decided.
 
-**Done when** waiting does not burn a turn a second.
+**Done when** the audit of a delegated run reads as a conversation somebody could
+check afterwards.
 
----
+### 2.5 Noticing when it is stuck
 
-## 5. Connections — *done*
+A person watching a terminal notices three things a program does not: nothing has
+happened for a long time, the same thing keeps happening, and it is asking the
+same question again. Each is mechanical.
 
-A tool server is three lines in `config.toml` today. Right for the protocol,
-wrong for a person: no notion of an account, credentials in plaintext, no way to
-see what is connected or to take it away.
+**Done when** a delegated agent that has stalled, looped, or asked twice is
+stopped and reported rather than waited on until the fifteen-minute cap.
 
-**Not thirty-five hand-written connectors.** `mcp.rs` already makes the argument
-in its own header — six integrations written by hand buy six integrations, and
-speaking the protocol buys the ones written next year. What is missing is the
-account model around it, and credentials in the Keychain rather than in a file
-anybody can `cat`.
+### 2.6 Checking what came back
 
-And the rule from OpenWorker's catalogue, which its test suite enforces: every
-connectable thing states what access it gets **before** consent, in plain
-statements of behaviour rather than marketing. Overclaiming there is a product
-bug.
+The half a person never skips. A delegation ends with output, and today that
+output is believed. What it actually did is checkable: which files changed,
+whether the build still runs, whether the thing it was asked for exists.
 
-**Done.** Picking from a list connects it; the token goes in the Keychain and the
-file names it; disconnecting takes both away.
+**Done when** a delegation reports what changed on disk rather than what the
+agent said about itself — the same bar §2.2 of the last plan set for Nudge's own
+writes, applied to work it handed away.
 
-An entry cannot overclaim because connecting *checks* — it starts the server and
-asks what it can do, and no tools means no connection and no token left behind.
-What the page shows afterwards is what the server reported.
+### 2.7 The flags people actually use
 
-`[[mcp]]` by hand still works and wins a name clash. A catalogue that was the
-only way in would be the hand-written-integrations trap wearing a nicer coat.
+`--continue` and `--resume` to carry on a session rather than starting a new one;
+choosing a model; pointing at a directory. Today one invocation per tool is
+hard-coded, checked by running it, and that is the right instinct — every form
+written from memory here has been wrong. Extending it means extending the same
+table, and checking each addition the same way.
 
-Verified with no `[[mcp]]` in the config at all: a connection on disk started a
-server that reported 14 tools, and a token-bearing connection left nothing
-greppable under `~/.config/nudge`.
+**Done when** a second delegation to the same tool continues the first rather
+than starting again, and the table still only contains forms that have been run.
 
 ---
 
-## Waiting on somebody else
+## 3. Tasks big enough to need a plan
 
-- **The certificate.** A Developer ID Application certificate, which only the
-  Nuddg Inc Account Holder can create. The CSR is in `.signing/`, the pipeline is
-  built and refuses to start without all six secrets, and the download page is
-  deliberately empty until then. See [RELEASING.md](RELEASING.md).
-- **One click.** The updater notices a newer build; nobody has watched it install
-  one. Needs a person at the machine for about a minute.
-- **Windows, then Linux.** Cannot be compiled from a Mac. See
-  [PORTING.md](PORTING.md).
+### 3.1 Decomposing, and being held to it
 
----
-## Running alongside
+`Step::Plan` exists and the card renders it. Nothing asks for one, and nothing
+notices when a run wanders off it. A task with four named parts that ends after
+one is a task that failed, and it currently reports success.
 
-Not phases, and not allowed to rot:
+**Done when** a run that set itself a plan is not finished while items remain
+unstarted, or says plainly that it stopped early.
 
-- **One unanswerable question, not four.** The truth suite scored 41/48 with four
-  wrong; reading the answers showed two of those four were correct refusals the
-  harness could not recognise, and a third was borderline. The hedge list is
-  wider now. What is left is 020-bitcoin, which answered *"between $80,000 and
-  $98,000"* with no admission anywhere — one real failure, and worth fixing.
-  See [FINDINGS.md](FINDINGS.md).
-- **The bench is at 57%** (4/7 pointed at, 3 misses, one of them 8px). First
-  measurement since thinking moved to `low`, and it is owed a controlled re-run
-  against the previous setting before anybody concludes anything from it.
-- **Widen the no-model path.** Every phrasing it learns is a turn that costs 0.3s
-  instead of 4.5. Typing into a named field and launching apps by name are next.
-- **Ablation: does a feature earn its keep?** Run a suite twice with one thing
-  switched off and print the per-case delta. Both existing suites are already one
-  arm of it, and four features have never been measured this way: per-application
-  memory, the early look, skills, and the thinking level. OpenExecutive's
-  `ablation.py` is the pattern, and its two rules matter more than its code — the
-  "off" arm must be the production path with one knob at zero rather than a
-  test-only branch, and the docstring must say what a run costs, because a
-  harness that quietly doubles a bill gets run once by accident.
-  See [OPENEXECUTIVE.md](OPENEXECUTIVE.md).
+### 3.2 Research without a shell
+
+Asked for a crate's dependency count, the model reached for `python3 -c` to call
+an API. The shell refused, correctly — that is arbitrary code execution — and the
+model fell back to memory rather than to `fetch`, which was available the whole
+time.
+
+A refusal that leaves the model with no route is a refusal that produces a
+confident guess. The prompt should route an API call to `fetch` and `request` by
+name, in the same place the refusal is explained.
+
+**Done when** a refused shell command hands back what to use instead, where one
+exists.
+
+### 3.3 Room to be long
+
+`MAX_STEPS = 40` was a lid over a context ceiling that compaction has since
+lifted. The number can rise once §1 makes a long run honest — a budget is only
+safe when finishing early is visible.
+
+**Done when** the cap reflects what a task needs rather than what the context
+window used to allow.
 
 ---
 
-## The safety model
+## Order
 
-Every rule here exists because something went wrong without it:
+1. **§1.2**, because it is small, it is five-for-five, and everything in §2.6
+   depends on the same idea.
+2. **§3.2**, which is a prompt and a sentence.
+3. **§2.1**, the pty, because nothing else in §2 can start without it.
+4. **§2.2 → 2.3 → 2.4**, which are one feature in three parts.
+5. **§2.5** and **§2.6**.
+6. **§3.1**, then **§3.3** and **§1.1**.
 
-| Rule | What happened |
-|---|---|
-| Workspace boundary | The first thing that wrote a file put it in this repository's root |
-| Read-only shell, by program | A model reached for `rm` to get around a refusal |
-| ...and by argument | `python3 -c` and `find -exec` walked straight past that |
-| ...and a version check is only a version check | `python3 x.py` ran a file with no grant at all — write a script, run it, never asked |
-| No key in an outgoing URL | A GET is the exfiltration channel |
-| One cursor, one agent | Two agents shared a WhatsApp chat and sent a voice note to a real person |
-| Ask before replacing | Self-evident, once |
-| Privacy guard | A password manager is one frontmost window away at all times |
-| Everything started is killed | A dev server still holding port 3000 tomorrow would be Nudge's fault |
-
-**Widening what is possible must widen what is recorded by the same amount.**
-The test for any new reach: can the person see afterwards what was done with it?
-That is §2, and it is why §2 is not optional.
+§2.7 can land any time after 2.1.
