@@ -121,13 +121,23 @@ pub async fn connect(
         }
     }
 
+    let pasted = token
+        .as_deref()
+        .map(str::trim)
+        .filter(|t| !t.is_empty());
+
     if offer.token.is_some() {
-        let token = token
-            .as_deref()
-            .map(str::trim)
-            .filter(|t| !t.is_empty())
-            .ok_or_else(|| format!("{} needs a token", offer.name))?;
-        secret::to_keychain(&connect::keychain_item(&key), token).map_err(|e| e.to_string())?;
+        match pasted {
+            Some(token) => {
+                secret::to_keychain(&connect::keychain_item(&key), token).map_err(|e| e.to_string())?
+            }
+            // Signing in already put one there, and this is called straight
+            // afterwards to do the half that proves it works. Demanding a paste
+            // here made the whole flow fail at the last step with "needs a
+            // token" -- for a token that was sitting in the Keychain.
+            None if secret::from_keychain(&connect::keychain_item(&key)).is_some() => {}
+            None => return Err(format!("{} needs a token", offer.name)),
+        }
     }
 
     // Slack's server needs the workspace id and nobody knows theirs by heart, so
@@ -136,7 +146,7 @@ pub async fn connect(
     // connection, and asking for it would be asking somebody to go and look up a
     // fact their credential already carries.
     let extra: Vec<String> = match key.as_str() {
-        "slack" => match team_of(token.as_deref().unwrap_or_default()).await {
+        "slack" => match team_of(pasted.unwrap_or_default()).await {
             Some(id) => vec![id],
             None => {
                 undo(&key, true);

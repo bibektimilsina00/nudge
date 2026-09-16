@@ -153,6 +153,7 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
   const [failed, setFailed] = useState("");
   const [tools, setTools] = useState(false);
   const [code, setCode] = useState<{ user_code: string; verification_uri: string } | null>(null);
+  const [copied, setCopied] = useState(false);
 
   /**
    * GitHub's device flow, driven from here.
@@ -172,6 +173,7 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
         expires_in: number;
       }>("sign_in_begin", { key: it.key });
       setCode(started);
+      setCopied(false);
       setOpen(true);
 
       const until = Date.now() + started.expires_in * 1000;
@@ -319,10 +321,19 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
             // eye, and that is where O and 0 get confused.
             <div className="rounded-lg bg-black/40 px-2.5 py-2 text-center hairline">
               <p className="text-[10px] text-ink-3">Enter this code on GitHub</p>
-              <p className="mt-1 font-mono text-[15px] font-semibold tracking-[0.18em] text-white select-all">
+              <button
+                onClick={() => {
+                  void navigator.clipboard.writeText(code.user_code);
+                  setCopied(true);
+                }}
+                title="Copy"
+                className="mt-1 w-full font-mono text-[15px] font-semibold tracking-[0.18em] text-white transition-colors duration-150 hover:text-blue"
+              >
                 {code.user_code}
+              </button>
+              <p className="mt-1 text-[10px] text-ink-3">
+                {copied ? "Copied — paste it on GitHub" : "Click the code to copy it"}
               </p>
-              <p className="mt-1 text-[10px] break-all text-ink-3">{code.verification_uri}</p>
             </div>
           )}
           {it.needs_folder && (
@@ -344,7 +355,7 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
               {it.setup}
             </p>
           )}
-          {it.needs_token && (
+          {it.needs_token && !it.signs_in && (
             <>
               <input
                 value={token}
