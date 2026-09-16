@@ -27,6 +27,13 @@ jobs:
       - uses: dorny/paths-filter@v3
         id: filter
         with:
+          # Against the previous commit on this same branch, not against the
+          # repository default branch -- which is what this action does if you
+          # do not say. Every push to `alpha` was comparing against `main`, and
+          # `main` has no server/ or web/ at all, so every path read as changed
+          # and every push redeployed everything. The filter was doing its job
+          # perfectly against the wrong question.
+          base: ${{ github.ref }}
           filters: |
             app:
               - 'src-tauri/**'
