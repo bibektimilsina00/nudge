@@ -168,6 +168,36 @@ const INLINE_CODE: &[&str] = &["-c", "-e", "--eval", "--command", "-E", "--exec"
 /// argument.
 const AWKS: &[&str] = &["awk", "gawk", "mawk", "nawk"];
 
+/// On the allow-list only because "is X installed" is a fair question.
+///
+/// The list's own comment says so -- *"Version checks, which is most of what
+/// 'is X installed' means"* -- and for these nothing enforced it, so the entry
+/// that permitted `python3 --version` permitted `python3 anything.py`. Proven,
+/// not supposed: `python3 x.py` ran the file and printed its output with no
+/// grant at all. An agent that reads an instruction off the screen, writes a
+/// script and runs it needed permission for none of those steps.
+///
+/// **Only the programs [`SUBCOMMANDS`] does not already cover.** git, npm, pip3,
+/// cargo, docker and brew each have an allow-list of verbs there, which is the
+/// same idea done better -- `npm ls` reads and `npm run` does not, and a verb
+/// list can say so where a flat rule cannot. These eight have no verbs worth
+/// allowing: everything they do that is not `--version` is running code.
+const VERSION_ONLY: &[&str] = &[
+    "node", "python3", "rustc", "go", "java", "ruby", "php", "swift",
+];
+
+/// The questions those programs are allowed to be asked.
+const VERSION_FLAGS: &[&str] = &[
+    "--version",
+    "-version",
+    "-V",
+    "-v",
+    "version",
+    "--help",
+    "-h",
+    "help",
+];
+
 /// Shell syntax that turns one command into something else.
 ///
 /// Pipes are allowed because a pipeline of readers is still a reader, and
@@ -231,6 +261,23 @@ fn argument_refusal(name: &str, stage: &str) -> Option<String> {
                 "{name} {flag} runs code given on the command line, which is not \
                  reading -- ask for the thing itself instead"
             ));
+        }
+    }
+
+    if VERSION_ONLY.contains(&name) {
+        // A version flag, and nothing else -- not even nothing. A bare
+        // interpreter opens a REPL and waits on a stdin that never arrives,
+        // which is a hang rather than a refusal, and "is it installed" is always
+        // asked with a flag anyway.
+        match args.first().copied() {
+            Some(a) if VERSION_FLAGS.contains(&a) => {}
+            asked => {
+                let asked = asked.unwrap_or("nothing");
+                return Some(format!(
+                    "{name} is here so you can check it is installed, not to run {asked:?}. \
+                     That needs \u{201c}Run any command\u{201d}, which is off."
+                ));
+            }
         }
     }
 
@@ -328,8 +375,15 @@ pub fn refuse(command: &str, anything: bool) -> Option<String> {
         }
 
         if let Some((_, verbs)) = SUBCOMMANDS.iter().find(|(p, _)| *p == name) {
-            // The first word that is not a flag is the subcommand.
-            let verb = words.find(|w| !w.starts_with('-'));
+            // The first word that is not a flag is the subcommand -- unless a
+            // flag is itself one of the listed verbs, which is how `-v` and
+            // `--version` earn their places on those lists.
+            //
+            // They were dead entries. The finder skipped every flag, so the only
+            // thing letting a version check through was the ad-hoc `--version`
+            // test below, and `npm -v` was refused while `npm --version` was
+            // not -- for no reason either list could express.
+            let verb = words.find(|w| !w.starts_with('-') || verbs.contains(w));
             match verb {
                 Some(v) if verbs.contains(&v) => {}
                 Some(v) => return Some(format!("{name} {v} can change things, so no")),
@@ -459,6 +513,65 @@ mod tests {
             "sed --in-place 's/a/b/' file",
         ] {
             assert!(super::refuse(attack, false).is_some(), "allowed: {attack}");
+        }
+    }
+
+    /// The eighth, and the one that was still open after the other seven.
+    ///
+    /// `python3` sits on the allow-list so that `python3 --version` can answer
+    /// "is it installed", and nothing made that the only thing it could be
+    /// asked. Proven before it was fixed: `python3 x.py` ran the file and
+    /// printed its output, with no grant of any kind. An agent that reads an
+    /// instruction off the screen, writes a script and runs it needed
+    /// permission for none of those steps.
+    ///
+    /// Not only interpreters. `npm run`, `cargo run` and `docker run` execute
+    /// somebody else's code just as directly, and `cargo build` runs `build.rs`.
+    #[test]
+    fn a_version_check_cannot_be_handed_a_program_to_run() {
+        for attack in [
+            "python3 x.py",
+            "python3 ./setup.py install",
+            "node server.js",
+            "ruby deploy.rb",
+            "php shell.php",
+            "go run main.go",
+            "rustc main.rs",
+            "java Main",
+            "swift script.swift",
+            // These were already refused, by the verb lists in `SUBCOMMANDS`.
+            // Kept here so that removing a verb list cannot quietly reopen them.
+            "npm run build",
+            "npm install",
+            "cargo run",
+            "cargo build",
+            "docker run -it alpine sh",
+            "brew install anything",
+            // Bare opens a REPL and waits on a stdin that never comes, which is
+            // a hang rather than a refusal.
+            "python3",
+        ] {
+            assert!(super::refuse(attack, false).is_some(), "allowed: {attack}");
+        }
+    }
+
+    /// And the question they are actually on the list to answer still works.
+    #[test]
+    fn asking_whether_something_is_installed_still_works() {
+        for fine in [
+            "python3 --version",
+            "node --version",
+            "cargo --version",
+            "go version",
+            "java -version",
+            "npm -v",
+            // git is deliberately not version-only: reading a repository is most
+            // of what it is asked for.
+            "git status",
+            "git log --oneline -5",
+            "git diff",
+        ] {
+            assert!(super::refuse(fine, false).is_none(), "refused: {fine}");
         }
     }
 
