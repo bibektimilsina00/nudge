@@ -39,6 +39,18 @@ pub enum State {
         why: String,
     },
     Stopped,
+    /// The process ended while this was still going.
+    ///
+    /// Its own state rather than `Stopped`, because they are different facts and
+    /// only one of them is a decision. Somebody who pressed Escape meant it;
+    /// somebody whose laptop went to sleep did not, and offering to carry on is
+    /// right for exactly one of those.
+    ///
+    /// Never written by the runtime. A live process cannot know it is about to
+    /// die, so this is applied on the way *back in*: anything read from the
+    /// ledger that claims to be running was running when the process ended, and
+    /// saying otherwise would be the lie this used to avoid by dropping them.
+    Interrupted,
 }
 
 /// A command an agent ran, and what came back.
@@ -148,8 +160,13 @@ impl Agent {
     pub fn finished(&self) -> bool {
         matches!(
             self.state,
-            State::Done | State::Failed { .. } | State::Stopped
+            State::Done | State::Failed { .. } | State::Stopped | State::Interrupted
         )
+    }
+
+    /// Ended without reaching an answer, and not because anybody said so.
+    pub fn interrupted(&self) -> bool {
+        matches!(self.state, State::Interrupted)
     }
 }
 
@@ -369,6 +386,25 @@ impl Agents {
         self.items.lock().unwrap().iter().any(|a| !a.finished())
     }
 
+    /// How long an interrupted run keeps offering to carry on.
+    ///
+    /// Long enough to cover quitting and reopening, a crash, and a laptop that
+    /// slept. Not long enough to still be asking about Tuesday -- an offer that
+    /// arrives on every launch until dismissed is not an offer, it is nagging,
+    /// and the run is still in the Agents tab with everything it did.
+    ///
+    /// **The card mirrors this number** -- see the `live` filter in `Agent.tsx`.
+    /// Two places, because one is TypeScript, and both say so.
+    pub const STILL_NEWS: u64 = 60 * 60 * 1000;
+
+    /// Is there a run worth offering to pick back up?
+    pub fn resumable(&self) -> bool {
+        let now = now_ms();
+        self.items.lock().unwrap().iter().any(|a| {
+            a.interrupted() && a.started > 0 && now.saturating_sub(a.started) < Self::STILL_NEWS
+        })
+    }
+
     /// Edit one in place. Unknown ids are ignored rather than panicking -- a card
     /// dismissed while its agent was mid-step would otherwise take the app down.
     fn edit(&self, id: u64, f: impl FnOnce(&mut Agent)) {
@@ -385,9 +421,13 @@ impl Agents {
         });
     }
 
-    /// Read the past back in. Finished runs only -- anything that was mid-flight
-    /// when the process ended did not finish, and saying it is still running
-    /// would be a lie about a thing that cannot possibly still be true.
+    /// Read the past back in.
+    ///
+    /// Anything the file claims is still running was running when the process
+    /// ended, and nothing has been running since -- so it comes back as
+    /// [`State::Interrupted`]. That is the honest label, and it is applied here
+    /// rather than on the way out because a live process cannot know it is about
+    /// to be killed.
     pub fn remember(&self) {
         let Some(path) = &self.ledger else { return };
         let Ok(text) = std::fs::read_to_string(path) else {
@@ -397,7 +437,15 @@ impl Agents {
             eprintln!("agents: could not read the history at {}", path.display());
             return;
         };
-        let kept: Vec<Agent> = past.into_iter().filter(|a| a.finished()).collect();
+        let kept: Vec<Agent> = past
+            .into_iter()
+            .map(|mut a| {
+                if !a.finished() {
+                    a.state = State::Interrupted;
+                }
+                a
+            })
+            .collect();
         if kept.is_empty() {
             return;
         }
@@ -405,11 +453,36 @@ impl Agents {
         // one can never collide -- which would show one card and lose the other.
         let highest = kept.iter().map(|a| a.id).max().unwrap_or(0);
         self.next_id.fetch_max(highest, Ordering::Relaxed);
-        eprintln!("agents: {} runs remembered", kept.len());
+        eprintln!(
+            "agents: {} runs remembered, {} interrupted",
+            kept.len(),
+            kept.iter().filter(|a| a.interrupted()).count()
+        );
         self.items.lock().unwrap().extend(kept);
     }
 
-    /// Write the finished ones down.
+    /// Save where things have got to.
+    ///
+    /// Called once a turn rather than on every edit. Edits happen several times
+    /// a step -- a status line, a plan tick, a file recorded -- and rewriting the
+    /// ledger for each would be a lot of writes for a file whose only reader
+    /// starts up after this process has died.
+    ///
+    /// Once a turn is enough because that is the unit somebody resumes from: a
+    /// run killed mid-turn comes back having lost that turn, which is honest,
+    /// and the alternative is writing after every field change to save a few
+    /// seconds of work nobody was watching.
+    pub fn checkpoint(&self) {
+        self.write_down();
+    }
+
+    /// Write them down -- the finished ones, and whatever is still going.
+    ///
+    /// The unfinished ones used to be left out, on the grounds that a run which
+    /// did not finish has nothing to report. True of what it *achieved* and
+    /// false of what it was *for*: the goal, the plan and the steps taken are
+    /// exactly what somebody needs to decide whether to carry on. They come back
+    /// as [`State::Interrupted`], never as running.
     ///
     /// Bounded, newest kept: this is a record somebody scrolls, not an archive,
     /// and a file that grows for the life of a machine is a bug with a slow fuse.
@@ -419,11 +492,11 @@ impl Agents {
         let Some(path) = &self.ledger else { return };
         let past: Vec<Agent> = {
             let items = self.items.lock().unwrap();
-            let mut done: Vec<Agent> = items.iter().filter(|a| a.finished()).cloned().collect();
-            if done.len() > KEEP {
-                done.drain(..done.len() - KEEP);
+            let mut kept: Vec<Agent> = items.to_vec();
+            if kept.len() > KEEP {
+                kept.drain(..kept.len() - KEEP);
             }
-            done
+            kept
         };
         let Ok(text) = serde_json::to_string(&past) else {
             return;
@@ -721,6 +794,76 @@ mod tests {
     /// The card is for background work only. Ordinary tasks are over in seconds
     /// and report through the notch; giving each one a floating window was a
     /// progress bar for something already finished.
+    /// A run that was going when the process died comes back as interrupted,
+    /// and never as running.
+    #[test]
+    fn what_was_in_flight_comes_back_honestly() {
+        let path = std::env::temp_dir().join(format!("nudge-resume-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+
+        {
+            let a = Agents {
+                ledger: Some(path.clone()),
+                ..Default::default()
+            };
+            let id = a.start_now("tidy the folder".into(), "Tidying".into(), "".into(), false);
+            a.edit(id, |x| {
+                x.step = 7;
+                x.history = vec!["Ran `ls`".into()];
+            });
+            a.start_now("a finished one".into(), "Done".into(), "".into(), false);
+            a.set_state(2, State::Done);
+        }
+
+        let back = Agents {
+            ledger: Some(path.clone()),
+            ..Default::default()
+        };
+        back.remember();
+        let all = back.list();
+
+        let live = all.iter().find(|a| a.goal == "tidy the folder").unwrap();
+        assert_eq!(
+            live.state,
+            State::Interrupted,
+            "claimed to still be running"
+        );
+        assert!(live.interrupted() && live.finished());
+        // And what it needs to carry on survived.
+        assert_eq!(live.step, 7);
+        assert_eq!(live.history, vec!["Ran `ls`".to_string()]);
+
+        // A run that genuinely finished is untouched.
+        let done = all.iter().find(|a| a.goal == "a finished one").unwrap();
+        assert_eq!(done.state, State::Done);
+        assert!(!done.interrupted());
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// Stopping is a decision. It must not come back as something to resume.
+    #[test]
+    fn a_run_somebody_stopped_stays_stopped() {
+        let path = std::env::temp_dir().join(format!("nudge-stopped-{}.json", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        {
+            let a = Agents {
+                ledger: Some(path.clone()),
+                ..Default::default()
+            };
+            let id = a.start_now("something".into(), "Something".into(), "".into(), false);
+            a.set_state(id, State::Stopped);
+        }
+        let back = Agents {
+            ledger: Some(path.clone()),
+            ..Default::default()
+        };
+        back.remember();
+        assert_eq!(back.list()[0].state, State::Stopped);
+        assert!(!back.list()[0].interrupted());
+        let _ = std::fs::remove_file(&path);
+    }
+
     #[test]
     fn only_background_work_earns_a_window() {
         let a = agents();

@@ -59,7 +59,13 @@ pub fn publish(app: &AppHandle) {
     // is still going, and here is how to stop it" is worth the corner -- an agent
     // owns the real cursor while it works, and that should never be invisible.
     // The card is one click away, and finished work lives in the Agents tab.
-    let (visible, running) = (agents.running(), agents.running());
+    // Two questions, and they used to be one value asked twice. `running` is
+    // "the cursor is in use"; `visible` is "there is something on this card
+    // worth a corner of the screen". A run that was interrupted is not running
+    // -- it is over -- and it still has the one thing worth showing: an offer to
+    // carry on, which nobody will find if the window never appears.
+    let running = agents.running();
+    let visible = running || agents.resumable();
     app.emit("agents", &list).ok();
 
     // Onto the main thread, always.
@@ -490,6 +496,10 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             },
         };
         app.state::<Agents>().now_doing(0);
+        // Where it got to, on disk, before the next turn. The process can end at
+        // any moment -- quit from the menu bar, a crash, a reboot -- and none of
+        // those ask first, so there is no on-the-way-out to rely on.
+        app.state::<Agents>().checkpoint();
         if let Err(e) = outcome {
             failures += 1;
             eprintln!("agent#{id} turn {turn}: could not perform it -- {e} (x{failures})");

@@ -80,6 +80,49 @@ pub fn dismiss_agent(app: AppHandle, id: u64) {
     crate::app::agent::publish(&app);
 }
 
+/// Pick an interrupted run back up.
+///
+/// A fresh run with the old one's goal and everything it had already done
+/// carried into its history, so it can see what was tried rather than start the
+/// task again from nothing.
+///
+/// A new run rather than reviving the old one, and the difference is not
+/// cosmetic. The old one *did* end -- its budget was spent, its processes were
+/// killed, its session is gone -- and a record that changed state after the
+/// process that owned it died would be a record nobody could trust. The old row
+/// stays interrupted, which is what happened to it.
+///
+/// Only an interrupted run. Carrying on from something somebody stopped on
+/// purpose would be undoing their decision.
+#[tauri::command]
+pub fn resume_agent(app: AppHandle, id: u64) {
+    let Some(was) = app
+        .state::<Agents>()
+        .list()
+        .into_iter()
+        .find(|a| a.id == id && a.interrupted())
+    else {
+        eprintln!("resume: agent#{id} is not an interrupted run");
+        return;
+    };
+
+    eprintln!(
+        "resume: agent#{id} {:?} from {} steps in",
+        was.goal, was.step
+    );
+    // The old one is finished and stays finished; it just stops cluttering the
+    // card now that its work has somewhere to continue.
+    app.state::<Agents>().dismiss(id);
+    crate::app::agent::spawn(
+        &app,
+        was.goal.clone(),
+        was.title,
+        "Picking this back up.".into(),
+        false,
+        was.history,
+    );
+}
+
 /// Do the thing that was agreed to, or record that it was not.
 ///
 /// One place per kind, and the kinds do not know about each other. Whether the

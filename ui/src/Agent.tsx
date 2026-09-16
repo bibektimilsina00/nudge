@@ -8,7 +8,8 @@ export type AgentState =
   | { state: "waiting"; question: string; choices: string[] }
   | { state: "done" }
   | { state: "failed"; why: string }
-  | { state: "stopped" };
+  | { state: "stopped" }
+  | { state: "interrupted" };
 
 /** A command an agent ran, and what came back. */
 export type Ran = { command: string; output: string };
@@ -50,6 +51,9 @@ const TONE = {
   done: { label: "Done", dot: "bg-[#30d158]" },
   failed: { label: "Failed", dot: "bg-[#ff5f57]" },
   stopped: { label: "Stopped", dot: "bg-white/30" },
+  // Amber rather than grey: this one is not finished with, it is waiting to
+  // hear whether to go on. Grey would file it with the things that are over.
+  interrupted: { label: "Interrupted", dot: "bg-[#e8b027]" },
 } as const;
 
 /**
@@ -333,14 +337,36 @@ export default function AgentCard() {
   }, []);
 
   // A question is a reason to come out -- but only the agent that asked it.
-  const asking = agents.find((a) => a.state === "waiting")?.id ?? null;
+  //
+  // So is an interrupted run, for the same reason: a collapsed tile cannot make
+  // an offer, and "carry on?" behind a click is a question nobody was asked.
+  // It does not block anything, unlike a question, which is why it is second --
+  // if something is genuinely waiting on a person, that wins.
+  const asking =
+    agents.find((a) => a.state === "waiting")?.id ??
+    agents.find((a) => a.state === "interrupted")?.id ??
+    null;
   useEffect(() => {
     if (asking !== null) setOpened(asking);
   }, [asking]);
 
   // Finished work belongs in the Agents tab, not floating over the screen.
+  //
+  // Except a run that was interrupted, and only while that is still news. It
+  // ended because Nudge did, so the offer to carry on has to be somewhere
+  // obvious -- but an offer to resume a task from last Tuesday is not an offer,
+  // it is nagging, and it would arrive on every launch until dismissed. Within
+  // the hour covers quitting and reopening, a crash, and a laptop that slept.
+  // After that it is still in the Agents tab with everything it did.
+  const RECENT = 60 * 60 * 1000;
+  const now = Date.now();
   const live = agents
-    .filter((a) => a.state === "running" || a.state === "waiting")
+    .filter(
+      (a) =>
+        a.state === "running" ||
+        a.state === "waiting" ||
+        (a.state === "interrupted" && a.started > 0 && now - a.started < RECENT),
+    )
     // A question un-hides itself: it needs a person, and a hidden tile cannot ask.
     .filter((a) => a.state === "waiting" || !hidden.includes(a.id));
 
@@ -575,6 +601,24 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
       {/* The footer is separated by a line rather than by space. Stopping is the
           one thing that must never be hunted for, and a rule says "this is not
           part of the report" more cheaply than a gap does. */}
+      {/* The one thing an interrupted run needs is a way to go on. It ended
+          because the process did -- nobody chose it -- so the offer is to carry
+          on, not to start again: the new run is handed everything this one had
+          already done. */}
+      {agent.state === "interrupted" && (
+        <div className="flex items-center gap-2.5 border-t border-line px-3 py-2">
+          <span className="min-w-0 flex-1 truncate text-[9.5px] text-ink-3">
+            Stopped when Nudge did, {agent.step} {agent.step === 1 ? "step" : "steps"} in
+          </span>
+          <button
+            onClick={() => void invoke("resume_agent", { id: agent.id }).catch(() => {})}
+            className="shrink-0 rounded-lg bg-blue px-2.5 py-[3px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-[#3a9bff] active:scale-[0.97]"
+          >
+            Carry on
+          </button>
+        </div>
+      )}
+
       {agent.state === "running" && (
         <div className="flex items-center gap-2.5 border-t border-line px-3 py-2">
           <div className="h-[3px] min-w-0 flex-1 overflow-hidden rounded-full bg-raise">

@@ -202,6 +202,27 @@ pub fn run() {
                 }
             }
 
+            // Anything that was mid-task when Nudge last ended has come back as
+            // interrupted, and the offer to carry on has to reach the window.
+            //
+            // From a task, for the same reason the example below is: `publish`
+            // reaches the window through `run_on_main_thread`, which posts to an
+            // event loop that does not exist yet during setup -- so publishing
+            // here would simply be dropped, the run would sit in the list, and
+            // nothing would appear.
+            if handle
+                .state::<crate::core::run::agent::Agents>()
+                .list()
+                .iter()
+                .any(|a| a.interrupted())
+            {
+                let back = handle.clone();
+                tauri::async_runtime::spawn(async move {
+                    tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+                    agent::publish(&back);
+                });
+            }
+
             // `NUDGE_CARD=1` puts a worked example on the agent card and leaves it
             // there, so how it looks can be changed without racing a real task.
             //
@@ -271,6 +292,7 @@ pub fn run() {
             commands::stop_agent,
             commands::dismiss_agent,
             commands::trail,
+            commands::resume_agent,
         ])
         .run(tauri::generate_context!())
         .expect("nudge failed to start");
