@@ -133,13 +133,17 @@ survive; the persisted transcript is never edited, only what is sent.
 
 **Done when** a run can exceed the context window without being cut off.
 
-### B3. Self-wake — *not started*
+### B3. Self-wake — *half done*
 
 `selfwake.py` turns an always-on agent into suspend/resume at roughly zero idle
-cost: `sleep_until` for a timer, `wake_on` for a backgrounded job. Nudge's agents
-either run or die, so "wait for CI and then open the PR" is not expressible.
+cost: `sleep_until` for a timer, `wake_on` for a backgrounded job.
 
-**Done when** an agent can wait for something without burning a turn a second.
+**`wake_on` is done.** `await` waits for a background job to end and comes back
+with how it ended — one turn for the whole wait, where polling cost a turn every
+twenty seconds. Sliced so a ten-minute wait still notices Escape.
+
+**`sleep_until` is not**, and is worth less here: Nudge is not always-on, so a
+timer that outlives the process is really §B4's scheduler wearing a smaller hat.
 
 ### B4. Scheduled and recurring work — *not started*
 
