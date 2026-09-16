@@ -99,23 +99,17 @@ ask repeated on every page: `Reach::allow_host` remembers a host for the run,
 matched exactly — a suffix rule would let `evil-example.com` through on the
 strength of `example.com`, so a subdomain is its own decision.
 
-### 1.3 Grants that expire
+### 1.3 Grants that expire — *done*
 
-Today a granted path is remembered forever and a grant is remembered until quit.
-OpenWorker has three scopes and the middle one is the useful one:
+An approval now offers **Just now / This session / Always**, shortest first, and
+the first of those is dropped when the task ends — however it ends, including
+stopped by Escape. A bare "yes" means the narrowest of the three, for the same
+reason `is_yes` fails closed: being read as too narrow costs one more question,
+and the other mistake costs a standing grant nobody chose.
 
-| Scope | Lasts |
-|---|---|
-| config | until the config changes |
-| session | until the app closes |
-| **run** | until this task ends |
-
-The run scope exists because one approval should cover a paginated loop without
-becoming a permanent grant. Nudge has exactly that problem: an agent fetching
-six pages asks six times, and the answer people give to that is "always".
-
-**Done when** an approval offers "just now / this session / always", and the
-first of those is gone when the task is.
+The buttons send the same words the field accepts, so a decision made by tapping,
+typing or saying it out loud goes down one path and means one thing. Only
+"Always" is written to disk, in `~/.config/nudge/allowed.toml`.
 
 ### 1.4 Egress asks instead of guessing — *done*
 

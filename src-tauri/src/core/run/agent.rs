@@ -25,9 +25,14 @@ pub const MAX_STEPS: usize = 40;
 #[serde(tag = "state", rename_all = "camelCase")]
 pub enum State {
     Running,
-    /// Blocked on the user. `question` is shown with a field to answer it.
+    /// Blocked on the user. `question` is shown with a field to answer it, and
+    /// `choices` -- when there are any -- as buttons above it. Carried here
+    /// rather than fetched by the card, so the question and the answers to it
+    /// arrive together and cannot be a frame out of step.
     Waiting {
         question: String,
+        #[serde(default)]
+        choices: Vec<String>,
     },
     Done,
     Failed {
@@ -278,6 +283,7 @@ impl Agents {
                 if waiting {
                     a.state = State::Waiting {
                         question: "Which address should this go to?".into(),
+                        choices: Vec::new(),
                     };
                 }
                 a.plan = vec![
@@ -462,7 +468,7 @@ impl Agents {
     /// Answer a question and let the loop continue.
     pub fn answer(&self, id: u64, text: String) {
         self.edit(id, |a| {
-            if let State::Waiting { question } = a.state.clone() {
+            if let State::Waiting { question, .. } = a.state.clone() {
                 // Both halves go into the record: a later turn needs to know what
                 // was asked as well as what was said back.
                 a.history.push(format!("Asked: {question}"));
@@ -481,7 +487,7 @@ impl Agents {
             .unwrap()
             .iter()
             .find_map(|a| match &a.state {
-                State::Waiting { question } => Some((a.id, question.clone())),
+                State::Waiting { question, .. } => Some((a.id, question.clone())),
                 _ => None,
             })
     }
@@ -567,7 +573,16 @@ impl Agents {
     /// permission that depends on the model choosing to request it is not a
     /// permission system.
     pub fn ask(&self, question: String) -> bool {
-        self.edit_running(|a| a.state = State::Waiting { question })
+        self.asking(question, Vec::new())
+    }
+
+    /// Ask, offering these as one-tap answers.
+    ///
+    /// A question with no choices is the open kind -- "which song?" -- and gets
+    /// a field. A question with them is a decision somebody is being asked to
+    /// make, and the answers should not have to be typed correctly to count.
+    pub fn asking(&self, question: String, choices: Vec<String>) -> bool {
+        self.edit_running(|a| a.state = State::Waiting { question, choices })
     }
 
     fn edit_running(&self, f: impl FnOnce(&mut Agent)) -> bool {
@@ -641,6 +656,10 @@ pub fn outcome(step: &Step) -> Option<State> {
             ..
         } => Some(State::Waiting {
             question: question.clone(),
+            // The model's own questions are open ones -- "which song?" -- and
+            // there is nothing to offer as a button. Choices come from a gate
+            // that knows what it is asking, not from free text.
+            choices: Vec::new(),
         }),
         Step::Done { .. } => Some(State::Done),
         // Replying inside an agent is talking to nobody. The prompt says not to,
@@ -651,6 +670,7 @@ pub fn outcome(step: &Step) -> Option<State> {
         Step::Reply { .. } => Some(State::Done),
         Step::Question { question } => Some(State::Waiting {
             question: question.clone(),
+            choices: Vec::new(),
         }),
         // Unsure is not fatal on its own -- the screen may simply not be ready --
         // but the stall detector already tells the model when nothing changed, so
@@ -884,6 +904,7 @@ mod tests {
             id,
             State::Waiting {
                 question: "Who should I send it to?".into(),
+                choices: Vec::new(),
             },
         );
         assert_eq!(a.waiting(), Some((id, "Who should I send it to?".into())));
@@ -955,6 +976,7 @@ mod tests {
             id,
             State::Waiting {
                 question: "Which song?".into(),
+                choices: Vec::new(),
             },
         );
         assert!(a.pending_answer(id).is_some());
@@ -990,6 +1012,7 @@ mod tests {
             id,
             State::Waiting {
                 question: "?".into(),
+                choices: Vec::new(),
             },
         );
         assert!(a.running(), "waiting on the user is still an open task");

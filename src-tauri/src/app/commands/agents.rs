@@ -21,9 +21,8 @@ pub fn answer_agent(app: AppHandle, id: u64, text: String) {
     // give itself a grant, and "yes" only ever applies to the thing that was
     // actually asked about.
     if let Some(pending) = app.state::<Grants>().asking.lock().unwrap().take() {
-        let yes = files::is_yes(&text);
-        eprintln!("{}", pending.recorded(yes));
-        carry_out(&app, pending, yes);
+        eprintln!("{}", pending.recorded(files::is_yes(&text)));
+        carry_out(&app, pending, &text);
     }
     app.state::<Agents>().answer(id, text.clone());
     // The running session is what the next turn reads, so the answer has to land
@@ -58,7 +57,13 @@ pub fn dismiss_agent(app: AppHandle, id: u64) {
 ///
 /// One place per kind, and the kinds do not know about each other. Whether the
 /// answer was yes is decided before this; what yes *means* is decided here.
-fn carry_out(app: &AppHandle, pending: crate::core::reach::Pending, yes: bool) {
+/// Do what the answer said, and for as long as it said.
+///
+/// Takes the words rather than a bool. Whether it was a yes is one thing read
+/// out of them; how long the yes lasts is another, and a bool has already
+/// thrown that away by the time it arrives here.
+fn carry_out(app: &AppHandle, pending: crate::core::reach::Pending, said: &str) {
+    let yes = files::is_yes(said);
     use crate::core::reach::Pending;
 
     match pending {
@@ -123,9 +128,11 @@ fn carry_out(app: &AppHandle, pending: crate::core::reach::Pending, yes: bool) {
                 ));
                 return;
             }
-            // Remembered for the rest of the run, so a page of results does not
-            // ask once per page. Scope comes with 1.3.
-            app.state::<Nudge>().reach.allow_host(&host);
+            // For as long as was agreed. A bare "yes" is the run only, which is
+            // what makes one approval cover a paginated loop without becoming a
+            // standing decision about a domain.
+            let scope = crate::core::reach::Scope::of(said);
+            app.state::<Nudge>().reach.allow_host(&host, scope);
             app.state::<Nudge>()
                 .note(format!("They agreed to {host}. Fetch {url} now."));
         }

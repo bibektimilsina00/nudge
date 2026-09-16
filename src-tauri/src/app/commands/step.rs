@@ -617,13 +617,14 @@ fn ask_to_replace(app: &AppHandle, path: &std::path::Path, content: String) -> R
 /// sentence about its own case.
 fn put_to_the_person(app: &AppHandle, pending: crate::core::reach::Pending) -> Result<()> {
     let question = pending.question();
+    let choices = pending.choices();
     app.state::<Grants>()
         .asking
         .lock()
         .unwrap()
         .replace(pending);
 
-    if app.state::<Agents>().ask(question.clone()) {
+    if app.state::<Agents>().asking(question.clone(), choices) {
         // Spoken here because this question is not a `Step` and never passes
         // through the agent loop's own asking path.
         speak(app, &question);

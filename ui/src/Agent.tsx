@@ -5,7 +5,7 @@ import { Face } from "./components/Face";
 
 export type AgentState =
   | { state: "running" }
-  | { state: "waiting"; question: string }
+  | { state: "waiting"; question: string; choices: string[] }
   | { state: "done" }
   | { state: "failed"; why: string }
   | { state: "stopped" };
@@ -549,7 +549,7 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
 
       <div className="px-3 pb-2.5">
         {agent.state === "waiting" ? (
-          <Question id={agent.id} question={agent.question} />
+          <Question id={agent.id} question={agent.question} choices={agent.choices} />
         ) : (
           <p className="text-[11.5px] leading-snug text-ink-2">
             {agent.state === "failed" ? agent.why : agent.status}
@@ -621,13 +621,26 @@ function progress(agent: Agent) {
   return Math.min(0.97, agent.step / 40);
 }
 
-function Question({ id, question }: { id: number; question: string }) {
+function Question({
+  id,
+  question,
+  choices,
+}: {
+  id: number;
+  question: string;
+  choices?: string[];
+}) {
   const [text, setText] = useState("");
   const field = useRef<HTMLInputElement>(null);
 
   // It is blocked until this is answered, so do not make anyone go looking for
   // the field.
   useEffect(() => field.current?.focus(), []);
+
+  // The buttons send the same words the field would, so a decision made by
+  // tapping and one made by saying it out loud go down the same path and mean
+  // the same thing. The backend reads how long the yes lasts out of the words.
+  const answer = (said: string) => void invoke("answer_agent", { id, text: said });
 
   return (
     <form
@@ -640,11 +653,33 @@ function Question({ id, question }: { id: number; question: string }) {
       }}
     >
       <p className="mt-2 text-[11.5px] leading-snug text-white/85">{question}</p>
+      {choices && choices.length > 0 && (
+        // Ordered by how long each one lasts, shortest first -- so the narrowest
+        // answer is the nearest one, and nobody reaches past it to be done with
+        // the question. The last is always the refusal, set apart by not being
+        // one of the agreements.
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {choices.map((c, i) => (
+            <button
+              key={c}
+              type="button"
+              onClick={() => answer(c)}
+              className={`rounded-lg px-2.5 py-1 text-[11px] transition-[background-color,transform] duration-150 ease-out active:scale-[0.97] hairline ${
+                i === 0
+                  ? "bg-[#0a84ff] text-white hover:bg-[#3a9bff]"
+                  : "bg-white/[0.06] text-white/85 hover:bg-white/[0.11]"
+              }`}
+            >
+              {c}
+            </button>
+          ))}
+        </div>
+      )}
       <input
         ref={field}
         value={text}
         onChange={(e) => setText(e.target.value)}
-        placeholder="Type your answer…"
+        placeholder={choices && choices.length > 0 ? "Or say why…" : "Type your answer…"}
         spellCheck={false}
         className="mt-2 w-full rounded-lg bg-black/40 px-2.5 py-1.5 text-[11.5px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
       />

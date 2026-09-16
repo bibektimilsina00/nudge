@@ -219,6 +219,11 @@ pub fn spawn(
         // port 3000 tomorrow is Nudge's fault, not the user's -- and a process
         // nobody is watching is the whole risk of being able to start one.
         app.state::<crate::app::state::Background>().stop_all();
+        // And nothing outlives it that was only agreed to for it. However this
+        // ended -- finished, failed, or stopped by Escape -- a host allowed for
+        // one task is not allowed for the next one. A grant that survives the
+        // task it was stopped out of is the thing this scope exists to prevent.
+        app.state::<Nudge>().reach.forget_run();
         // Recorded first, then read back and logged. `set_state` refuses to move
         // an agent out of `Stopped`, so a late `Done` arriving after Escape is
         // already ignored -- and reading afterwards is what makes the log agree
@@ -384,7 +389,7 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             // A question nobody hears is a hang. There is no card for foreground
             // work and no typed prompt anywhere, so the voice is the whole
             // interface: Nudge asks out loud and listens for the answer.
-            if let State::Waiting { question } = &state {
+            if let State::Waiting { question, .. } = &state {
                 // A finished task that offered a next step says both halves: what
                 // it did, then what it could do. Two sentences, one breath.
                 let line = match &step {

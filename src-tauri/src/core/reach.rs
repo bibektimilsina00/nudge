@@ -113,12 +113,33 @@ pub struct Reach {
     /// example.com agreed to example.com; asking again for every path under it
     /// is the approval fatigue that makes people answer "always" to everything.
     hosts_allowed: std::sync::Mutex<std::collections::HashSet<String>>,
+    /// Agreed to for this task only, and dropped the moment it ends. Separate
+    /// from the session set rather than a timestamp on one set, because
+    /// "forget these" is the whole operation and a set you can drop entire is
+    /// the cheapest way to be sure it happened.
+    hosts_run: std::sync::Mutex<std::collections::HashSet<String>>,
+    /// Remembered across restarts, and the only one written to disk.
+    hosts_always: std::sync::Mutex<std::collections::HashSet<String>>,
+    /// Where the remembered ones live. `None` in tests, so a test run cannot
+    /// grant a host to somebody's real installation.
+    remembered: Option<std::path::PathBuf>,
+}
+
+/// The on-disk shape of the remembered hosts. A named field rather than a bare
+/// list because TOML has no top-level array.
+#[derive(serde::Serialize, serde::Deserialize, Default)]
+struct Remembered {
+    hosts: Vec<String>,
 }
 
 impl Reach {
     /// The starting point, from the config file. Absent means closed.
     pub fn from_config(granted: &[String]) -> Self {
-        let reach = Reach::default();
+        let reach = Reach {
+            remembered: dirs::home_dir().map(|d| d.join(".config/nudge/allowed.toml")),
+            ..Default::default()
+        };
+        reach.load_remembered();
         for name in granted {
             match Grant::ALL.iter().find(|g| g.key() == name) {
                 Some(g) => reach.set(*g, true),
@@ -167,12 +188,62 @@ impl Reach {
         !self.servers_off.lock().unwrap().contains(name)
     }
 
-    /// Remember that this host was agreed to, for the rest of the run.
-    pub fn allow_host(&self, host: &str) {
-        self.hosts_allowed
-            .lock()
-            .unwrap()
-            .insert(host.trim().to_lowercase());
+    /// Remember that this host was agreed to, for as long as was agreed.
+    pub fn allow_host(&self, host: &str, scope: Scope) {
+        let host = host.trim().to_lowercase();
+        match scope {
+            Scope::Run => {
+                self.hosts_run.lock().unwrap().insert(host);
+            }
+            Scope::Session => {
+                self.hosts_allowed.lock().unwrap().insert(host);
+            }
+            Scope::Always => {
+                self.hosts_always.lock().unwrap().insert(host);
+                self.save_remembered();
+            }
+        }
+    }
+
+    /// Drop everything that was only agreed to for one task.
+    ///
+    /// Called when a run ends, however it ends -- finished, failed, or stopped
+    /// by Escape. A grant that outlives a task it was stopped out of is the
+    /// exact thing this scope exists to prevent.
+    pub fn forget_run(&self) {
+        self.hosts_run.lock().unwrap().clear();
+    }
+
+    fn load_remembered(&self) {
+        let Some(path) = &self.remembered else { return };
+        let Ok(text) = std::fs::read_to_string(path) else {
+            return;
+        };
+        let Ok(kept) = toml::from_str::<Remembered>(&text) else {
+            eprintln!("reach: {} is not readable -- ignoring it", path.display());
+            return;
+        };
+        let mut always = self.hosts_always.lock().unwrap();
+        for h in kept.hosts {
+            always.insert(h.trim().to_lowercase());
+        }
+    }
+
+    fn save_remembered(&self) {
+        let Some(path) = &self.remembered else { return };
+        let mut hosts: Vec<String> = self.hosts_always.lock().unwrap().iter().cloned().collect();
+        // Sorted, so the file is a thing a person can read and diff rather than
+        // a set printed in whatever order it happened to hash into.
+        hosts.sort();
+        let Ok(text) = toml::to_string(&Remembered { hosts }) else {
+            return;
+        };
+        if let Some(parent) = path.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::write(path, text) {
+            eprintln!("reach: could not write {}: {e}", path.display());
+        }
     }
 
     /// Has this host been agreed to?
@@ -182,10 +253,10 @@ impl Reach {
     /// would be worse than no rule -- so a subdomain is its own decision until
     /// somebody asks for something cleverer.
     pub fn host_allowed(&self, host: &str) -> bool {
-        self.hosts_allowed
-            .lock()
-            .unwrap()
-            .contains(&host.trim().to_lowercase())
+        let host = host.trim().to_lowercase();
+        self.hosts_run.lock().unwrap().contains(&host)
+            || self.hosts_allowed.lock().unwrap().contains(&host)
+            || self.hosts_always.lock().unwrap().contains(&host)
     }
 
     pub fn set_server(&self, name: &str, on: bool) {
@@ -500,6 +571,53 @@ mod decision_tests {
 /// out means is decided where the answer lands, because that is the layer with
 /// the app in its hands; what it *is* lives here, with the rest of the
 /// permission vocabulary.
+/// How long a yes lasts.
+///
+/// One approval should cover a paginated loop without becoming a standing
+/// decision about a domain. Today it cannot: a yes lasts until the process
+/// quits, so an agent fetching six pages either asks six times or is told
+/// "always" -- and the answer people give to being asked six times is always
+/// "always". That is how an allow-list fills up with hosts nobody remembers
+/// agreeing to, and the fault is the question, not the person answering it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// Until this task ends. The one that was missing, and the one that makes
+    /// the other two rare.
+    Run,
+    /// Until Nudge quits.
+    Session,
+    /// Written down and remembered across restarts.
+    Always,
+}
+
+impl Scope {
+    /// Read from what somebody said, because the answer arrives as a sentence
+    /// whether it was typed, clicked or spoken -- the buttons send these words.
+    ///
+    /// Defaults to the tightest, like [`crate::core::tools::files::is_yes`]
+    /// defaults to no: the cost of reading "yes" as narrower than meant is being
+    /// asked again, and the cost of the other mistake is a standing grant
+    /// nobody chose.
+    pub fn of(answer: &str) -> Scope {
+        let a = answer.trim().to_lowercase();
+        const ALWAYS: &[&str] = &[
+            "always",
+            "every time",
+            "forever",
+            "ask again",
+            "from now on",
+        ];
+        const SESSION: &[&str] = &["session", "rest of the", "until you quit", "while you"];
+        if ALWAYS.iter().any(|w| a.contains(w)) {
+            return Scope::Always;
+        }
+        if SESSION.iter().any(|w| a.contains(w)) {
+            return Scope::Session;
+        }
+        Scope::Run
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Pending {
     /// Replace a file that already exists, with these exact bytes.
@@ -514,6 +632,30 @@ pub enum Pending {
     },
     /// Reach a host this run has not reached before.
     Reach { host: String, url: String },
+}
+
+impl Pending {
+    /// The answers worth offering as one tap, in order of how long they last.
+    ///
+    /// Shortest first, and the shortest is what a bare "yes" means, so the
+    /// tightest answer is both the default and the nearest button. Free text
+    /// still works -- these are the words [`Scope::of`] reads, so clicking and
+    /// saying it out loud go down the same path.
+    ///
+    /// A file replacement is not on this list. Its grants live in a different
+    /// store keyed by path, and "always replace this file" is a sentence that
+    /// should be hard to say.
+    pub fn choices(&self) -> Vec<String> {
+        match self {
+            Pending::Replace { .. } => vec!["Yes".into(), "No".into()],
+            Pending::Reach { .. } => vec![
+                "Just now".into(),
+                "This session".into(),
+                "Always".into(),
+                "No".into(),
+            ],
+        }
+    }
 }
 
 impl Pending {
@@ -590,12 +732,111 @@ mod pending_tests {
 mod host_tests {
     use super::*;
 
+    /// The whole point of the scope: it is gone when the task is.
+    #[test]
+    fn a_host_agreed_to_for_one_task_is_not_agreed_to_for_the_next() {
+        let r = Reach::default();
+        r.allow_host("example.com", Scope::Run);
+        assert!(r.host_allowed("example.com"), "the task it was granted for");
+
+        r.forget_run();
+        assert!(
+            !r.host_allowed("example.com"),
+            "a grant that outlives its task is the allow-list filling up by itself"
+        );
+    }
+
+    /// And the wider ones are not swept up with it.
+    #[test]
+    fn forgetting_a_task_leaves_the_session_alone() {
+        let r = Reach::default();
+        r.allow_host("session.example", Scope::Session);
+        r.allow_host("run.example", Scope::Run);
+        r.forget_run();
+        assert!(r.host_allowed("session.example"));
+        assert!(!r.host_allowed("run.example"));
+    }
+
+    /// A bare yes is the narrowest, because the cost of being too narrow is
+    /// being asked again and the cost of the other mistake is a standing grant.
+    #[test]
+    fn a_plain_yes_lasts_only_for_the_task() {
+        assert_eq!(Scope::of("yes"), Scope::Run);
+        assert_eq!(Scope::of("go ahead"), Scope::Run);
+        assert_eq!(Scope::of("Just now"), Scope::Run);
+        assert_eq!(Scope::of("This session"), Scope::Session);
+        assert_eq!(
+            Scope::of("yes, for the rest of the session"),
+            Scope::Session
+        );
+        assert_eq!(Scope::of("Always"), Scope::Always);
+        assert_eq!(Scope::of("always, don't ask again"), Scope::Always);
+    }
+
+    /// Nothing is written unless somebody said the word that writes it.
+    #[test]
+    fn only_always_reaches_the_disk() {
+        let path = std::env::temp_dir().join(format!("nudge-allowed-{}.toml", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let r = Reach {
+            remembered: Some(path.clone()),
+            ..Default::default()
+        };
+
+        r.allow_host("run.example", Scope::Run);
+        r.allow_host("session.example", Scope::Session);
+        assert!(!path.exists(), "a narrow yes must not be written down");
+
+        r.allow_host("always.example", Scope::Always);
+        let on_disk = std::fs::read_to_string(&path).unwrap_or_default();
+        assert!(on_disk.contains("always.example"), "{on_disk}");
+        assert!(!on_disk.contains("run.example"), "{on_disk}");
+        assert!(!on_disk.contains("session.example"), "{on_disk}");
+
+        // And it comes back.
+        let next = Reach {
+            remembered: Some(path.clone()),
+            ..Default::default()
+        };
+        next.load_remembered();
+        assert!(next.host_allowed("always.example"));
+        // Even across a task boundary, which is what "always" means.
+        next.forget_run();
+        assert!(next.host_allowed("always.example"));
+
+        let _ = std::fs::remove_file(&path);
+    }
+
+    /// A gate that knows what it is asking offers the answers; the model's own
+    /// questions are open ones and get a field.
+    #[test]
+    fn reaching_offers_how_long_and_replacing_does_not() {
+        let reach = Pending::Reach {
+            host: "example.com".into(),
+            url: "https://example.com/a".into(),
+        };
+        let choices = reach.choices();
+        assert_eq!(choices.first().map(String::as_str), Some("Just now"));
+        // Every offered answer has to read back as the scope it names, or the
+        // button says one thing and grants another.
+        assert_eq!(Scope::of(&choices[0]), Scope::Run);
+        assert_eq!(Scope::of(&choices[1]), Scope::Session);
+        assert_eq!(Scope::of(&choices[2]), Scope::Always);
+        assert!(!crate::core::tools::files::is_yes(&choices[3]));
+
+        let replace = Pending::Replace {
+            path: "/tmp/x".into(),
+            content: String::new(),
+        };
+        assert_eq!(replace.choices(), vec!["Yes", "No"]);
+    }
+
     #[test]
     fn a_host_agreed_to_is_remembered_and_others_are_not() {
         let r = Reach::default();
         assert!(!r.host_allowed("example.com"));
 
-        r.allow_host("Example.COM");
+        r.allow_host("Example.COM", Scope::Session);
         // Case and spacing are how a host arrives, not what it is.
         assert!(r.host_allowed("example.com"));
         assert!(r.host_allowed(" EXAMPLE.com "));
@@ -607,7 +848,7 @@ mod host_tests {
     #[test]
     fn a_lookalike_host_is_not_the_host() {
         let r = Reach::default();
-        r.allow_host("example.com");
+        r.allow_host("example.com", Scope::Session);
 
         for other in [
             "evil-example.com",
