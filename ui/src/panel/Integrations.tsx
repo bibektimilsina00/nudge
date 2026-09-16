@@ -1,6 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
+import gcalLogo from "../assets/logos/google_calendar.svg?url";
+import githubLogo from "../assets/logos/github.svg?url";
+import gmailLogo from "../assets/logos/gmail.svg?url";
+import googleLogo from "../assets/logos/google.svg?url";
+import gscLogo from "../assets/logos/google_search_console.svg?url";
+import gsheetsLogo from "../assets/logos/google_sheets.svg?url";
+import gtasksLogo from "../assets/logos/google_tasks.svg?url";
+import slackLogo from "../assets/logos/slack.svg?url";
+
 /** Mirrors `Listed` in `app/commands/connect.rs`. */
 type Listed = {
   key: string;
@@ -35,10 +44,31 @@ type Listed = {
  * catalogue enforces with a test, and this one enforces it too -- an offer with
  * nothing to say about its access does not compile.
  *
- * Monogram tiles rather than the real brand marks: shipping other companies'
- * logos into a binary is a licensing question, and a coloured initial carries
- * the same recognition in a 22px square.
+ * The real brand marks, from thesvg.org, with a coloured monogram behind any
+ * key that has no logo yet.
+ *
+ * These were monograms on the grounds that shipping other companies' marks is a
+ * licensing question. It is a smaller one than that: using a mark to name the
+ * thing it belongs to is what marks are for, and every integrations page in
+ * existence does it. What would not be fine is implying those companies endorse
+ * this, which a 20px tile beside their own product name does not.
+ *
+ * GitHub ships light and dark variants because its mark is monochrome -- and
+ * `dark.svg` is the one for a dark background, not the dark-coloured one. The
+ * first attempt got a near-black mark on a near-black card.
  */
+const LOGO: Record<string, string> = {
+  github: githubLogo,
+  slack: slackLogo,
+  gmail: gmailLogo,
+  google_calendar: gcalLogo,
+  google_sheets: gsheetsLogo,
+  google_tasks: gtasksLogo,
+  google_search_console: gscLogo,
+  google: googleLogo,
+};
+
+/** Behind the monogram, for anything with no mark of its own. */
 const TINT: Record<string, string> = {
   files: "#8a8f98",
   google: "#1a73e8",
@@ -132,12 +162,23 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
   return (
     <div className="rounded-xl bg-raise p-2.5 hairline">
       <div className="flex items-start gap-2.5">
-        <span
-          className="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-bold text-white"
-          style={{ backgroundColor: TINT[it.key] ?? "#555" }}
-        >
-          {it.name.slice(0, 2).toUpperCase()}
-        </span>
+        {LOGO[it.key] ? (
+          // `contain`, because these are not all square -- Gmail's viewBox is a
+          // wide envelope, and stretching it to a square is the tell.
+          <img
+            src={LOGO[it.key]}
+            alt=""
+            className="size-5 shrink-0 object-contain"
+            draggable={false}
+          />
+        ) : (
+          <span
+            className="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-bold text-white"
+            style={{ backgroundColor: TINT[it.key] ?? "#555" }}
+          >
+            {it.name.slice(0, 2).toUpperCase()}
+          </span>
+        )}
 
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
