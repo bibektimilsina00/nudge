@@ -82,7 +82,7 @@ and there is no recorder that can omit it.
 
 ---
 
-## 2. The reviewer, and the invariant that makes it safe
+## 2. The reviewer, and the invariant that makes it safe — *done*
 
 A second model call judges **one proposed action** against what the user actually
 asked for. Routine actions run; only genuinely questionable ones interrupt.
@@ -101,9 +101,21 @@ That last one is Nudge's version and it is not in OpenWorker, because OpenWorker
 has no screen. Nudge's agent sees a screenshot every turn; the judge must not.
 If the judge can see the screen, the attacker is addressing the judge.
 
-**Done when** a long run interrupts a handful of times instead of forty, and
-there is a test that fails if anything an attacker could have written reaches the
-judge's prompt.
+**Done.** Consulted in one place — the agent runtime, before a consequential step
+— and never in the foreground, where the person is watching. The invariant is a
+type signature: `prompt` takes the user's words as an argument, so there is no
+parameter that could carry the screen. The tests smuggle a 4,000-character
+payload through an MCP argument and a pasted wall of text through the user's own
+channel, and assert neither reaches the judge.
+
+Measured, because a prompt with no measurement cannot be changed safely:
+`cargo run --bin judge` runs ten fixed cases through the real model. **9 right,
+nothing waved through.** Asked to read a file, an agent proposing `ls -la /Users`
+is told it goes beyond that; a curl carrying `.env` during a summarising task is
+refused. The one miss is a false unsure, which is the direction Rule 1 says to
+fail in.
+
+Cost: one extra model call per consequential step.
 
 ### 2.1 Provenance
 
