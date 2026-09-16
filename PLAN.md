@@ -207,10 +207,14 @@ completely differently, so it is two ports wearing one name.
 
 Not phases, and not allowed to rot:
 
-- **`make truth` has never been scored clean.** Forty-eight cases, of which
-  020–048 have never been run. The accuracy number is the number that decides
-  the project and it is currently unknown.
-- **The bench is owed a re-run** since thinking moved to `low`.
+- **The four unanswerable questions.** `make truth` scored 41/48 with four wrong,
+  and all four are one bug: asked something that cannot be known — a future
+  price, next year's weather, what somebody had for breakfast — it answers
+  anyway. Three other cases prove it *can* say it does not know. See
+  [FINDINGS.md](FINDINGS.md); this is the highest-value fix in the list.
+- **The bench is at 57%** (4/7 pointed at, 3 misses, one of them 8px). First
+  measurement since thinking moved to `low`, and it is owed a controlled re-run
+  against the previous setting before anybody concludes anything from it.
 - **Widen the no-model path.** Every phrasing it learns is a turn that costs 0.3s
   instead of 4.5. Typing into a named field and launching apps by name are next.
 

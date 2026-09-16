@@ -1119,3 +1119,59 @@ September or October 2036"*, on a machine running macOS 27. It searched, got 274
 characters back, and still produced the wrong year. Nothing in this document
 would have caught that, and the bench cannot see it either -- it scores where a
 click lands, not whether the answer is true.
+
+## The truth suite, scored clean for the first time — and by accident
+
+`make truth` had never been run past case 019. It ran to completion on
+2026-09-16 because a commit message quoted the target name in backticks inside a
+double-quoted shell string, which executed it. An expensive way to find out, and
+the number is the number.
+
+**41/48 right · 3 said they did not know · 4 wrong.**
+
+Saying "I do not know" is the correct answer to three of these, so the honest
+reading is 44 of 48 handled correctly and **four failures of one kind**:
+
+| Case | What it did |
+|---|---|
+| 020-bitcoin-future | Gave a price range for a future date |
+| 021-far-future-weather | Answered a question that has no answer |
+| 025-my-breakfast | Answered a question that has no answer |
+| 026-agi-date | Answered a question that has no answer |
+
+Every one is the same failure: **asked something unknowable, it answers anyway.**
+It is not hallucinating facts — 027 through 048 are all correct, including the
+ones answered from memory with no call. It is failing to recognise that a
+question about the future, or about something private to the person, cannot be
+answered by looking it up.
+
+That is one bug with four witnesses, and it is a prompt-level fix rather than a
+model change: cases 022–024 prove the model *can* say it does not know, because
+on those three it did. What separates them is not difficulty but framing.
+
+Worth noting what this does *not* say. The four wrong answers are all
+confidently phrased — "forecasts range from $80,000 to $98,000" — which is the
+shape that makes a wrong answer expensive. §1.3 of the old plan built
+`Unsure`, and these four never reached for it.
+
+## And the bench, on the same accidental run
+
+10 cases, gemini-3.6-flash, thinking low, 28px tolerance:
+
+**4/7 hits (57%) · 3 not pointed at · median 2590ms · p95 5103ms**
+
+The three misses:
+
+| Case | Miss |
+|---|---|
+| 05-click-the-second-tab | 8px — just outside tolerance |
+| 07-click-the-search-icon-in-the-sidebar | 50px |
+| 08-click-plan-md-in-the-file-explorer | 33px |
+
+57% is the accuracy number this project says decides it, and it is the first
+measurement since thinking moved to `low`. One of the three is 8px out, which is
+a tolerance question rather than a miss; the other two are not close.
+
+**This is owed a controlled re-run** — same cases, `think` back at its previous
+setting — because the one variable that changed since the last number is the one
+nobody has measured.
