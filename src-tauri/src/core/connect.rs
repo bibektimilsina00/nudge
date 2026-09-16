@@ -97,9 +97,47 @@ pub fn catalogue() -> Vec<Offer> {
             setup: None,
         },
         Offer {
+            key: "gmail",
+            name: "Gmail",
+            about: "Search, read, draft and send mail.",
+            // The scopes are named because they were read out of the package
+            // rather than taken from its description, and because "Gmail access"
+            // and `gmail.modify` are not the same sentence to anybody who has to
+            // decide. Verified 2026-09-17 against v1.1.11.
+            access: "Your mail, and the labels and filters on it: gmail.modify \
+                     and gmail.settings.basic. Not your Drive, your Calendar or \
+                     anything else in the account.",
+            command: "npx",
+            args: &["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
+            token: None,
+            where_from: None,
+            setup: Some(
+                "Uses the same Desktop OAuth client as the rest of Google, and asks \
+                 only for mail. Put its JSON at ~/.gmail-mcp/gcp-oauth.keys.json, \
+                 then run: npx @gongrzhe/server-gmail-autoauth-mcp auth",
+            ),
+        },
+        Offer {
+            key: "google_calendar",
+            name: "Google Calendar",
+            about: "Read availability, summarise schedules and create events.",
+            access: "Your calendars and their events: calendar and \
+                     calendar.events. No access to mail or files.",
+            command: "npx",
+            args: &["-y", "@cocal/google-calendar-mcp"],
+            token: None,
+            where_from: None,
+            setup: Some(
+                "Same Desktop OAuth client, calendar scopes only. Point \
+                 GOOGLE_OAUTH_CREDENTIALS at its JSON -- \
+                 ~/.config/gcp-oauth.keys.json works -- then run: \
+                 npx @cocal/google-calendar-mcp auth",
+            ),
+        },
+        Offer {
             key: "google",
             name: "Google Workspace",
-            about: "Docs, Sheets, Slides, Drive, Gmail, Calendar and Forms.",
+            about: "Docs, Sheets, Slides, Drive and Forms, in one grant.",
             access: "Whatever you consent to when you sign in, for the account you \
                      sign in with. The consent screen lists it before you agree, and \
                      that screen is Google's rather than ours.",
