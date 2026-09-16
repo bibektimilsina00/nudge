@@ -31,7 +31,22 @@ pub fn look(app: &AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(SETTLE).await;
 
-        let updater = match app.updater() {
+        // Pointed somewhere else for testing. The endpoint is compiled into the
+        // config, which makes the install path the one thing that cannot be
+        // tried without publishing to production first -- and "can it install"
+        // is exactly the half that strands people if it is wrong.
+        let builder = match std::env::var("NUDGE_UPDATE_FROM") {
+            Ok(url) if !url.is_empty() => {
+                eprintln!("update: asking {url} instead of the configured endpoint");
+                app.updater_builder().endpoints(
+                    url.split(',')
+                        .filter_map(|u| u.trim().parse().ok())
+                        .collect(),
+                )
+            }
+            _ => Ok(app.updater_builder()),
+        };
+        let updater = match builder.and_then(|b| b.build()) {
             Ok(u) => u,
             // No endpoint configured, or a build with no public key. Not worth
             // saying out loud on every launch of a development build.

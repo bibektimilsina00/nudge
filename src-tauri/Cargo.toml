@@ -114,4 +114,5 @@ objc2-speech = { version = "0.3.2", features = ["SFSpeechRecognizer", "SFSpeechR
 uiautomation = "0.25.1"
 
 [dev-dependencies]
+minisign-verify = "0.2"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
