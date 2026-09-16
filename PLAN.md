@@ -168,24 +168,28 @@ which is safe because a person reading a sentence is not a system that can be
 instructed by it. With nobody to ask, the job is stopped rather than left waiting
 for an answer that is never coming.
 
-### 2.5 Noticing when it is stuck
+### 2.5 Noticing when it is stuck — *done*
 
 A person watching a terminal notices three things a program does not: nothing has
 happened for a long time, the same thing keeps happening, and it is asking the
 same question again. Each is mechanical.
 
-**Done when** a delegated agent that has stalled, looped, or asked twice is
-stopped and reported rather than waited on until the fifteen-minute cap.
+**Done.** Four minutes of silence, or six repeats of a block no longer than four
+lines at the very tail. Both stop the job and say what was happening. The bar is
+high on purpose — a build printing a line per file is working, and there is a
+test that a forty-crate build is not mistaken for a loop. Asking the same
+question twice was already handled in §2.4.
 
-### 2.6 Checking what came back
+### 2.6 Checking what came back — *done*
 
 The half a person never skips. A delegation ends with output, and today that
 output is believed. What it actually did is checkable: which files changed,
 whether the build still runs, whether the thing it was asked for exists.
 
-**Done when** a delegation reports what changed on disk rather than what the
-agent said about itself — the same bar §2.2 of the last plan set for Nudge's own
-writes, applied to work it handed away.
+**Done.** A finished job reports `git status` — and says plainly when nothing
+changed, which is the case worth catching: a tool that ran happily and changed
+nothing has not done the job. Status rather than diff, because a new file is the
+commonest thing a delegated agent produces.
 
 ### 2.7 The flags people actually use
 
