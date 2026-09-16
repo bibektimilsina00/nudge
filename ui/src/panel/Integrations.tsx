@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 import { Label } from "../components/controls";
@@ -334,7 +334,7 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
     () => new Set(it.allowed ?? it.tools),
   );
   const [query, setQuery] = useState("");
-  const [saving, setSaving] = useState(false);
+  const [state, setState] = useState<"" | "saving" | "saved">("");
 
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -344,11 +344,6 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
   const isNew = (t: string) =>
     it.allowed !== null && !it.allowed.includes(t) && !it.declined.includes(t);
 
-  // Saving an unchanged list is a write nobody asked for, and a button that is
-  // always live gives no sign of whether anything was actually altered.
-  const saved = useMemo(() => new Set(it.allowed ?? it.tools), [it.allowed, it.tools]);
-  const dirty =
-    checked.size !== saved.size || [...checked].some((t) => !saved.has(t));
   const fresh = it.tools.filter(isNew).length;
 
   const flip = (t: string) =>
@@ -358,12 +353,39 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
       return next;
     });
 
-  const save = () => {
-    setSaving(true);
-    void invoke("choose_tools", { key: it.key, allowed: [...checked] })
-      .then(onChanged)
-      .finally(() => setSaving(false));
-  };
+  // Autosave, debounced.
+  //
+  // Ticking eight boxes should be one write, not eight, and the pause is what
+  // makes it one. It is also short enough that closing the panel straight after
+  // a click does not lose it -- the effect's cleanup only cancels a pending
+  // write when another click replaces it, and a click always schedules its own.
+  const first = useRef(true);
+  useEffect(() => {
+    // Not on the way in. Opening a panel is not a change to it, and writing
+    // here would stamp an include list onto a connection nobody has touched.
+    if (first.current) {
+      first.current = false;
+      return;
+    }
+    const id = window.setTimeout(() => {
+      setState("saving");
+      void invoke("choose_tools", { key: it.key, allowed: [...checked] })
+        .then(onChanged)
+        .then(() => setState("saved"))
+        .catch(() => setState(""));
+    }, 400);
+    return () => window.clearTimeout(id);
+    // Only on what the person changed. `onChanged` reloads the row, which would
+    // otherwise re-run this and write the thing it just wrote.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [checked]);
+
+  // The confirmation stops being true after a moment, so it stops being shown.
+  useEffect(() => {
+    if (state !== "saved") return;
+    const id = window.setTimeout(() => setState(""), 1800);
+    return () => window.clearTimeout(id);
+  }, [state]);
 
   return (
     <div className="mt-2.5 border-t border-line pt-2.5">
@@ -375,7 +397,11 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
         <p className="text-[10px] leading-snug text-ink-3">{it.access}</p>
       </Group>
 
-      <Group label={`Tools — ${checked.size} of ${it.tools.length} on`}>
+      <Group
+        label={`Tools — ${checked.size} of ${it.tools.length} on${
+          state === "saving" ? " · saving…" : state === "saved" ? " · saved" : ""
+        }`}
+      >
         {fresh > 0 && (
           // Worth saying out loud: these arrived switched off, and the reason
           // somebody is looking at this panel at all may be that they appeared.
@@ -448,13 +474,6 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
           told it exists. Applies next time this server starts.
         </p>
 
-        <button
-          onClick={save}
-          disabled={saving || !dirty}
-          className="w-full rounded-lg bg-blue py-1.5 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:bg-raise disabled:text-ink-3"
-        >
-          {saving ? "Saving…" : dirty ? "Save" : "Saved"}
-        </button>
       </Group>
 
       {/* Last, and quiet until you mean it. Taking the connection away is the one
