@@ -367,12 +367,64 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         crate::app::agent::publish(app);
     }
     if let Step::Mcp { tool, args, .. } = step {
+        // Which files it named, before it runs, because afterwards a replaced
+        // file cannot tell you what it used to be.
+        let workspace = app.state::<Nudge>().workspace();
+        let touched = crate::core::tools::files::named(&workspace, args);
+
         let said = app.state::<Nudge>().run_tool(tool, args).await?;
         eprintln!("mcp {tool} -> {} chars", said.len());
-        app.state::<Nudge>()
-            .note(format!("Ran {tool}, which said:\n{said}"));
+
+        // A tool server is a second way to write a file, and it used to be the
+        // one with no record: Nudge's own writes are gated, diffed and logged,
+        // and a call to `files/write_file` was none of those. So the same
+        // question gets the same answer whichever route it came in by.
+        //
+        // The arguments are never recorded. They carry the file's new contents,
+        // and a log that copies them is the leak this log exists to avoid -- so
+        // the entry is the tool's name and the paths it named, nothing else.
+        let changed: Vec<String> = touched
+            .iter()
+            .filter_map(|p| {
+                crate::core::tools::files::changed(p).map(|d| format!("{} ({d})", p.display()))
+            })
+            .collect();
+        let named = match touched.is_empty() {
+            true => tool.clone(),
+            false => format!(
+                "{tool} on {}",
+                touched
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+        };
+        record(
+            app,
+            "tool",
+            &named,
+            Outcome::Did {
+                detail: match changed.is_empty() {
+                    true => format!("{} chars back", said.len()),
+                    false => changed.join(", "),
+                },
+            },
+        );
+
+        // And the model is told what actually changed rather than only what the
+        // tool said about itself -- one run read a terminal, decided the file
+        // was already written, and reported success having done nothing.
+        let mut note = format!("Ran {tool}, which said:\n{said}");
+        if !changed.is_empty() {
+            note.push_str(&format!("\n\n(git says: {})", changed.join(", ")));
+        }
+        app.state::<Nudge>().note(note);
         app.state::<Agents>()
             .record_run(format!("tool {tool}"), said);
+        for p in &touched {
+            app.state::<Agents>().record_file(p.display().to_string());
+        }
         crate::app::agent::publish(app);
     }
     if let Step::Fetch { url, .. } = step {

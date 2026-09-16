@@ -172,24 +172,57 @@ pub fn changed(path: &Path) -> Option<String> {
 /// **Only absolute paths.** A relative one is relative to the server's own root,
 /// which is its business and not visible from here.
 pub fn guard(workspace: &Path, args: &serde_json::Value) -> Vec<PathBuf> {
+    let mut kept = Vec::new();
+    for path in named(workspace, args) {
+        if let Ok(Some(copy)) = keep_a_copy(workspace, &path) {
+            eprintln!("kept a copy of {} at {}", path.display(), copy.display());
+            kept.push(copy);
+        }
+    }
+    kept
+}
+
+/// Every existing file a tool call's arguments name. No side effects.
+///
+/// Split out from [`guard`] because two things want this list and only one of
+/// them should be making copies: the backup, and the record of what the call
+/// actually changed. Calling `guard` twice to find out would take two backups.
+///
+/// **Relative paths are resolved against the workspace**, which is a judgement
+/// call worth stating. A relative path is relative to the tool server's own
+/// root, which is not visible from here -- but the servers Nudge launches are
+/// rooted at the workspace, and treating them as such is what makes the ordinary
+/// case work. This used to skip relative paths entirely, and the cost was not
+/// theoretical: a tool called with `{"path": "notes.txt"}` replaced a file with
+/// no copy kept and nothing written down, because the argument had no leading
+/// slash. A server rooted somewhere else can at worst make this name a
+/// same-named file in the workspace, which is a wasted copy rather than a lost
+/// one.
+pub fn named(workspace: &Path, args: &serde_json::Value) -> Vec<PathBuf> {
     /// Longer than any path, and short enough that a file's *contents* -- which
     /// arrive in these arguments too -- are never handed to the filesystem.
     const LONGEST: usize = 1024;
 
-    let mut kept = Vec::new();
+    let mut found = Vec::new();
     let mut look = vec![args];
     while let Some(value) = look.pop() {
         match value {
             serde_json::Value::String(s) => {
-                if s.len() > LONGEST || !Path::new(s).is_absolute() {
+                if s.len() > LONGEST {
                     continue;
                 }
-                let path = Path::new(s);
-                if path.is_file() {
-                    if let Ok(Some(copy)) = keep_a_copy(workspace, path) {
-                        eprintln!("kept a copy of {} at {}", path.display(), copy.display());
-                        kept.push(copy);
-                    }
+                let path = match Path::new(s).is_absolute() {
+                    true => PathBuf::from(s),
+                    // A relative path only counts if it stays inside the
+                    // workspace once resolved. "../.." must not become a way to
+                    // have Nudge go looking outside it.
+                    false => match workspace.join(s).canonicalize() {
+                        Ok(p) if p.starts_with(workspace) => p,
+                        _ => continue,
+                    },
+                };
+                if path.is_file() && !found.contains(&path) {
+                    found.push(path);
                 }
             }
             serde_json::Value::Array(items) => look.extend(items),
@@ -197,7 +230,7 @@ pub fn guard(workspace: &Path, args: &serde_json::Value) -> Vec<PathBuf> {
             _ => {}
         }
     }
-    kept
+    found
 }
 
 /// Copy a file aside before changing it.
@@ -426,6 +459,36 @@ mod tests {
 
     /// The bug this is for: a tool call that replaced a file, with nothing
     /// anywhere able to put it back.
+    /// The hole this closed: a relative path was skipped entirely, so a tool
+    /// called with `{"path": "notes.txt"}` replaced a file with no copy kept
+    /// and nothing written down. Found live, not reasoned about.
+    #[test]
+    fn a_relative_path_names_a_file_just_as_an_absolute_one_does() {
+        let dir = workspace("relative");
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::write(dir.join("notes.txt"), "here").unwrap();
+        let here = dir.canonicalize().unwrap();
+
+        let args = serde_json::json!({ "path": "notes.txt", "content": "hello" });
+        let found = named(&here, &args);
+        assert_eq!(found.len(), 1, "a relative path is still a path: {found:?}");
+        assert!(found[0].ends_with("notes.txt"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// And it is not a way out of the workspace.
+    #[test]
+    fn a_relative_path_cannot_climb_out_of_the_workspace() {
+        let dir = workspace("climb");
+        std::fs::create_dir_all(&dir).unwrap();
+        let here = dir.canonicalize().unwrap();
+        // Something that certainly exists above it.
+        let args = serde_json::json!({ "path": "../../../../../../etc/hosts" });
+        assert!(named(&here, &args).is_empty(), "climbed out");
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn a_tool_call_copies_aside_whatever_it_names() {
         let dir = std::env::temp_dir().join("nudge-guard-test");

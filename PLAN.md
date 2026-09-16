@@ -197,6 +197,14 @@ against. The write and edit paths were near-identical copies and neither wrote t
 the audit at all — they go through one place now, so the log that answers *what
 did it do to my files* has file changes in it.
 
+A tool server is a second way to write a file, and live testing found it was the
+one with no record at all: a `files/write_file` call was ungated, undiffed and
+unlogged, and because its argument was `notes.txt` rather than an absolute path,
+no copy was kept either — the backup only looked at absolute paths. Relative
+arguments now resolve against the workspace (and are refused if they climb out of
+it), so an MCP write gets the same copy, the same diff and the same log entry as
+Nudge's own.
+
 ---
 
 ## 3. Somebody else can run it
