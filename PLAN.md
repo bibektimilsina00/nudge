@@ -160,7 +160,7 @@ The old plan set the test and never met it: *"can the person see afterwards what
 was done with it?"* Today the answer is no. An agent reports what it did and
 Nudge believes it.
 
-### 2.1 An audit trail that cannot itself become the leak
+### 2.1 An audit trail that cannot itself become the leak — *done*
 
 Every tool call, every grant used, every refusal — appended to a local SQLite
 log. OpenWorker's `audit.py` and OpenExecutive's `audit/` are each about a
@@ -193,7 +193,7 @@ refused and all three are on the card. A fetch records the host and how much cam
 back — never the page — and a tool call records the path and byte count, never a
 word of the file.
 
-### 2.2 Read the diff — done
+### 2.2 Read the diff — *done*
 
 A write now reports `git diff --numstat` rather than its own intention: *"Edited
 main.rs (+12 -3)"*. Silent outside a repository, where there is nothing to check
