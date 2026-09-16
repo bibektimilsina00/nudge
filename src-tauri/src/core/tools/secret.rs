@@ -49,6 +49,72 @@ pub fn from_keychain(name: &str) -> Option<String> {
     (!found.is_empty()).then_some(found)
 }
 
+/// Put a token in the Keychain, replacing whatever was there.
+///
+/// Through `security` rather than the Security framework, for the same reason
+/// the read above does: it is one process, it is already how the documentation
+/// tells people to do it by hand, and it keeps this file free of an FFI surface
+/// for something done twice in the life of a connection.
+///
+/// **The token never reaches the command line.** `-w` with no value makes
+/// `security` read it from stdin, which keeps it out of the process table --
+/// where `ps` would show it to every other user on the machine. That is the
+/// whole reason this is not two lines.
+pub fn to_keychain(name: &str, token: &str) -> Result<()> {
+    use std::io::Write;
+    let mut child = std::process::Command::new("/usr/bin/security")
+        .args([
+            "add-generic-password",
+            "-s",
+            name,
+            "-a",
+            "nudge",
+            "-U",
+            "-w",
+        ])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .spawn()
+        .map_err(|e| Error::Config(format!("could not run security: {e}")))?;
+
+    // Twice. `-w` with no value prompts for the password and then asks to retype
+    // it, and sending it once gets "passwords don't match" -- which it reports by
+    // printing a line and **exiting zero**.
+    child
+        .stdin
+        .take()
+        .ok_or_else(|| Error::Config("security took no input".into()))?
+        .write_all(format!("{token}\n{token}\n").as_bytes())
+        .map_err(|e| Error::Config(format!("could not hand security the token: {e}")))?;
+    let _ = child
+        .wait_with_output()
+        .map_err(|e| Error::Config(format!("security did not finish: {e}")))?;
+
+    // Checked by reading it back, because the exit status is not evidence: a
+    // failed store exits zero here, so trusting it would report success and
+    // leave a connection that fails later with somebody else's error message.
+    match from_keychain(name).as_deref() == Some(token) {
+        true => Ok(()),
+        false => Err(Error::Config(format!(
+            "the Keychain did not keep {name:?}. If a dialog appeared, allow it and try again."
+        ))),
+    }
+}
+
+/// Take it back out again.
+///
+/// Missing is success. Disconnecting something twice, or something whose token
+/// was already deleted by hand, should not be an error somebody has to think
+/// about -- the state afterwards is the one they asked for either way.
+pub fn forget_keychain(name: &str) {
+    let _ = std::process::Command::new("/usr/bin/security")
+        .args(["delete-generic-password", "-s", name])
+        .stdout(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .status();
+}
+
 /// Turn a configured value into the value to actually use.
 ///
 /// Anything without the prefix is returned unchanged, so a plain token still
@@ -202,28 +268,28 @@ mod tests {
 
     /// Round trip through the real Keychain, since that is the only thing that
     /// proves the arguments are right.
+    ///
+    /// Now through `to_keychain` rather than by shelling out here, so the test
+    /// exercises what the app runs. The thing it is guarding: **the token never
+    /// appears in an argument.** Every other user on this machine can read the
+    /// process table, so `security ... -w <token>` publishes it to them for as
+    /// long as the command runs. Handed over on stdin instead.
     #[test]
     #[ignore = "writes to the login keychain"]
     fn a_stored_secret_comes_back() {
         let name = "nudge-secret-roundtrip";
-        std::process::Command::new("/usr/bin/security")
-            .args([
-                "add-generic-password",
-                "-s",
-                name,
-                "-a",
-                "nudge",
-                "-w",
-                "hunter2",
-                "-U",
-            ])
-            .status()
-            .unwrap();
+        to_keychain(name, "hunter2").unwrap();
         assert_eq!(resolve(&format!("keychain:{name}")).unwrap(), "hunter2");
-        std::process::Command::new("/usr/bin/security")
-            .args(["delete-generic-password", "-s", name])
-            .status()
-            .unwrap();
+
+        // Updated, not added beside. Without `-U` the old item keeps answering
+        // and a re-connected account would go on using the token it replaced.
+        to_keychain(name, "hunter3").unwrap();
+        assert_eq!(from_keychain(name).as_deref(), Some("hunter3"));
+
+        forget_keychain(name);
+        assert_eq!(from_keychain(name), None);
+        // Forgetting something already gone is the state somebody asked for.
+        forget_keychain(name);
     }
 
     #[test]

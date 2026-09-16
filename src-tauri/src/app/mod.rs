@@ -140,6 +140,9 @@ pub fn run() {
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));
             app.manage(Reviewing(Flag::new(reviewing)));
+            app.manage(commands::Connections {
+                path: crate::core::connect::store(),
+            });
             app.manage(Hotkey(std::sync::Mutex::new(hotkey.clone())));
             app.manage(Suggesting(Flag::new(true)));
             app.manage(Look(std::sync::Mutex::new(
@@ -293,6 +296,9 @@ pub fn run() {
             commands::dismiss_agent,
             commands::trail,
             commands::resume_agent,
+            commands::connections,
+            commands::connect,
+            commands::disconnect,
         ])
         .run(tauri::generate_context!())
         .expect("nudge failed to start");

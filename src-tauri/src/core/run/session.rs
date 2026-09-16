@@ -196,12 +196,30 @@ impl Nudge {
         })
     }
 
-    /// Start the configured MCP servers. Called once, off the startup path.
+    /// Start the tool servers. Called once, off the startup path.
+    ///
+    /// Two sources, and they are different kinds of thing. `[[mcp]]` in the
+    /// config is somebody wiring up a server by hand, which stays supported --
+    /// speaking the protocol is the point, and a catalogue that was the only way
+    /// in would be the hand-written-integrations trap wearing a nicer coat.
+    /// `connections.toml` is what the integrations page writes.
+    ///
+    /// Connections come second, so a hand-written entry wins on a name clash:
+    /// somebody who wrote it themselves meant it.
     pub async fn connect_tools(&self) {
-        if self.cfg.mcp.is_empty() {
+        let mut specs = self.cfg.mcp.clone();
+        for made in crate::core::connect::read(crate::core::connect::store().as_deref()) {
+            if specs.iter().any(|s| s.name == made.key) {
+                continue;
+            }
+            if let Some(spec) = crate::core::connect::spec(&made) {
+                specs.push(spec);
+            }
+        }
+        if specs.is_empty() {
             return;
         }
-        let servers = crate::core::tools::mcp::Servers::start(&self.cfg.mcp).await;
+        let servers = crate::core::tools::mcp::Servers::start(&specs).await;
         // Losing the race means another caller already did it, which is fine and
         // is not worth an error -- the servers this one started are dropped, and
         // dropping them kills the children.

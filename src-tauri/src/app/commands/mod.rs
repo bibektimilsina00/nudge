@@ -6,9 +6,11 @@
 //! already running, and the settings. `advance` and `quit` do not belong
 //! together.
 mod agents;
+mod connect;
 mod settings;
 mod step;
 
 pub use agents::*;
+pub use connect::*;
 pub use settings::*;
 pub use step::*;

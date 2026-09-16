@@ -13,6 +13,7 @@
 //! - [`laps`] -- where a turn's time went
 pub mod audit;
 pub mod compact;
+pub mod connect;
 pub mod judge;
 pub mod laps;
 pub mod memory;

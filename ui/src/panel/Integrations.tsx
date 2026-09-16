@@ -1,86 +1,58 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 
-type Service = { name: string; tint: string; mark: string; dark?: boolean; blurb: string };
+/** Mirrors `Listed` in `app/commands/connect.rs`. */
+type Listed = {
+  key: string;
+  name: string;
+  about: string;
+  /** What connecting grants. Shown before consent, never after. */
+  access: string;
+  needs_token: boolean;
+  where_from: string | null;
+  needs_folder: boolean;
+  connected: boolean;
+  /** What the server itself said it could do. */
+  tools: string[];
+};
 
 /**
  * The integrations browser.
  *
- * UI only for now -- nothing here connects to anything, and `Connect` is inert.
+ * It used to be a catalogue of logos with an inert Connect button -- a list of
+ * things that did not work, which is worse than a short list of things that do.
+ * What is here now is whatever `core::connect` offers, and connecting one
+ * actually starts its server.
  *
- * The real tool servers used to sit at the top of this page, which put working
- * plumbing above a catalogue of things that do not work yet. They belong with the
- * agents that use them, and that is where they went.
+ * **Access before consent.** Every card states what connecting grants, in the
+ * same words whether or not anybody clicks. That is the rule OpenWorker's
+ * catalogue enforces with a test, and this one enforces it too -- an offer with
+ * nothing to say about its access does not compile.
  *
  * Monogram tiles rather than the real brand marks: shipping other companies'
- * logos into a binary is a licensing question, and a coloured initial carries the
- * same recognition in a 22px square.
+ * logos into a binary is a licensing question, and a coloured initial carries
+ * the same recognition in a 22px square.
  */
-const SERVICES: Service[] = [
-  {
-    name: "Notion",
-    tint: "#ffffff",
-    mark: "N",
-    dark: true,
-    blurb:
-      "Search Notion pages and databases, read content, then create, update, comment on, organize, or attach uploaded files to pages.",
-  },
-  {
-    name: "Linear",
-    tint: "#5e6ad2",
-    mark: "L",
-    blurb:
-      "Search Linear issues, teams, projects, cycles, labels, and users, then create or update issues, comments, projects, and milestones.",
-  },
-  {
-    name: "GitHub",
-    tint: "#e6e6e6",
-    mark: "G",
-    dark: true,
-    blurb:
-      "Search repositories, inspect issues, PRs, commits, releases, and Actions, then create or update repo work with approval.",
-  },
-  {
-    name: "Google Docs",
-    tint: "#4285f4",
-    mark: "D",
-    blurb:
-      "Search Docs, create documents, read or export content, insert text, images, and tables, and update document sections.",
-  },
-  {
-    name: "Google Calendar",
-    tint: "#1a73e8",
-    mark: "31",
-    blurb:
-      "List calendars and events, find free time, then create, move, update, or delete Google Calendar events.",
-  },
-  {
-    name: "Slack",
-    tint: "#4a154b",
-    mark: "S",
-    blurb:
-      "Search channels and threads, read recent messages, then post, reply, or react on your behalf.",
-  },
-  {
-    name: "Gmail",
-    tint: "#ea4335",
-    mark: "M",
-    blurb:
-      "Search mail, read threads and attachments, then draft, reply, label, or archive with approval.",
-  },
-];
+const TINT: Record<string, string> = {
+  files: "#8a8f98",
+  github: "#24292f",
+  slack: "#4a154b",
+};
 
 export function Integrations({ onBack }: { onBack: () => void }) {
   const [query, setQuery] = useState("");
+  const [all, setAll] = useState<Listed[]>([]);
 
-  // Filtering is real even though connecting is not -- a search box that does
-  // nothing is more confusing than no search box.
+  const load = () => void invoke<Listed[]>("connections").then(setAll).catch(() => {});
+  useEffect(load, []);
+
   const shown = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return SERVICES;
-    return SERVICES.filter(
-      (s) => s.name.toLowerCase().includes(q) || s.blurb.toLowerCase().includes(q),
+    if (!q) return all;
+    return all.filter(
+      (s) => s.name.toLowerCase().includes(q) || s.about.toLowerCase().includes(q),
     );
-  }, [query]);
+  }, [query, all]);
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -115,7 +87,7 @@ export function Integrations({ onBack }: { onBack: () => void }) {
 
       <div className="min-h-0 flex-1 space-y-2 overflow-y-auto px-3 pb-3">
         {shown.map((s) => (
-          <Card key={s.name} service={s} />
+          <Card key={s.key} it={s} onChanged={load} />
         ))}
         {shown.length === 0 && (
           <p className="pt-6 text-center text-[12px] text-ink-3">Nothing matches “{query}”.</p>
@@ -125,40 +97,120 @@ export function Integrations({ onBack }: { onBack: () => void }) {
   );
 }
 
-function Card({ service }: { service: Service }) {
-  return (
-    <div className="flex items-start gap-2.5 rounded-xl bg-raise p-2.5 hairline">
-      <span
-        className="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-bold"
-        style={{
-          backgroundColor: service.tint,
-          color: service.dark ? "#111" : "#fff",
-        }}
-      >
-        {service.mark}
-      </span>
+function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [token, setToken] = useState("");
+  const [folder, setFolder] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState("");
 
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center gap-2">
-          <h3 className="text-[12px] font-semibold">{service.name}</h3>
-          <span className="rounded bg-raise px-1.5 py-[1px] text-[9px] text-ink-3">
-            Not connected
-          </span>
+  const go = () => {
+    setBusy(true);
+    setFailed("");
+    void invoke<string[]>("connect", {
+      key: it.key,
+      token: token || null,
+      folder: folder || null,
+    })
+      .then(() => {
+        setOpen(false);
+        setToken("");
+        onChanged();
+      })
+      .catch((e) => setFailed(String(e)))
+      .finally(() => setBusy(false));
+  };
+
+  return (
+    <div className="rounded-xl bg-raise p-2.5 hairline">
+      <div className="flex items-start gap-2.5">
+        <span
+          className="grid size-5 shrink-0 place-items-center rounded-[6px] text-[9px] font-bold text-white"
+          style={{ backgroundColor: TINT[it.key] ?? "#555" }}
+        >
+          {it.name.slice(0, 2).toUpperCase()}
+        </span>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-[12px] font-semibold">{it.name}</h3>
+            {it.connected && (
+              <span className="rounded bg-[#30d158]/15 px-1.5 py-[1px] text-[9px] text-[#30d158]">
+                Connected
+              </span>
+            )}
+          </div>
+          <p className="mt-1 text-[10.5px] leading-snug text-ink-2">{it.about}</p>
+          {/* Always, not only while deciding. What something can reach is not a
+              detail that stops mattering once it is connected. */}
+          <p className="mt-1 text-[10px] leading-snug text-ink-3">
+            <span className="text-ink-2">Gets:</span> {it.access}
+          </p>
+          {it.connected && it.tools.length > 0 && (
+            // What the server said, not what the catalogue claimed.
+            <p className="mt-1 text-[10px] text-ink-3">
+              {it.tools.length} tools · {it.tools.slice(0, 3).join(", ")}
+              {it.tools.length > 3 ? "…" : ""}
+            </p>
+          )}
         </div>
-        {/* Two lines, then clipped -- the same shape for every card keeps the list
-            scannable no matter how much the service has to say about itself. */}
-        <p className="mt-1 line-clamp-2 text-[10.5px] leading-snug text-ink-2">
-          {service.blurb}
-        </p>
+
+        {it.connected ? (
+          <button
+            onClick={() => void invoke("disconnect", { key: it.key }).then(onChanged)}
+            className="shrink-0 rounded-full bg-raise px-2.5 py-[5px] text-[11px] font-medium text-ink-2 transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            onClick={() => (it.needs_token || it.needs_folder ? setOpen((o) => !o) : go())}
+            disabled={busy}
+            className="shrink-0 rounded-full bg-blue px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
+          >
+            {busy ? "Checking…" : "Connect"}
+          </button>
+        )}
       </div>
 
-      <button className="flex shrink-0 items-center gap-1.5 rounded-full bg-blue px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi">
-        <svg viewBox="0 0 16 16" className="size-3" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round">
-          <path d="M6.6 9.4a2.8 2.8 0 0 0 4 0l2-2a2.8 2.8 0 1 0-4-4l-.6.6" />
-          <path d="M9.4 6.6a2.8 2.8 0 0 0-4 0l-2 2a2.8 2.8 0 1 0 4 4l.6-.6" />
-        </svg>
-        Connect
-      </button>
+      {open && !it.connected && (
+        <div className="mt-2.5 space-y-2 border-t border-line pt-2.5">
+          {it.needs_folder && (
+            <input
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              placeholder="Which folder? e.g. /Users/you/Work"
+              spellCheck={false}
+              className="w-full rounded-lg bg-black/40 px-2.5 py-1.5 text-[11px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
+            />
+          )}
+          {it.needs_token && (
+            <>
+              <input
+                value={token}
+                onChange={(e) => setToken(e.target.value)}
+                type="password"
+                placeholder="Paste the token"
+                spellCheck={false}
+                className="w-full rounded-lg bg-black/40 px-2.5 py-1.5 text-[11px] text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
+              />
+              {/* Where to get one. "Paste your token" is not an instruction
+                  anybody can follow, and hunting for it is where people stop. */}
+              {it.where_from && (
+                <p className="text-[10px] leading-snug text-ink-3">{it.where_from}</p>
+              )}
+            </>
+          )}
+          {failed && <p className="text-[10px] leading-snug text-[#ff8a80]">{failed}</p>}
+          <button
+            onClick={go}
+            disabled={busy}
+            className="w-full rounded-lg bg-blue py-1.5 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
+          >
+            {busy ? "Starting it to check…" : "Connect"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
