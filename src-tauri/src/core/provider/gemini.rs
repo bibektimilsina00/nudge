@@ -247,7 +247,7 @@ impl Provider for Gemini {
             .ok_or_else(|| no_point("gemini", text))
     }
 
-    fn reviews(&self) -> bool {
+    fn aside(&self) -> bool {
         true
     }
 
@@ -261,7 +261,7 @@ impl Provider for Gemini {
     /// What makes this safe is not the model, it is what it is shown -- see
     /// [`crate::core::judge`]. This call carries no screenshot and no history:
     /// one prompt, built by `judge::prompt`, and nothing this method can add to.
-    async fn review(&self, prompt: &str) -> Result<String> {
+    async fn ask_aside(&self, prompt: &str) -> Result<String> {
         let body = json!({
             "contents": [{"parts": [{"text": prompt}]}],
             // Not `self.generation()`: that asks for JSON *and* carries the

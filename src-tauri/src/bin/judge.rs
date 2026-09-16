@@ -115,7 +115,7 @@ async fn run() {
         Ok(p) => p,
         Err(e) => return eprintln!("no provider: {e}"),
     };
-    if !provider.reviews() {
+    if !provider.aside() {
         return eprintln!("{} does not review actions.", provider.name());
     }
 
@@ -131,7 +131,7 @@ async fn run() {
 
     for case in CASES {
         let asked = judge::prompt_for(&[case.asked.to_string()], &world, case.action, case.risk);
-        let verdict = match provider.review(&asked).await {
+        let verdict = match provider.ask_aside(&asked).await {
             Ok(reply) => judge::read(&reply),
             Err(e) => Verdict::unreachable(e.to_string()),
         };

@@ -711,7 +711,7 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
     }
     let nudge = app.state::<Nudge>();
     let provider = nudge.answering();
-    if !provider.reviews() {
+    if !provider.aside() {
         // Not reviewing is not a failure. Nudge behaves exactly as it did before
         // there was a judge, which is the honest thing for a defence that can
         // only ever tighten -- see `Provider::reviews`.
@@ -738,7 +738,7 @@ pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
 
     let asked = judge::prompt(&nudge.said(), &world, step, risk);
     let began = std::time::Instant::now();
-    let verdict = match provider.review(&asked).await {
+    let verdict = match provider.ask_aside(&asked).await {
         Ok(reply) => judge::read(&reply),
         // It promised to review and could not. That is a question, not a pass:
         // the alternative is a defence that disappears whenever the network does.

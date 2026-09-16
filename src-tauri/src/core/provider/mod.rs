@@ -590,7 +590,7 @@ pub trait Provider: Send + Sync {
         )))
     }
 
-    /// Can this provider review an action at all?
+    /// Can this provider take a question that is not the main loop?
     ///
     /// Asked before the judge is consulted, and the distinction is load-bearing.
     /// The judge only ever *tightens* -- it turns something that would have
@@ -601,19 +601,24 @@ pub trait Provider: Send + Sync {
     /// not reviewing, and nothing changes from how Nudge behaved before there
     /// was a judge. A provider that says `true` and then errors has broken a
     /// promise, and that is a question for a person.
-    fn reviews(&self) -> bool {
+    fn aside(&self) -> bool {
         false
     }
 
-    /// Judge one proposed action. Returns the model's raw reply.
+    /// A plain call with no screenshot: one prompt in, the raw reply out.
+    ///
+    /// Two callers, and both want it for the same reason -- the judge, which
+    /// must never see a screen, and compaction, which is folding a history
+    /// rather than deciding a step. Neither is the main loop and neither wants
+    /// a `Step` back.
     ///
     /// Raw, because reading a verdict out of it is [`crate::core::judge::read`]'s
     /// job and the whole point of that living in `core` is that failing closed is
     /// tested without a network. A provider that returns prose here has not
     /// failed -- it has answered badly, and that is a verdict of its own.
-    async fn review(&self, _prompt: &str) -> Result<String> {
+    async fn ask_aside(&self, _prompt: &str) -> Result<String> {
         Err(Error::Config(format!(
-            "{} cannot review an action.",
+            "{} cannot answer anything but a step.",
             self.name()
         )))
     }

@@ -54,6 +54,14 @@ pub struct Session {
     /// That is correct for the agent, which needs to know what happened, and
     /// fatal for anything that must not read an attacker's words.
     pub done: Vec<String>,
+    /// The earlier part of `done`, folded into one block, and how much of it
+    /// that block stands for.
+    ///
+    /// The record is never edited -- this is only what gets *sent*. `done` keeps
+    /// every line, so the card, the hand-over and anything written down later
+    /// still see what actually happened.
+    pub folded: Option<String>,
+    pub folded_upto: usize,
     /// What the *user* said, verbatim, and nothing else.
     ///
     /// The one channel in this program an attacker cannot write to. It holds the
@@ -70,6 +78,26 @@ pub struct Session {
     /// Nudge is carrying this out itself, unwatched. Changes both the budget and
     /// what the model is allowed to answer -- see `provider::prompt`.
     pub agent: bool,
+}
+
+impl Session {
+    /// What the model is shown: the folded block, then everything since.
+    ///
+    /// Not `done`. `done` is the record and stays whole -- this is the only
+    /// thing compaction is allowed to touch, and the difference is what lets a
+    /// finished run still report what it actually did.
+    pub fn outbound(&self) -> Vec<String> {
+        match &self.folded {
+            None => self.done.clone(),
+            Some(block) => std::iter::once(block.clone())
+                .chain(
+                    self.done[self.folded_upto.min(self.done.len())..]
+                        .iter()
+                        .cloned(),
+                )
+                .collect(),
+        }
+    }
 }
 
 /// How a configured tool server is getting on.
@@ -341,6 +369,8 @@ impl Nudge {
             goal,
             earlier,
             done: Vec::new(),
+            folded: None,
+            folded_upto: 0,
             said: Vec::new(),
             seen: Vec::new(),
             agent,
@@ -478,6 +508,76 @@ impl Nudge {
             .unwrap_or_default()
     }
 
+    /// Fold the earlier part of the history into one block, if it has got long.
+    ///
+    /// This owns *when*, and the provider owns nothing but the sentence. The
+    /// split is the whole reason the policy is testable without a network: what
+    /// to keep, where to cut and what survives verbatim are decided in
+    /// [`crate::core::compact`] against plain strings.
+    ///
+    /// Failing to fold is not failing. If the summariser cannot be reached the
+    /// history stays long, which is exactly how it was before any of this
+    /// existed -- a turn that errors because compaction did would be a worse
+    /// outcome than a turn that is merely expensive.
+    async fn fold(&self) {
+        use crate::core::compact;
+
+        let Some((outbound, done, said, from)) = ({
+            let held = self.session.lock().unwrap();
+            held.as_ref().map(|s| {
+                (
+                    s.outbound(),
+                    s.done.clone(),
+                    std::iter::once(s.goal.clone())
+                        .chain(s.said.iter().cloned())
+                        .collect::<Vec<_>>(),
+                    s.folded_upto,
+                )
+            })
+        }) else {
+            return;
+        };
+        if !compact::due(&outbound) {
+            return;
+        }
+
+        // Where to cut, in the record's own indices. The block already covers
+        // everything before `from`, so only what has arrived since is in play.
+        let fresh = &done[from.min(done.len())..];
+        let at = compact::boundary(fresh);
+        if at == 0 {
+            return;
+        }
+        let span = &fresh[..at];
+        // Nothing to gain. A block carries a header, the user's words and the
+        // extracted facts whatever it stands for, so folding a small span makes
+        // the next call more expensive rather than less.
+        if !compact::worth_folding(span) {
+            return;
+        }
+
+        let provider = self.answering();
+        if !provider.aside() {
+            return;
+        }
+        let summary = match provider.ask_aside(&compact::summarise(span)).await {
+            Ok(text) => text,
+            Err(e) => return eprintln!("compaction: could not summarise ({e}) -- carrying on"),
+        };
+
+        let block = compact::block(&summary, span, &said);
+        let mut held = self.session.lock().unwrap();
+        let Some(s) = held.as_mut() else { return };
+        eprintln!(
+            "compaction: folded {} steps, {} tokens down to {}",
+            span.len(),
+            compact::weight(&outbound),
+            compact::tokens(&block)
+        );
+        s.folded = Some(block);
+        s.folded_upto = from + at;
+    }
+
     /// Fold an answer into the context, so the next turn knows what was said.
     ///
     /// Untrusted by default, and deliberately the easy one to reach for: most
@@ -571,13 +671,18 @@ impl Nudge {
         }
         let _report = Report(self);
 
+        // Before the snapshot, because folding changes what the snapshot holds.
+        self.fold().await;
+
         // Snapshot and release: the lock must not be held across the await, and a
         // tokio Mutex would be a heavier fix than simply not needing one.
         let Some((goal, done, seen, agent, earlier)) =
             self.session.lock().unwrap().as_ref().map(|s| {
                 (
                     s.goal.clone(),
-                    s.done.clone(),
+                    // The folded view, not the record. Identical until something
+                    // has actually been folded.
+                    s.outbound(),
                     s.seen.clone(),
                     s.agent,
                     s.earlier.clone(),
@@ -759,6 +864,45 @@ impl Nudge {
 
 #[cfg(test)]
 mod tests {
+    /// Folding changes what is sent and never what happened.
+    ///
+    /// The difference is what lets a finished run still report what it actually
+    /// did: the card, the hand-over to the next turn and anything written down
+    /// later all read `done`, which keeps every line however long the task ran.
+    #[test]
+    fn compaction_touches_the_prompt_and_not_the_record() {
+        let n = nudge();
+        n.begin("a long job".into());
+        for i in 0..50 {
+            n.note(format!("Ran `step {i}`"));
+        }
+
+        {
+            let mut held = n.session.lock().unwrap();
+            let s = held.as_mut().unwrap();
+            assert_eq!(s.outbound().len(), 50, "nothing folded yet");
+            s.folded = Some("--- FOLDED: 40 steps ---".into());
+            s.folded_upto = 40;
+        }
+
+        let held = n.session.lock().unwrap();
+        let s = held.as_ref().unwrap();
+
+        // What the model sees: one block, then the ten newest.
+        let sent = s.outbound();
+        assert_eq!(sent.len(), 11, "{sent:?}");
+        assert!(sent[0].contains("FOLDED"));
+        assert!(sent[1].contains("step 40"));
+        assert!(sent[10].contains("step 49"));
+
+        // What happened: all of it, untouched.
+        assert_eq!(s.done.len(), 50);
+        assert!(
+            s.done[0].contains("step 0"),
+            "the record lost its beginning"
+        );
+    }
+
     /// The boundary the whole through-line is about.
     ///
     /// Nudge acts on a screenshot, and everything in a screenshot was written by
