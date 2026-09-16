@@ -21,7 +21,8 @@ Four promises, and they are not equally far away:
 
 This document enumerates every feature between here and that sentence. It is not
 a plan; [PLAN.md](PLAN.md) is the plan and it is deliberately short. This is the
-inventory the plan draws from.
+inventory the plan draws from — the current plan takes C5, C6, C7, B2, B1, B3 and
+A1–A4 from here, in that order.
 
 ## The one thing not to lose
 

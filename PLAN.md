@@ -1,34 +1,36 @@
-# Nudge — what is left to build
+# Plan
 
-The last plan carried six phases and most of them are built. What replaced it is
-this: the work that is actually ahead, in the order it should happen, with the
-reason for each.
+The last plan is finished. Every section of it is done or blocked on somebody
+else: the gate says three things, a yes lasts as long as was agreed, what was
+done is written down and readable, and the app can update itself. What is left
+there needs a certificate only the Nuddg Inc Account Holder can create, and a
+Windows build that cannot be compiled from a Mac.
 
-Two things decide that order. The first is a bug this project has had on record
-for a while and has never fixed. The second is that nobody outside this machine
-can run the app at all.
+So this one is about the sentence Nudge is actually aiming at:
 
----
+> AI that gets your everyday tasks done. It works in the tools you use every
+> day, **carries tasks through from start to finish**, and **checks in before
+> important actions**, so you stay in charge.
 
-## Beyond this plan
+Checking in is largely built. Carrying a task through is not started at all — a
+run lives inside one process and dies with it. That is the gap this plan closes.
 
-[FEATURES.md](FEATURES.md) is the full inventory between here and *"gets your
-everyday tasks done"* — every feature, what exists, and what each would cost.
-This plan is the near work; that is where the next one comes from.
+[FEATURES.md](FEATURES.md) is the full inventory — every feature, what exists,
+what done would mean. This is the near work drawn from it, in dependency order.
 
 ## Where this actually is
 
 Built and working: the screen loop, agents that finish a task, MCP servers,
 skills, memory, the notch interface, settings, bug reports, a marketing site
-serving its own downloads, and CI/CD that deploys only what changed.
+serving its own downloads, CI/CD that deploys only what changed, a permission
+gate with scopes, an audit trail, and an updater.
 
 Not working: **the app cannot be opened by anybody else.** `spctl` says
-`rejected`. Everything below is theoretical until that changes, which is why
-§3 is where the deadline is even though §1 is where the danger is.
+`rejected`, and that is a certificate, not code.
 
 Measurements live in [FINDINGS.md](FINDINGS.md) and [SPEED.md](SPEED.md); neither
-is a plan and both are still true. The reading of Andrew Ng's OpenWorker that
-most of §1 comes from is in [OPENWORKER.md](OPENWORKER.md).
+is a plan and both are still true. The reading of OpenWorker that this plan and
+FEATURES.md come from is in [OPENWORKER.md](OPENWORKER.md).
 
 ---
 
@@ -40,262 +42,156 @@ someone else's program is printing to. There is no boundary in the product
 between *what the user asked for* and *what the screen says*, and that is the
 whole of the risk.
 
-It has already happened three times: Nudge read a suggestion off a Claude Code
-transcript on screen and acted on it as though it were an instruction.
+It has happened four times now. Three were a suggestion read off a Claude Code
+transcript and acted on as an instruction. The fourth was this month: a run read
+its own goal text out of a terminal, decided the file had already been written,
+and reported success having done nothing.
 
-OpenWorker's answer is one sentence worth keeping in view for all of §1:
+OpenWorker's answer is one sentence, and it is the spine of §2:
 
 > The attacker can address the agent, never the judge.
 
-Two floors went in already — the shell no longer lets an argument turn a reader
-into a writer, and a URL carrying this machine's API key never leaves. Both are
-floors, not answers. The answer is §1.
+Floors already in: the shell cannot be argued into writing, a version check
+cannot be handed a program to run, a URL carrying this machine's API key never
+leaves, and a write reports what `git` says changed rather than what it meant to
+do. Floors, not an answer. The answer is §2.
 
 ---
 
-## 1. The gate says three things
+## 1. Risk is a property, not a list of names
 
-Nudge's permission model is `may(app, Grant) -> bool`, read at each gate. Three
-grants, each on or off, decided once in advance by somebody who cannot know what
-will be asked of it. There is no way to say *ask me*.
+Today `Grant` names a *capability* — shell, files, http — and the gate asks which
+one a step needs. That works because every tool is one this repository wrote.
 
-That single missing answer is why the rest of this section cannot be built.
+It stops working at the first tool Nudge has never heard of. An MCP server
+arrives with thirty tools and the gate has no way to know which of them write to
+the outside world, so they are all treated alike. OpenWorker hit this and
+replaced hardcoded `WRITE_TOOLS` / `SHELL_TOOL` name sets with a declared risk
+class that one `classify` reads.
 
-### 1.1 A decision instead of a bool — *done*
+Small on its own, and §2 cannot be built without it: a judge that cannot tell a
+read from a write has nothing to judge.
 
-```rust
-pub struct Decision {
-    pub allowed: bool,
-    pub reason: String,      // always; a refusal with no reason is a dead end
-    pub needs_user: bool,    // pause and ask
-    pub rule: Option<String> // which grant allowed it, for the record
-}
-```
-
-Replaces `may()`. Every gate returns one. The interface can then show *why*
-uniformly instead of each call site inventing a sentence.
-
-*Built.* `permits()` replaces `may()` at all eight call sites and returns a
-`Decision` carrying `Answer::{Allow, Ask, Deny}`, a reason, and which grant
-decided. Nothing produces `Ask` yet — that arrives with 1.2, which is the thing
-able to act on one.
-
-The reason is not decoration: `Grant::denied()` is the single sentence for a
-missing grant, and the shell's refusal now composes it rather than writing its
-own. There had been two copies of that sentence and they had already drifted to
-naming different places to change the setting.
-
-### 1.2 One approval path, not one per thing — *done*
-
-There is already a working approval flow for a single case: replacing a file
-asks, remembers the answer per path, and resumes the turn. It is hard-wired to
-`(PathBuf, String)`.
-
-Generalise it to *any* pending action, so that a `needs_user` decision from any
-gate routes to the same place: the same card, the same spoken question, the same
-resume.
-
-*Built.* `Pending` is a value with a question attached, the slot holds one of
-those rather than a `(PathBuf, String)`, and `put_to_the_person` is the single
-path. What "yes" *means* is decided in one place per kind, and the kinds do not
-know about each other.
-
-Also brought forward from 1.3, because an ask nobody remembers answering is an
-ask repeated on every page: `Reach::allow_host` remembers a host for the run,
-matched exactly — a suffix rule would let `evil-example.com` through on the
-strength of `example.com`, so a subdomain is its own decision.
-
-### 1.3 Grants that expire — *done*
-
-An approval now offers **Just now / This session / Always**, shortest first, and
-the first of those is dropped when the task ends — however it ends, including
-stopped by Escape. A bare "yes" means the narrowest of the three, for the same
-reason `is_yes` fails closed: being read as too narrow costs one more question,
-and the other mistake costs a standing grant nobody chose.
-
-The buttons send the same words the field accepts, so a decision made by tapping,
-typing or saying it out loud goes down one path and means one thing. Only
-"Always" is written to disk, in `~/.config/nudge/allowed.toml`.
-
-### 1.4 Egress asks instead of guessing — *done*
-
-With 1.1–1.3 in place, the real fix for `Grant::Http` becomes possible, and the
-current shape of it is wrong on two counts:
-
-- it gates the **method**, and a GET is the exfiltration channel
-- there is no allow-list, so every host is equal
-
-Replace it with a host allow-list that **asks** for anything new. Refusing
-outright would break the ordinary case; asking preserves it. Remember the answer
-at session or run scope per 1.3.
-
-The machinery is in place — `Pending::Reach`, the host memory, the single ask
-path. What is not decided is **when to ask**, and it is a product question rather
-than a coding one:
-
-- Asking on every new host breaks the thing fetch exists for. It is a background
-  optimisation — *"prefer the data to the picture of the data"* — and a question
-  in front of every one of those is worse than the screenshot it replaced.
-- Foreground fetches are the person's own question, seconds after they asked it.
-  There is nothing to protect them from and often nobody to ask, since
-  `put_to_the_person` needs a card to put it on.
-- **Agent runs are the opposite on both counts.** Nobody is watching, the URL may
-  have come from something on screen rather than from the person, and there is
-  always a card.
-
-So the rule is: **ask when an agent is running and the host is new; leave the
-foreground alone.** That is where the danger is and where the question can
-actually be answered.
-
-*Built.* Asked per host and remembered for the run, so a page of results does not
-ask once per page. The host comes from the same parser the refusal uses — there
-were nearly two, and two URL parsers is how `https://github.com@evil.example/`
-comes to be refused in one place and read as GitHub in the other.
-
-Not covered, and worth knowing: **search is not gated this way.** It goes to one
-fixed provider rather than a host the model chose, so there is no host to ask
-about — but the query is still data leaving the machine, and a query is a place
-something could be hidden. That is a smaller hole than the one just closed and it
-is still a hole.
+**Done when** a tool this repository has never seen arrives carrying a risk class,
+and the gate decides on that rather than on its name.
 
 ---
 
-## 2. What it did, recorded
+## 2. The reviewer, and the invariant that makes it safe
 
-The old plan set the test and never met it: *"can the person see afterwards what
-was done with it?"* Today the answer is no. An agent reports what it did and
-Nudge believes it.
+A second model call judges **one proposed action** against what the user actually
+asked for. Routine actions run; only genuinely questionable ones interrupt.
 
-### 2.1 An audit trail that cannot itself become the leak — *done*
+This is not a nicety. OpenWorker built it from measured pain — *~15
+hand-approvals per run* in security scans — and Nudge meets the same wall the
+moment agents get longer than forty steps. Asking about everything and asking
+about nothing are both failures, and today Nudge can only do one or the other.
 
-Every tool call, every grant used, every refusal — appended to a local SQLite
-log. OpenWorker's `audit.py` and OpenExecutive's `audit/` are each about a
-hundred lines and do exactly this.
+**The invariant is the whole feature.** The reviewer never reads untrusted
+content. Its input is the instructions, the known world (folders and remotes,
+never contents), the user's own messages, and the proposed action. Page text,
+mail bodies, file contents and **screenshots** never reach it.
 
-The part to get right is not the table, it is what goes in it. Both projects
-learned the same thing and OpenExecutive says it plainly: tool inputs and outputs
-carry tokens, cookies, mail bodies and file contents, and *"persisting them
-verbatim into the audit table would turn the audit log itself into a leak
-vector"*. **Log the call, its shape and its outcome; never its contents.** Their
-clips are 140 characters of input and 300 of result — enough to recognise a call,
-not enough to carry a document.
+That last one is Nudge's version and it is not in OpenWorker, because OpenWorker
+has no screen. Nudge's agent sees a screenshot every turn; the judge must not.
+If the judge can see the screen, the attacker is addressing the judge.
 
-Two details worth taking with it:
+**Done when** a long run interrupts a handful of times instead of forty, and
+there is a test that fails if anything an attacker could have written reaches the
+judge's prompt.
 
-- **`summary` and `full` are different columns.** The list view stays small; the
-  untruncated payload is fetched only when somebody opens one row.
-- **WAL and a busy timeout**, because audit writes swallow their exceptions and
-  *"silent loss under contention would be undetectable"*. A log that quietly
-  drops rows is worse than no log, because it is trusted.
+### 2.1 Provenance
 
-This is also what makes §1 legible: a permission system whose decisions vanish is
-one nobody can check.
+The engine knows one thing neither the judge nor the person does: whether it
+wrote or downloaded that file moments ago. One line of fixed vocabulary, never
+file content.
 
-**Done.** The card shows a run's refusals and questions from the log rather than
-from the model's account of itself, open by default because a refusal is the one
-thing here somebody actually needs to see. Verified live: asked to clear a
-folder, a model reached for `find -delete`, then `rm -rf *` twice; all three were
-refused and all three are on the card. A fetch records the host and how much came
-back — never the page — and a tool call records the path and byte count, never a
-word of the file.
+Worth less than it was — running a script now needs an explicit grant — but it is
+still the answer to *"you are about to run a file you wrote a moment ago"*.
 
-### 2.2 Read the diff — *done*
-
-A write now reports `git diff --numstat` rather than its own intention: *"Edited
-main.rs (+12 -3)"*. Silent outside a repository, where there is nothing to check
-against. The write and edit paths were near-identical copies and neither wrote to
-the audit at all — they go through one place now, so the log that answers *what
-did it do to my files* has file changes in it.
-
-A tool server is a second way to write a file, and live testing found it was the
-one with no record at all: a `files/write_file` call was ungated, undiffed and
-unlogged, and because its argument was `notes.txt` rather than an absolute path,
-no copy was kept either — the backup only looked at absolute paths. Relative
-arguments now resolve against the workspace (and are refused if they climb out of
-it), so an MCP write gets the same copy, the same diff and the same log entry as
-Nudge's own.
+**Done when** a command naming a file this run created says so, in the audit and
+in the question.
 
 ---
 
-## 3. Somebody else can run it
+## 3. Compaction: the ceiling on how long a task can be
 
-This is the one with a deadline, because nothing above matters to anybody who
-cannot open the app.
+`session.done` grows one line per step and every step sends the whole thing.
+Nothing trims it. `MAX_STEPS = 40` is not a budget, it is a lid hiding the fact
+that a task needing two hundred steps cannot be run at all.
 
-### 3.1 The certificate — blocked on a person
+The structure is the part to copy: pure functions plus one dataclass, with the
+runtime owning *when* and *with what*, so the policy is testable without a
+provider. Older turns become a summary plus mechanically extracted state; recent
+turns and **every user message** survive. The stored transcript is never edited —
+only what is sent.
 
-The pipeline is built and tested: `scripts/release.sh` signs, notarises, staples
-and then asks Gatekeeper the question another Mac will ask. It needs a **Developer
-ID Application** certificate, which only the Account Holder of the Nuddg Inc team
-can create. The CSR is generated and waiting in `.signing/`. See
-[RELEASING.md](RELEASING.md).
-
-Until then `make share` packs a build with instructions for clearing quarantine,
-which is fine between people who know each other and is not shipping.
-
-### 3.2 Auto-update — *done, bar one click*
-
-Shipped before the certificate deliberately: there is no way to update somebody
-into having an updater, so whoever downloads the first build without one is
-pinned to it for good.
-
-The check is quiet, automatic and twenty seconds after launch; the install is a
-button that only appears when there is something to install. Nothing replaces
-its own binary while somebody is mid-sentence. Both ends compare versions — the
-server so it cannot offer a downgrade to everybody at once, the app so a wrong
-answer is still refused by the thing installing it. Every answer that is not a
-genuine newer build is a 204, which is the updater's contract rather than a
-choice.
-
-Two artifacts per release: the `.dmg` somebody downloads once, and the
-`.app.tar.gz` plus minisign signature the updater installs — the one signature
-Apple's notarisation does not cover. A test holds the shipped public key against
-a signature from the real signing key, because a rotation that updates one and
-not the other breaks installs silently and strands everybody on that version.
-
-**Verified**: a 0.1.0 build pointed at a locally served 0.2.0 manifest noticed
-it. **Not verified**: the install itself, which needs a click on a screen.
-
-### 3.3 Discovery — *started*
-
-An interface that shows nothing teaches nothing, and nobody guesses that the
-thing in the notch can refactor a repository. The answer belongs in the voice
-loop — *"what can you do?"* answered well — rather than in a menu nobody opens.
-
-The first half is done: approaching the notch now says **Hold ⌃ to ask**, which
-is the one thing somebody has to know before anything else is reachable. See
-§3.4. The voice answer is still open.
-
-### 3.4 The resting state — *in progress*
-
-The pill and the cat are what is on screen 99% of the time and have had the least
-attention of anything here. If the product is the shape, the shape is the work.
-
-The strip now says what it is for while somebody is on their way to it, on a
-wider ring than the dock's — a hint cannot be a delay before opening, because a
-dock that hesitates feels broken. It sits *inside* the strip: growing the strip
-to make room pushed the companion out past the hardware onto the menu bar and
-left a slab of nothing where the width had gone.
-
-Still open: the companion is dark on black at 28px, so at rest what reads is two
-eyes and a rim. It lives in the notch deliberately, but ignorable and invisible
-are not the same thing.
+**Done when** a run can exceed the context window without being cut off, and the
+user's own words are still in the prompt at step two hundred.
 
 ---
 
-## 4. Elsewhere
+## 4. Runs that survive the process
 
-**Windows.** The seam is drawn and the other side is written; nothing has been
-compiled for the target, because it cannot be from a Mac. Expect a different
-latency profile entirely — capture is 61ms here through ScreenCaptureKit and
-about 2100ms through the portable path. [PORTING.md](PORTING.md) says which calls
-to suspect first.
+Quit Nudge mid-task and the run is gone. Finished runs persist to `history.json`
+for display; in-flight ones are dropped on purpose, because claiming a run is
+still going when the process running it has died would be a lie.
 
-**Linux.** After Windows. Wayland and X11 handle capture and input injection
-completely differently, so it is two ports wearing one name.
+That honesty is right and the situation it describes is not. A task that cannot
+survive a restart is a session, not a task — and "carries tasks through from
+start to finish" is the promise this plan exists for.
+
+Needs: the goal, the history, the plan, where it got to, and enough to pick the
+thread back up. Plus the question the old behaviour was protecting — an
+interrupted run must come back as *interrupted*, offering to continue, never as
+though it had been running the whole time.
+
+**Done when** quitting mid-task and reopening offers to carry on.
+
+### 4.1 Self-wake
+
+`sleep_until` for a timer, `wake_on` for a backgrounded job. An agent that can
+wait costs nothing while it waits, and *"run the tests and tell me when they are
+green"* stops holding a turn open for eight minutes.
+
+**Done when** waiting does not burn a turn a second.
 
 ---
 
+## 5. Connections
+
+A tool server is three lines in `config.toml` today. Right for the protocol,
+wrong for a person: no notion of an account, credentials in plaintext, no way to
+see what is connected or to take it away.
+
+**Not thirty-five hand-written connectors.** `mcp.rs` already makes the argument
+in its own header — six integrations written by hand buy six integrations, and
+speaking the protocol buys the ones written next year. What is missing is the
+account model around it, and credentials in the Keychain rather than in a file
+anybody can `cat`.
+
+And the rule from OpenWorker's catalogue, which its test suite enforces: every
+connectable thing states what access it gets **before** consent, in plain
+statements of behaviour rather than marketing. Overclaiming there is a product
+bug.
+
+**Done when** connecting an account means picking it from a list, its token is
+not readable with `cat`, and it can be disconnected.
+
+---
+
+## Waiting on somebody else
+
+- **The certificate.** A Developer ID Application certificate, which only the
+  Nuddg Inc Account Holder can create. The CSR is in `.signing/`, the pipeline is
+  built and refuses to start without all six secrets, and the download page is
+  deliberately empty until then. See [RELEASING.md](RELEASING.md).
+- **One click.** The updater notices a newer build; nobody has watched it install
+  one. Needs a person at the machine for about a minute.
+- **Windows, then Linux.** Cannot be compiled from a Mac. See
+  [PORTING.md](PORTING.md).
+
+---
 ## Running alongside
 
 Not phases, and not allowed to rot:
@@ -332,6 +228,7 @@ Every rule here exists because something went wrong without it:
 | Workspace boundary | The first thing that wrote a file put it in this repository's root |
 | Read-only shell, by program | A model reached for `rm` to get around a refusal |
 | ...and by argument | `python3 -c` and `find -exec` walked straight past that |
+| ...and a version check is only a version check | `python3 x.py` ran a file with no grant at all — write a script, run it, never asked |
 | No key in an outgoing URL | A GET is the exfiltration channel |
 | One cursor, one agent | Two agents shared a WhatsApp chat and sent a voice note to a real person |
 | Ask before replacing | Self-evident, once |
