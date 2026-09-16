@@ -14,6 +14,8 @@ Workspace one, so it is worth not widening here.
     python3 scripts/google-sheets-token.py
 """
 
+import base64
+import html
 import http.server
 import json
 import pathlib
@@ -30,6 +32,78 @@ SCOPES = [
 ]
 KEYS = pathlib.Path.home() / ".config/gcp-oauth.keys.json"
 OUT = pathlib.Path.home() / ".mcp-google-sheets-token.json"
+ICON = pathlib.Path(__file__).resolve().parent.parent / "src-tauri/icons/64x64.png"
+
+
+def page(ok: bool, heading: str, detail: str, scopes: list[str]) -> bytes:
+    """The one page anybody sees after handing Google access to something.
+
+    Worth more than `<h1>Signed in.</h1>` on browser-default white, for a reason
+    beyond looking nicer: at this exact moment somebody has just granted access
+    to their account and the only thing that can tell them *who to* and *what to*
+    is this page. So it carries Nudge's mark and lists the scopes back.
+
+    Self-contained -- the icon is inlined and there are no fonts to fetch. It is
+    served by a loopback server that stops a second later, so anything it asked
+    the network for would be a race it loses.
+    """
+    try:
+        mark = base64.b64encode(ICON.read_bytes()).decode()
+        art = f'<img class="mark" src="data:image/png;base64,{mark}" alt="">'
+    except OSError:
+        # Running from somewhere the repo is not. Not a reason to fail.
+        art = ""
+
+    granted = "".join(
+        f'<li><span class="tick">✓</span>{html.escape(s.rsplit("/", 1)[-1])}</li>'
+        for s in scopes
+    )
+    # Failure colours the sentence that says what went wrong; success lets the
+    # ticks carry it. Either way the accent appears once.
+    detail_style = "" if ok else ' style="color:#ff6961"'
+    return f"""<!doctype html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Nudge</title>
+<style>
+  :root {{ color-scheme: dark; }}
+  * {{ box-sizing: border-box; }}
+  body {{
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: #0b0b0d; color: rgba(255,255,255,.95);
+    font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    -webkit-font-smoothing: antialiased; padding: 24px;
+  }}
+  .card {{
+    width: 100%; max-width: 27rem; background: #141417; border-radius: 16px;
+    border: 1px solid rgba(255,255,255,.09); padding: 32px 28px; text-align: center;
+  }}
+  .mark {{ width: 52px; height: 52px; border-radius: 12px; }}
+  h1 {{
+    margin: 18px 0 6px; font-size: 1.3rem; font-weight: 600; letter-spacing: -.01em;
+  }}
+  p {{ margin: 0; color: rgba(255,255,255,.55); font-size: .875rem; }}
+  ul {{
+    margin: 22px 0 0; padding: 14px 16px; list-style: none; text-align: left;
+    background: rgba(255,255,255,.04); border-radius: 10px;
+    font: .8125rem/1.9 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: rgba(255,255,255,.72);
+  }}
+  .tick {{ color: #30d158; margin-right: 9px; }}
+  .what {{
+    margin: 18px 0 0; font-size: .75rem; color: rgba(255,255,255,.38);
+  }}
+  @media (prefers-reduced-motion: no-preference) {{
+    .card {{ animation: rise .32s cubic-bezier(.23,1,.32,1) both; }}
+    @keyframes rise {{ from {{ opacity: 0; transform: translateY(6px); }} }}
+  }}
+</style></head>
+<body><main class="card">
+  {art}
+  <h1>{html.escape(heading)}</h1>
+  <p{detail_style}>{html.escape(detail)}</p>
+  {f'<ul>{granted}</ul><p class="what">Granted to Nudge on this Mac. Nothing else.</p>' if granted else ""}
+</main></body></html>"""
 
 
 def free_port() -> int:
@@ -58,13 +132,25 @@ def main() -> int:
             q = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
             if q.get("state", [None])[0] == state and "code" in q:
                 got["code"] = q["code"][0]
-                body = b"<h1>Signed in.</h1><p>You can close this window.</p>"
+                body = page(
+                    True,
+                    "Signed in",
+                    "You can close this window.",
+                    SCOPES,
+                )
             else:
-                body = b"<h1>That did not carry a code.</h1>"
+                # Either a stray request to the loopback, or consent was refused.
+                # Both mean the same thing here and neither is worth a stack trace.
+                body = page(
+                    False,
+                    "Not signed in",
+                    q.get("error", ["That did not carry an authorisation code."])[0],
+                    [],
+                )
             self.send_response(200)
-            self.send_header("Content-Type", "text/html")
+            self.send_header("Content-Type", "text/html; charset=utf-8")
             self.end_headers()
-            self.wfile.write(body)
+            self.wfile.write(body.encode())
             done.set()
 
         def log_message(self, *_):
