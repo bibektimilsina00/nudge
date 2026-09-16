@@ -78,6 +78,14 @@ pub struct Entry {
     /// Which grant allowed it, when one had to.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub rule: Option<String>,
+    /// What class of thing it was -- read, egress, write, exec, external.
+    ///
+    /// The `kind` beside it names the tool; this names the *effect*, which is
+    /// the question somebody scanning a log is actually asking. It is also the
+    /// only thing that can be said about a tool this repository has never heard
+    /// of, whose name is a stranger's claim.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub risk: Option<String>,
 }
 
 impl Entry {
@@ -99,7 +107,13 @@ impl Entry {
                 },
             },
             rule: None,
+            risk: None,
         }
+    }
+
+    pub fn at_risk(mut self, risk: crate::core::risk::Risk) -> Self {
+        self.risk = Some(risk.name().to_string());
+        self
     }
 
     pub fn during(mut self, run: u64) -> Self {

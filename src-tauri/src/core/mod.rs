@@ -20,6 +20,7 @@ pub mod permits;
 pub mod provider;
 pub mod reach;
 pub mod report;
+pub mod risk;
 pub mod run;
 pub mod screen;
 pub mod skills;

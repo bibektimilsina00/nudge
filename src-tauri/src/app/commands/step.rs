@@ -9,6 +9,7 @@ use crate::app::state::{permits, Background, Grants, Screen, Settle, Voice};
 use crate::core::audit::Outcome;
 use crate::core::provider::{Act, Step};
 use crate::core::reach::Grant;
+use crate::core::risk::Risk;
 use crate::core::run::agent::Agents;
 use crate::core::run::session::Nudge;
 use crate::core::screen::click;
@@ -410,6 +411,9 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
                     false => changed.join(", "),
                 },
             },
+            // External, whatever it is called. The name of somebody else's tool
+            // is a claim, not evidence -- see `core::risk`.
+            Risk::External,
         );
 
         // And the model is told what actually changed rather than only what the
@@ -443,11 +447,18 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
                     Outcome::Did {
                         detail: format!("{} chars", text.len()),
                     },
+                    Risk::Egress,
                 );
                 text
             }
             Err(e) => {
-                record(app, "fetch", url, Outcome::Refused { why: e.to_string() });
+                record(
+                    app,
+                    "fetch",
+                    url,
+                    Outcome::Refused { why: e.to_string() },
+                    Risk::Egress,
+                );
                 return Err(e);
             }
         };
@@ -465,14 +476,29 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
 ///
 /// A free function so a call site is one line and cannot forget the run id --
 /// the entries worth having are the ones nobody remembered to add by hand.
-fn record(app: &AppHandle, kind: &str, said: &str, outcome: Outcome) {
-    record_by(app, kind, said, outcome, None);
+/// Write down what happened, and what class of thing it was.
+///
+/// There is no version of this that omits the risk. A record that *can* omit it
+/// is one that will, at whichever call site somebody adds next -- and the class
+/// is the only thing that can honestly be said about a tool this repository has
+/// never heard of.
+fn record(app: &AppHandle, kind: &str, said: &str, outcome: Outcome, risk: Risk) {
+    record_by(app, kind, said, outcome, risk, None);
 }
 
 /// The same, naming the grant that allowed it.
-fn record_by(app: &AppHandle, kind: &str, said: &str, outcome: Outcome, rule: Option<String>) {
+fn record_by(
+    app: &AppHandle,
+    kind: &str,
+    said: &str,
+    outcome: Outcome,
+    risk: Risk,
+    rule: Option<String>,
+) {
     use crate::core::audit::{Audit, Entry};
-    let entry = Entry::new(kind, said, outcome).allowed_by(rule);
+    let entry = Entry::new(kind, said, outcome)
+        .at_risk(risk)
+        .allowed_by(rule);
     // Attributed to the run that is actually acting, which the runtime says
     // rather than this guessing. Guessing looked for an agent that had not
     // finished and lost exactly the records worth keeping: an agent stopped
@@ -519,6 +545,7 @@ fn ask_before_reaching(app: &AppHandle, url: &str) -> Option<Result<()>> {
         Outcome::Asked {
             question: pending.question(),
         },
+        Risk::Egress,
     );
     Some(put_to_the_person(app, pending).map(|_| ()))
 }
@@ -629,6 +656,7 @@ fn landed(
         Outcome::Did {
             detail: stat.unwrap_or_else(|| "untracked".into()),
         },
+        Risk::WriteLocal,
     );
 
     let agents = app.state::<Agents>();
@@ -915,6 +943,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                         Outcome::Did {
                             detail: format!("{} chars", out.len()),
                         },
+                        Risk::Exec,
                         gate.rule.clone(),
                     );
                     out
@@ -928,6 +957,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                         "shell",
                         command,
                         Outcome::Refused { why: e.to_string() },
+                        Risk::Exec,
                     );
                     return Err(e);
                 }
