@@ -15,11 +15,41 @@ use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// Long enough for a real task -- open a browser, search, click a result, play --
-/// and short enough that a model which never finishes gives up rather than
-/// clicking forever. The foreground loop caps at 12 for the same reason; an
-/// agent needs more room because nobody is watching it.
-pub const MAX_STEPS: usize = 40;
+/// Long enough for a real task, and short enough that a model which never
+/// finishes gives up rather than clicking forever.
+///
+/// **Raised from forty, which was a lid rather than a budget.** Forty was where
+/// the history got too long to send, not where a task stopped being worth
+/// finishing -- and the three things that made it a lid have all gone:
+/// compaction folds a long history so the prompt stops growing, a run that
+/// stops early now says which of its own items it skipped, and a run that
+/// looked at nothing says so. A cap is only safe when finishing early is
+/// visible, and it is.
+///
+/// This is not the only thing standing between a task and forever, and it is
+/// the crudest. Three failures in a row, three turns that changed nothing, the
+/// same action repeated, a delegated job stalled or going in circles -- each
+/// ends a run for a reason somebody can read, where the budget ends one with
+/// "gave up after N steps", which explains nothing. The budget is the backstop.
+///
+/// The foreground loop still caps at 12: somebody is sitting there.
+pub const MAX_STEPS: usize = 150;
+
+/// What an ordinary task takes, for the bar only.
+///
+/// Not the budget. A bar drawn against 150 sits at one percent through a
+/// five-step task, which reads as nothing happening -- and a bar that creeps is
+/// the point, so measuring it against a cap nobody expects to reach makes it
+/// useless exactly when it is being watched.
+///
+/// So the bar measures a *typical* run and pins near the end when one goes long.
+/// That is honest in a way a bar scaled to the budget is not: "this is taking
+/// longer than most things" is true and useful, where "you are 3% through 150
+/// steps you will never take" is neither.
+///
+/// **The card mirrors this** -- see `progress` in `Agent.tsx`, which has to,
+/// because it is TypeScript.
+pub const NOMINAL_STEPS: usize = 20;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(tag = "state", rename_all = "camelCase")]
@@ -166,7 +196,7 @@ impl Agent {
             let done = self.plan.iter().filter(|t| t.status == Doing::Done).count();
             return (done as f32 / self.plan.len() as f32).clamp(0.0, 0.97);
         }
-        (self.step as f32 / MAX_STEPS as f32).clamp(0.0, 0.97)
+        (self.step as f32 / NOMINAL_STEPS as f32).clamp(0.0, 0.97)
     }
 
     pub fn finished(&self) -> bool {

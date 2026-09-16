@@ -424,6 +424,18 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         // whether any step in this run actually read anything -- so a miss
         // leaves the sentence exactly as it was.
         let settled = crate::core::claimed::settled(step.say(), &taken);
+        // A run that neither looked at anything nor changed anything is talking
+        // from memory, whatever it sounds like. The subagent has said so since
+        // it was written; this is the same rule for the run somebody is watching.
+        //
+        // Only on the way out. Mid-run there is nothing to be recollection
+        // *about* -- the sentence that matters is the one a task finishes with.
+        let settled = match matches!(step, crate::core::provider::Step::Done { .. })
+            && crate::core::claimed::from_memory(&settled, &taken)
+        {
+            true => crate::core::provider::recalled(settled),
+            false => settled,
+        };
         let settled = match skipped.is_empty() {
             true => settled,
             // Named rather than counted: "two items remain" tells nobody what

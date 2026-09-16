@@ -666,10 +666,25 @@ function Ghost({
   );
 }
 
-/** Mirrors `Agent::progress` in Rust: steps against the budget, never backwards. */
+/**
+ * Mirrors `Agent::progress` in Rust, and has to, because this is TypeScript.
+ *
+ * It had drifted: the Rust one prefers the plan and this one never did, so a
+ * run with four steps written down showed a bar creeping against a step count
+ * nobody had asked about. A plan measures the *work*; the step count only
+ * measures how patient the runtime is.
+ *
+ * Twenty is `NOMINAL_STEPS` and is deliberately not the budget, which is 150. A
+ * bar drawn against the budget sits at one percent through a short task, which
+ * reads as nothing happening.
+ */
 function progress(agent: Agent) {
   if (agent.state === "done") return 1;
-  return Math.min(0.97, agent.step / 40);
+  if (agent.plan.length > 0) {
+    const done = agent.plan.filter((t) => t.status === "done").length;
+    return Math.min(0.97, done / agent.plan.length);
+  }
+  return Math.min(0.97, agent.step / 20);
 }
 
 function Question({

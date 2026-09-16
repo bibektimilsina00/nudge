@@ -100,6 +100,56 @@ pub fn settled(say: &str, steps: &[Step]) -> String {
     format!("{}{INSTEAD}", say.trim_end())
 }
 
+/// Did this run do anything to the world?
+///
+/// The other half of [`looked`]. A run that wrote a file, clicked something or
+/// ran a command has *acted*, and a sentence about what it did is backed by the
+/// doing -- whether or not it also read anything.
+pub fn acted(steps: &[Step]) -> bool {
+    steps
+        .iter()
+        .any(|s| crate::core::risk::of(s).consequential())
+}
+
+/// A run that neither looked at anything nor changed anything is talking from
+/// memory, whatever it sounds like.
+///
+/// Narrow on purpose, and both halves matter. Plenty of honest runs consult
+/// nothing -- opening an application and clicking a button learns nothing from
+/// outside, and the clicking *is* the evidence for "I opened it". What has no
+/// evidence at all is a run that did neither and still states a fact.
+///
+/// The subagent has done this since it was written: an answer from a run that
+/// consulted nothing is relabelled as recollection. This is the same rule for
+/// the main agent, with the extra condition that it did not act either.
+pub fn from_memory(say: &str, steps: &[Step]) -> bool {
+    !looked(steps) && !acted(steps) && !hedged(say)
+}
+
+/// Is this already an admission?
+///
+/// Nothing to add to a sentence that has said it. Borrowed from the subagent,
+/// which has needed the same list for the same reason.
+fn hedged(say: &str) -> bool {
+    let s = say.to_lowercase();
+    [
+        "i think",
+        "i believe",
+        "from memory",
+        "as of",
+        "may have",
+        "might be",
+        "i am not sure",
+        "i'm not sure",
+        "cannot confirm",
+        "did not check",
+        "have not checked",
+        "without checking",
+    ]
+    .iter()
+    .any(|h| s.contains(h))
+}
+
 /// What a run set itself and has not done.
 ///
 /// `Step::Plan` exists, the card renders it, and nothing ever looked at it
@@ -229,6 +279,43 @@ mod tests {
         assert!(looked(&tool("notes/search")));
         assert!(!looked(&tool("files/write_file")));
         assert!(!looked(&tool("mail/send_message")));
+    }
+
+    /// A run that neither looked nor acted is talking from memory.
+    #[test]
+    fn a_run_that_did_nothing_at_all_is_recollection() {
+        assert!(from_memory("The capital of France is Paris.", &[]));
+    }
+
+    /// But doing something is its own evidence. Clicking a button teaches the
+    /// run nothing, and "I opened Safari" is backed by having opened it.
+    #[test]
+    fn a_run_that_acted_is_not_accused_of_remembering() {
+        let clicked = vec![Step::Type {
+            text: "hello".into(),
+            submit: true,
+            say: String::new(),
+        }];
+        assert!(!from_memory("I typed it in for you.", &clicked));
+        assert!(!from_memory("I wrote the file.", &wrote()));
+    }
+
+    /// And a run that looked is grounded, obviously.
+    #[test]
+    fn a_run_that_looked_is_grounded() {
+        assert!(!from_memory("It says 313 lines.", &read_back()));
+    }
+
+    /// A sentence that already admits it needs nothing added.
+    #[test]
+    fn an_answer_that_already_hedges_is_left_alone() {
+        for said in [
+            "I think it is Paris, though I did not check.",
+            "From memory, the crate is maintained by epage.",
+            "I'm not sure, but it looks like 40.",
+        ] {
+            assert!(!from_memory(said, &[]), "{said:?}");
+        }
     }
 
     /// A run that set itself four things and did one has not finished.
