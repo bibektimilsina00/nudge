@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 
 import { Label } from "../components/controls";
 
+import calcomLogo from "../assets/logos/calcom.svg?url";
 import gcalLogo from "../assets/logos/google_calendar.svg?url";
 import githubLogo from "../assets/logos/github.svg?url";
 import gmailLogo from "../assets/logos/gmail.svg?url";
@@ -11,7 +12,11 @@ import googleLogo from "../assets/logos/google.svg?url";
 import gscLogo from "../assets/logos/google_search_console.svg?url";
 import gsheetsLogo from "../assets/logos/google_sheets.svg?url";
 import gtasksLogo from "../assets/logos/google_tasks.svg?url";
+import hubspotLogo from "../assets/logos/hubspot.svg?url";
+import notionLogo from "../assets/logos/notion.svg?url";
 import slackLogo from "../assets/logos/slack.svg?url";
+import supabaseLogo from "../assets/logos/supabase.svg?url";
+import todoistLogo from "../assets/logos/todoist.svg?url";
 
 /** Mirrors `Listed` in `app/commands/connect.rs`. */
 type Listed = {
@@ -70,6 +75,11 @@ type Listed = {
  * first attempt got a near-black mark on a near-black card.
  */
 const LOGO: Record<string, string> = {
+  notion: notionLogo,
+  todoist: todoistLogo,
+  hubspot: hubspotLogo,
+  calcom: calcomLogo,
+  supabase: supabaseLogo,
   github: githubLogo,
   slack: slackLogo,
   gmail: gmailLogo,
@@ -79,6 +89,15 @@ const LOGO: Record<string, string> = {
   google_search_console: gscLogo,
   google: googleLogo,
 };
+
+/**
+ * Marks that need a dark tile rather than the white default.
+ *
+ * Notion publishes its mark in white only. On the white tile every other logo
+ * needs, it disappears entirely -- the same mistake as GitHub's variant, caught
+ * before shipping this time by counting fills rather than by looking at it.
+ */
+const DARK_TILE: Record<string, string> = { notion: "#0f0f0f" };
 
 /** Behind the monogram, for anything with no mark of its own. */
 const TINT: Record<string, string> = {
@@ -236,7 +255,10 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
           // It is also why GitHub uses their `light.svg`, which is the
           // dark-coloured one. The name describes the background it is for, not
           // the ink.
-          <span className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-white">
+          <span
+            className="grid size-8 shrink-0 place-items-center rounded-[9px] bg-white"
+            style={DARK_TILE[it.key] ? { backgroundColor: DARK_TILE[it.key] } : undefined}
+          >
             {/* `contain`: not all square. Gmail's viewBox is a wide envelope. */}
             <img
               src={LOGO[it.key]}

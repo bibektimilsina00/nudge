@@ -119,6 +119,89 @@ pub fn catalogue() -> Vec<Offer> {
             setup: None,
         },
         Offer {
+            key: "notion",
+            name: "Notion",
+            about: "Search pages, read content, query databases and create pages.",
+            // Notion's is the narrowest model of the lot and worth saying plainly,
+            // because it is the opposite of what people expect from a token.
+            access: "Only the pages and databases you share with the integration. \
+                     A new integration can reach nothing until you add it to \
+                     something, page by page.",
+            command: "npx",
+            args: &["-y", "@notionhq/notion-mcp-server"],
+            env: &[],
+            sign_in: None,
+            token: Some("AUTH_TOKEN"),
+            where_from: Some(
+                "notion.so → Settings → Connections → Develop or manage integrations \
+                 → New integration → Internal Integration Secret",
+            ),
+            setup: None,
+        },
+        Offer {
+            key: "todoist",
+            name: "Todoist",
+            about: "Read, create and complete tasks, projects and labels.",
+            access: "Everything in your Todoist account. Their API token is not \
+                     scoped, so this is all of it or none of it.",
+            command: "npx",
+            args: &["-y", "@doist/todoist-mcp"],
+            env: &[],
+            sign_in: None,
+            token: Some("TODOIST_API_KEY"),
+            where_from: Some("todoist.com → Settings → Integrations → Developer → API token"),
+            setup: None,
+        },
+        Offer {
+            key: "hubspot",
+            name: "HubSpot",
+            about: "Search CRM records, log notes and tasks, update records.",
+            access: "Whatever scopes you tick when you create the private app — \
+                     that list is the whole of the limit, and it is worth ticking \
+                     narrowly.",
+            command: "npx",
+            args: &["-y", "@hubspot/mcp-server"],
+            env: &[],
+            sign_in: None,
+            token: Some("HUBSPOT_ACCESS_TOKEN"),
+            where_from: Some(
+                "hubspot.com → Settings → Integrations → Private Apps → Create → \
+                 Auth → Access token",
+            ),
+            setup: None,
+        },
+        Offer {
+            key: "calcom",
+            name: "Cal.com",
+            about: "Read availability and manage bookings and event types.",
+            access: "Your bookings, availability and event types.",
+            command: "npx",
+            args: &["-y", "@calcom/cal-mcp"],
+            env: &[],
+            sign_in: None,
+            token: Some("CAL_API_KEY"),
+            where_from: Some("cal.com → Settings → Developer → API keys"),
+            setup: None,
+        },
+        Offer {
+            key: "supabase",
+            name: "Supabase",
+            about: "Query databases, inspect schemas and manage projects.",
+            // The broadest thing in this catalogue, and it would be dishonest to
+            // describe it in the same shape as the others.
+            access: "Every project in your account, including the ability to run \
+                     SQL and change schemas. A personal access token is not scoped \
+                     to one project. Consider a read-only token, and consider \
+                     turning off the write tools once connected.",
+            command: "npx",
+            args: &["-y", "@supabase/mcp-server-supabase"],
+            env: &[],
+            sign_in: None,
+            token: Some("SUPABASE_ACCESS_TOKEN"),
+            where_from: Some("supabase.com/dashboard/account/tokens → Generate new token"),
+            setup: None,
+        },
+        Offer {
             key: "gmail",
             name: "Gmail",
             about: "Search, read, draft and send mail.",
