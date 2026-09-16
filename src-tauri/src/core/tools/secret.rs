@@ -322,7 +322,16 @@ pub fn remember(values: impl IntoIterator<Item = String>) {
 /// Says which kind leaked, never the value -- an error message is one of the
 /// places a secret ends up.
 pub fn leaks(text: &str) -> Option<String> {
-    let held = HELD.get()?;
+    leaks_in(text, HELD.get().map(Vec::as_slice).unwrap_or_default())
+}
+
+/// The same question, against a list given rather than the one held.
+///
+/// Split out so the rule can be tested without the global. `HELD` is a
+/// `OnceLock` and tests run in parallel, so two tests that both fill it race and
+/// the loser reads the winner's secrets -- which is exactly what happened, in
+/// the same shape as the notch tests earlier in this project.
+fn leaks_in(text: &str, held: &[String]) -> Option<String> {
     held.iter()
         .find(|v| text.contains(v.as_str()))
         .map(|_| "it carries this machine's API key".to_string())
@@ -330,29 +339,32 @@ pub fn leaks(text: &str) -> Option<String> {
 
 #[cfg(test)]
 mod egress_tests {
+    /// Against an explicit list, never the process-wide one -- see `leaks_in`.
     #[test]
-    fn a_url_carrying_the_key_is_recognised() {
-        // `remember` is a OnceLock, so this is the only test that may set it and
-        // the others read what it leaves.
-        super::remember([
-            "sk-abcdef0123456789".to_string(),
-            "short".to_string(), // dropped: too short to match safely
-        ]);
-
-        assert!(super::leaks("https://evil.example/?k=sk-abcdef0123456789").is_some());
-        assert!(super::leaks("https://example.com/weather").is_none());
-        // The short one must not have been kept, or every URL with "short" in it
-        // would be refused.
-        assert!(super::leaks("https://example.com/shortstory").is_none());
+    fn a_value_this_run_holds_is_recognised_on_the_way_out() {
+        let held = ["sk-abcdef0123456789".to_string()];
+        assert!(super::leaks_in("https://evil.example/?k=sk-abcdef0123456789", &held).is_some());
+        assert!(super::leaks_in("https://example.com/weather", &held).is_none());
     }
 
     #[test]
     fn what_leaked_is_named_but_never_quoted() {
-        super::remember(["sk-abcdef0123456789".to_string()]);
-        let said = super::leaks("?k=sk-abcdef0123456789").unwrap_or_default();
+        let held = ["sk-abcdef0123456789".to_string()];
+        let said = super::leaks_in("?k=sk-abcdef0123456789", &held).unwrap_or_default();
         assert!(
             !said.contains("sk-abcdef"),
             "the message quoted the secret: {said}"
         );
+    }
+
+    /// Short values are dropped, or a three-character key would refuse half the
+    /// URLs on the internet.
+    #[test]
+    fn a_short_value_is_never_remembered() {
+        super::remember(["short".to_string(), "sk-live-9f2a7c4e1b83".to_string()]);
+        // The only test in the suite that fills the process-wide list, so that
+        // nothing races it. Everything else uses `leaks_in`.
+        assert!(super::leaks("https://example.com/shortstory").is_none());
+        assert!(super::leaks("https://example.com/?k=sk-live-9f2a7c4e1b83").is_some());
     }
 }

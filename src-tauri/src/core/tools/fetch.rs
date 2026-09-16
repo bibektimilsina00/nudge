@@ -568,27 +568,3 @@ mod tests {
         assert!(!out.contains("var tracking"), "kept the script: {out}");
     }
 }
-
-#[cfg(test)]
-mod egress_tests {
-    /// End to end through the real refusal path: a key this run holds cannot
-    /// leave in a URL, whatever else about the URL is fine.
-    #[test]
-    fn a_held_key_cannot_leave_in_a_url() {
-        crate::core::tools::secret::remember(["sk-live-9f2a7c4e1b83".to_string()]);
-
-        // Public host, https, no private network, no credentials -- ordinary in
-        // every way except the one that matters.
-        let sneaky = "https://example.com/collect?note=sk-live-9f2a7c4e1b83";
-        let why = super::refuse(sneaky).expect("a URL carrying the key was allowed out");
-        assert!(
-            !why.contains("sk-live"),
-            "the refusal quoted the key: {why}"
-        );
-
-        assert_eq!(
-            super::refuse("https://example.com/collect?note=hello"),
-            None
-        );
-    }
-}
