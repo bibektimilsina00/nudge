@@ -311,10 +311,14 @@ pub fn refuse(command: &str, anything: bool) -> Option<String> {
             if !super::present::installed(name) {
                 return Some(super::present::missing(name));
             }
+            // The sentence comes from the grant rather than from here, so the
+            // same refusal reads the same way whichever tool ran into it. It
+            // was written out twice once, and the two copies had already
+            // drifted to naming different places to change it.
             return Some(format!(
-                "{name} is here, but running it is not something I have been \
-                 allowed to do -- I can only read. Someone can change that under \
-                 \u{201c}Allowed to\u{201d} in the menu bar."
+                "{name} is here, but running it is not something I can do -- I \
+                 can only read. {}",
+                crate::core::reach::Grant::Shell.denied()
             ));
         }
         // Before the subcommand check, because these are about the program
@@ -423,6 +427,7 @@ pub fn run(workspace: &std::path::Path, command: &str, anything: bool) -> Result
 
 #[cfg(test)]
 mod tests {
+
     /// Seven ways past the read-only shell that needed no shell syntax at all.
     ///
     /// Every one of these was allowed by this file, and each is the same mistake:

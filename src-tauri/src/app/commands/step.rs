@@ -5,7 +5,7 @@
 //! which is what makes the shell allow-list, the workspace boundary and
 //! ask-before-replacing hold everywhere rather than in whichever caller
 //! remembered them.
-use crate::app::state::{may, Background, Grants, Screen, Settle, Voice};
+use crate::app::state::{permits, Background, Grants, Screen, Settle, Voice};
 use crate::core::provider::{Act, Step};
 use crate::core::reach::Grant;
 use crate::core::run::agent::Agents;
@@ -350,8 +350,14 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         ..
     } = step
     {
-        let said =
-            fetch::request(method, url, headers, body.as_deref(), may(app, Grant::Http)).await?;
+        let said = fetch::request(
+            method,
+            url,
+            headers,
+            body.as_deref(),
+            permits(app, Grant::Http).allowed(),
+        )
+        .await?;
         eprintln!("{method} {url} -> {} chars", said.len());
         app.state::<Nudge>()
             .note(format!("{method} {url} answered:\n{said}"));
@@ -540,10 +546,16 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         Step::Write { path, content, .. } => {
             let workspace = app.state::<Nudge>().workspace();
             let grants = app.state::<Grants>();
-            let target = files::resolve(&workspace, path, may(app, Grant::Files))?;
+            let target = files::resolve(&workspace, path, permits(app, Grant::Files).allowed())?;
             let permitted = grants.granted.lock().unwrap().contains(&target);
 
-            match files::write(&workspace, path, content, permitted, may(app, Grant::Files))? {
+            match files::write(
+                &workspace,
+                path,
+                content,
+                permitted,
+                permits(app, Grant::Files).allowed(),
+            )? {
                 // Asked on the model's behalf; the task waits for the answer.
                 files::Wrote::NeedsPermission { path } => {
                     return ask_to_replace(app, &path, content.clone())
@@ -599,7 +611,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             // The same boundary as writing: a path from a model is a path that
             // has to be proven, and `open` on a file is a real action.
             let workspace = app.state::<Nudge>().workspace();
-            let target = files::resolve(&workspace, path, may(app, Grant::Files))?;
+            let target = files::resolve(&workspace, path, permits(app, Grant::Files).allowed())?;
             if !target.is_file() {
                 return Err(crate::error::Error::Click(format!(
                     "{} is not there to show",
@@ -620,7 +632,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                 path,
                 *from,
                 *lines,
-                may(app, Grant::Files),
+                permits(app, Grant::Files).allowed(),
             )?;
             eprintln!("read {path} @{from} ({} chars)", text.len());
             app.state::<Nudge>().note(format!("Read {path}:\n{text}"));
@@ -628,7 +640,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
         Step::Edit { path, old, new, .. } => {
             let workspace = app.state::<Nudge>().workspace();
             let grants = app.state::<Grants>();
-            let target = files::resolve(&workspace, path, may(app, Grant::Files))?;
+            let target = files::resolve(&workspace, path, permits(app, Grant::Files).allowed())?;
             let permitted = grants.granted.lock().unwrap().contains(&target);
 
             match files::edit(
@@ -637,7 +649,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
                 old,
                 new,
                 permitted,
-                may(app, Grant::Files),
+                permits(app, Grant::Files).allowed(),
             )? {
                 files::Wrote::NeedsPermission { path } => {
                     return ask_to_replace(app, &path, String::new())
@@ -711,7 +723,7 @@ pub(crate) fn perform(app: &AppHandle, step: &Step) -> Result<()> {
             let out = shell::run(
                 &app.state::<Nudge>().workspace(),
                 command,
-                may(app, Grant::Shell),
+                permits(app, Grant::Shell).allowed(),
             )?;
             eprintln!("$ {command}\n{out}");
             app.state::<Nudge>()

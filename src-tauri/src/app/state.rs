@@ -74,16 +74,30 @@ impl Offering {
     }
 }
 
-/// Whether a grant is currently given. Read at every gate.
+/// What the gate answers for this grant, right now.
 ///
 /// A free function rather than a method so the call site reads as the question
-/// being asked -- `may(app, Grant::Files)` -- and so there is exactly one place
-/// that knows the state is managed by Tauri.
-pub fn may(app: &tauri::AppHandle, grant: crate::core::reach::Grant) -> bool {
+/// being asked -- `permits(app, Grant::Files)` -- and so there is exactly one
+/// place that knows the state is managed by Tauri.
+///
+/// Returns a `Decision` rather than a bool. Today it only ever says allow or
+/// deny, and the behaviour is exactly what `may()` did before it; what the type
+/// buys is somewhere for the third answer to go, and a refusal that carries its
+/// own reason instead of each call site inventing one.
+pub fn permits(
+    app: &tauri::AppHandle,
+    grant: crate::core::reach::Grant,
+) -> crate::core::reach::Decision {
+    use crate::core::reach::Decision;
     use tauri::Manager;
-    app.state::<crate::core::run::session::Nudge>()
+    match app
+        .state::<crate::core::run::session::Nudge>()
         .reach
         .has(grant)
+    {
+        true => Decision::allowed_by(grant),
+        false => Decision::deny(grant.denied()),
+    }
 }
 
 /// A setting the menu bar can flip at runtime. The config value is only ever the

@@ -55,7 +55,7 @@ will be asked of it. There is no way to say *ask me*.
 
 That single missing answer is why the rest of this section cannot be built.
 
-### 1.1 A decision instead of a bool
+### 1.1 A decision instead of a bool — *done*
 
 ```rust
 pub struct Decision {
@@ -69,8 +69,15 @@ pub struct Decision {
 Replaces `may()`. Every gate returns one. The interface can then show *why*
 uniformly instead of each call site inventing a sentence.
 
-**Done when** every existing gate returns a `Decision`, the behaviour is
-unchanged, and the tests say so.
+*Built.* `permits()` replaces `may()` at all eight call sites and returns a
+`Decision` carrying `Answer::{Allow, Ask, Deny}`, a reason, and which grant
+decided. Nothing produces `Ask` yet — that arrives with 1.2, which is the thing
+able to act on one.
+
+The reason is not decoration: `Grant::denied()` is the single sentence for a
+missing grant, and the shell's refusal now composes it rather than writing its
+own. There had been two copies of that sentence and they had already drifted to
+naming different places to change the setting.
 
 ### 1.2 One approval path, not one per thing
 

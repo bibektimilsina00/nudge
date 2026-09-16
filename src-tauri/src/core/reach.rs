@@ -322,3 +322,136 @@ mod tests {
         );
     }
 }
+
+/// What a gate answers.
+///
+/// Three, and the third is the one the product does not have yet. `allow` and
+/// `deny` can only be decided in advance, by somebody who does not know what
+/// will be asked of them -- so the honest default has to be either uselessly
+/// narrow or quietly wide, and this codebase chose narrow and then widened it
+/// one grant at a time.
+///
+/// `Ask` is what lets a default be safe without being useless: the answer is
+/// deferred to the moment there is something concrete to judge.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Answer {
+    Allow,
+    /// Pause and put it to the person. Nothing acts on this yet -- see the plan.
+    Ask,
+    Deny,
+}
+
+/// A gate's answer, and why.
+///
+/// The reason is not optional. Every refusal in this codebase used to invent its
+/// own sentence at the call site, which is how the same denial came to be worded
+/// three ways depending on which tool hit it -- and why an interface cannot show
+/// a person *why* something did not happen without knowing where it failed.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Decision {
+    pub answer: Answer,
+    /// Said to the person, or to the model. Empty only for `Allow`.
+    pub reason: String,
+    /// What decided it, for the record §2.1 will keep. `None` when nothing had
+    /// to be granted.
+    pub rule: Option<String>,
+}
+
+impl Decision {
+    pub fn allow() -> Self {
+        Self {
+            answer: Answer::Allow,
+            reason: String::new(),
+            rule: None,
+        }
+    }
+
+    /// Allowed, and by which grant -- so the audit can say more than "it ran".
+    pub fn allowed_by(grant: Grant) -> Self {
+        Self {
+            answer: Answer::Allow,
+            reason: String::new(),
+            rule: Some(grant.key().to_string()),
+        }
+    }
+
+    pub fn deny(reason: impl Into<String>) -> Self {
+        Self {
+            answer: Answer::Deny,
+            reason: reason.into(),
+            rule: None,
+        }
+    }
+
+    pub fn ask(reason: impl Into<String>) -> Self {
+        Self {
+            answer: Answer::Ask,
+            reason: reason.into(),
+            rule: None,
+        }
+    }
+
+    /// May this go ahead without anybody being asked?
+    pub fn allowed(&self) -> bool {
+        self.answer == Answer::Allow
+    }
+
+    /// Does this want a person before it happens?
+    pub fn needs_user(&self) -> bool {
+        self.answer == Answer::Ask
+    }
+}
+
+impl Grant {
+    /// What to say when this grant is what was missing.
+    ///
+    /// One sentence per grant, in one place, so the same refusal reads the same
+    /// way whichever tool ran into it -- and so it names where to change it,
+    /// because a refusal that does not say how to lift it is a dead end.
+    pub fn denied(self) -> String {
+        format!(
+            "That needs \u{201c}{}\u{201d}, which is off. It can be turned on under \
+             \u{201c}Allowed to\u{201d} in settings or the menu bar.",
+            self.menu()
+        )
+    }
+}
+
+#[cfg(test)]
+mod decision_tests {
+    use super::*;
+
+    #[test]
+    fn a_refusal_always_carries_a_reason() {
+        for g in Grant::ALL {
+            let d = Decision::deny(g.denied());
+            assert!(!d.reason.is_empty());
+            // And it says where to lift it, or somebody reads it as "no" full
+            // stop and goes looking for a bug.
+            assert!(d.reason.contains("Allowed to"), "{}", d.reason);
+        }
+    }
+
+    #[test]
+    fn the_three_answers_do_not_overlap() {
+        assert!(Decision::allow().allowed());
+        assert!(!Decision::allow().needs_user());
+
+        assert!(!Decision::deny("no").allowed());
+        assert!(!Decision::deny("no").needs_user());
+
+        // The one that matters: an ask is not an allow. Anything treating
+        // "not denied" as "go ahead" would run it.
+        assert!(!Decision::ask("which folder?").allowed());
+        assert!(Decision::ask("which folder?").needs_user());
+    }
+
+    #[test]
+    fn an_allow_records_what_allowed_it() {
+        assert_eq!(
+            Decision::allowed_by(Grant::Shell).rule.as_deref(),
+            Some("shell")
+        );
+        assert_eq!(Decision::allow().rule, None);
+    }
+}
