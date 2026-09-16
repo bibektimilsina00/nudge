@@ -195,13 +195,13 @@ one nobody can check.
 log rather than from the model's account of itself — and when a run that fetched
 a page has recorded the URL and not the page.
 
-### 2.2 Read the diff
+### 2.2 Read the diff — done
 
-An agent says it edited a file. `git diff` is one call away and would turn that
-claim into a check. Nothing does it.
-
-**Done when** a run that touched tracked files reports what changed, not what it
-intended.
+A write now reports `git diff --numstat` rather than its own intention: *"Edited
+main.rs (+12 -3)"*. Silent outside a repository, where there is nothing to check
+against. The write and edit paths were near-identical copies and neither wrote to
+the audit at all — they go through one place now, so the log that answers *what
+did it do to my files* has file changes in it.
 
 ---
 
