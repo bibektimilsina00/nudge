@@ -10,6 +10,11 @@ name = "nudge"
 path = "src/main.rs"
 
 # Accuracy harness. Shares the lib so it exercises the real coordinate math.
+# The reviewer's eval. See src/bin/judge.rs.
+[[bin]]
+name = "judge"
+path = "src/bin/judge.rs"
+
 [[bin]]
 name = "probe"
 path = "src/bin/probe.rs"

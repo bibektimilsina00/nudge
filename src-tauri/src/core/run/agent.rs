@@ -515,6 +515,31 @@ impl Agents {
     ///
     /// One entry per path: writing the same file three times while iterating is
     /// one artifact, not three. The command log still has every write.
+    /// The files one run has made, newest last.
+    ///
+    /// Names only. Whoever asks is deciding whether running one of them follows
+    /// from what was asked, and that question is not answered by its contents --
+    /// it is answered by nobody having asked for it.
+    pub fn files_of(&self, run: u64) -> Vec<String> {
+        self.items
+            .lock()
+            .unwrap()
+            .iter()
+            .find(|a| a.id == run)
+            .map(|a| {
+                a.made
+                    .iter()
+                    .map(|m| {
+                        std::path::Path::new(&m.path)
+                            .file_name()
+                            .map(|n| n.to_string_lossy().to_string())
+                            .unwrap_or_else(|| m.path.clone())
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     pub fn record_file(&self, path: String) {
         if let Some(a) = self
             .items

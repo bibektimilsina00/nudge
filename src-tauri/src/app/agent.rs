@@ -474,9 +474,15 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         // Named for the record, around the step and not a moment longer: a
         // refusal arriving after the agent was stopped still belongs to it.
         app.state::<Agents>().now_doing(id);
-        let outcome = match commands::perform(app, &step) {
-            Ok(()) => commands::perform_async(app, &step).await,
-            Err(e) => Err(e),
+        // Judged before it happens, and only here. A foreground step is
+        // something the person asked for a second ago and is watching; this is
+        // the loop that runs unattended, reading a screen somebody else wrote.
+        let outcome = match commands::reviewed(app, &step).await {
+            Some(stopped) => Err(crate::error::Error::Click(stopped)),
+            None => match commands::perform(app, &step) {
+                Ok(()) => commands::perform_async(app, &step).await,
+                Err(e) => Err(e),
+            },
         };
         app.state::<Agents>().now_doing(0);
         if let Err(e) = outcome {

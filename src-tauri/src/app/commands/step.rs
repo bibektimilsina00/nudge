@@ -665,6 +665,84 @@ fn landed(
     crate::app::agent::publish(app);
 }
 
+/// Put one proposed action to a judge that never saw the screen.
+///
+/// `None` means carry on: the step has no consequences worth judging, nothing is
+/// running that could be steered, or this provider does not review. Anything
+/// else is the sentence to hand back instead of doing it.
+///
+/// Consulted only inside an agent run. A foreground step is something the person
+/// asked for a second ago and is watching happen; the danger this exists for is
+/// an unattended loop reading an instruction off the screen.
+pub async fn reviewed(app: &AppHandle, step: &Step) -> Option<String> {
+    use crate::core::judge::{self, Verdict};
+
+    let risk = crate::core::risk::of(step);
+    if !risk.consequential() {
+        return None;
+    }
+    let nudge = app.state::<Nudge>();
+    let provider = nudge.answering();
+    if !provider.reviews() {
+        // Not reviewing is not a failure. Nudge behaves exactly as it did before
+        // there was a judge, which is the honest thing for a defence that can
+        // only ever tighten -- see `Provider::reviews`.
+        return None;
+    }
+
+    let world = judge::World {
+        workspace: nudge.workspace().display().to_string(),
+        granted: nudge
+            .reach
+            .granted()
+            .into_iter()
+            .map(|g| g.told().to_string())
+            .collect(),
+        // Named, never opened. A script the user asked for is ordinary work;
+        // running one the agent wrote for reasons of its own is not, and the
+        // effects of a file cannot be read off the command that runs it.
+        made: app
+            .state::<Agents>()
+            .doing()
+            .map(|id| app.state::<Agents>().files_of(id))
+            .unwrap_or_default(),
+    };
+
+    let asked = judge::prompt(&nudge.said(), &world, step, risk);
+    let verdict = match provider.review(&asked).await {
+        Ok(reply) => judge::read(&reply),
+        // It promised to review and could not. That is a question, not a pass:
+        // the alternative is a defence that disappears whenever the network does.
+        Err(e) => Verdict::unreachable(format!("the reviewer could not be reached: {e}")),
+    };
+
+    if verdict.agreed() {
+        return None;
+    }
+
+    eprintln!(
+        "reviewer: {} -- {}",
+        match verdict.broken() {
+            true => "unreachable",
+            false => "stopped a step",
+        },
+        verdict.why()
+    );
+    record(
+        app,
+        "reviewer",
+        &judge::shown(step),
+        Outcome::Refused {
+            why: verdict.why().to_string(),
+        },
+        risk,
+    );
+
+    // The agent is told nothing it could iterate against. The reason went to the
+    // record, where a person reads it.
+    Some(judge::REFUSED.to_string())
+}
+
 /// Ask whether to replace a file, and hold the task until the answer comes.
 ///
 /// Returns the error to raise when there is no agent to hold -- the foreground

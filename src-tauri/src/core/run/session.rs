@@ -290,7 +290,7 @@ impl Nudge {
     }
 
     /// The provider in force right now.
-    fn answering(&self) -> std::sync::Arc<dyn Provider> {
+    pub fn answering(&self) -> std::sync::Arc<dyn Provider> {
         self.provider.read().unwrap().clone()
     }
 

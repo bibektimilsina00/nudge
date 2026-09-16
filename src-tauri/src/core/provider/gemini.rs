@@ -247,6 +247,47 @@ impl Provider for Gemini {
             .ok_or_else(|| no_point("gemini", text))
     }
 
+    fn reviews(&self) -> bool {
+        true
+    }
+
+    /// One action, judged by the same model that drives the agent.
+    ///
+    /// The same model on purpose: if it is trusted to decide what Nudge does, it
+    /// is strong enough to say whether one action follows from what was asked.
+    /// A second key and a second model to configure would be two more things to
+    /// get wrong for a defence people would then switch off.
+    ///
+    /// What makes this safe is not the model, it is what it is shown -- see
+    /// [`crate::core::judge`]. This call carries no screenshot and no history:
+    /// one prompt, built by `judge::prompt`, and nothing this method can add to.
+    async fn review(&self, prompt: &str) -> Result<String> {
+        let body = json!({
+            "contents": [{"parts": [{"text": prompt}]}],
+            // Not `self.generation()`: that asks for JSON *and* carries the
+            // thinking level configured for driving the agent. A verdict is a
+            // small judgement and the reply shape is spelled out in the
+            // instructions, so this stays plain and cheap.
+            "generationConfig": {"responseMimeType": "application/json"},
+        });
+        let resp: serde_json::Value = self
+            .http
+            .post(format!(
+                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
+                self.model, self.key
+            ))
+            .json(&body)
+            .send()
+            .await?
+            .error_for_status()?
+            .json()
+            .await?;
+        Ok(resp["candidates"][0]["content"]["parts"][0]["text"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string())
+    }
+
     /// Google Search, through the key that is already configured.
     ///
     /// A separate call rather than grounding the main loop: the step request

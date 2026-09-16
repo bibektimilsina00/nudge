@@ -284,6 +284,16 @@ fn clip(text: &str) -> String {
 /// There is no parameter here that can carry the screen, so passing the wrong
 /// thing is a type error rather than a review comment.
 pub fn prompt(said: &[String], world: &World, step: &Step, risk: Risk) -> String {
+    prompt_for(said, world, &shown(step), risk)
+}
+
+/// The same, given an action already rendered.
+///
+/// Exists so the eval can hold an action fixed while the instructions change --
+/// a prompt with no measurement is a prompt nobody can edit safely. Callers with
+/// a real step want [`prompt`], which renders it the one way that is allowed to
+/// see a step's contents.
+pub fn prompt_for(said: &[String], world: &World, action: &str, risk: Risk) -> String {
     let mut out = String::with_capacity(2048);
 
     // Ordered for a prompt cache: everything stable or append-only first, the one
@@ -327,7 +337,7 @@ pub fn prompt(said: &[String], world: &World, step: &Step, risk: Risk) -> String
 
     out.push_str("\n--- THE PROPOSED ACTION ---\n");
     out.push_str(&format!("Kind: {}\n", risk.name()));
-    out.push_str(&format!("Action: {}\n", shown(step)));
+    out.push_str(&format!("Action: {action}\n"));
     out.push_str("\nVerdict:");
     out
 }

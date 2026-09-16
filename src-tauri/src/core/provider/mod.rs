@@ -590,6 +590,34 @@ pub trait Provider: Send + Sync {
         )))
     }
 
+    /// Can this provider review an action at all?
+    ///
+    /// Asked before the judge is consulted, and the distinction is load-bearing.
+    /// The judge only ever *tightens* -- it turns something that would have
+    /// happened silently into a question -- so a judge that cannot be reached
+    /// would let everything through, which is failing open by another name.
+    ///
+    /// So the two failures are kept apart: a provider that says `false` here is
+    /// not reviewing, and nothing changes from how Nudge behaved before there
+    /// was a judge. A provider that says `true` and then errors has broken a
+    /// promise, and that is a question for a person.
+    fn reviews(&self) -> bool {
+        false
+    }
+
+    /// Judge one proposed action. Returns the model's raw reply.
+    ///
+    /// Raw, because reading a verdict out of it is [`crate::core::judge::read`]'s
+    /// job and the whole point of that living in `core` is that failing closed is
+    /// tested without a network. A provider that returns prose here has not
+    /// failed -- it has answered badly, and that is a verdict of its own.
+    async fn review(&self, _prompt: &str) -> Result<String> {
+        Err(Error::Config(format!(
+            "{} cannot review an action.",
+            self.name()
+        )))
+    }
+
     /// Search the web and come back with an answer and its sources.
     ///
     /// On the provider rather than in a module of its own, because it is a
