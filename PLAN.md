@@ -10,6 +10,12 @@ can run the app at all.
 
 ---
 
+## Beyond this plan
+
+[FEATURES.md](FEATURES.md) is the full inventory between here and *"gets your
+everyday tasks done"* — every feature, what exists, and what each would cost.
+This plan is the near work; that is where the next one comes from.
+
 ## Where this actually is
 
 Built and working: the screen loop, agents that finish a task, MCP servers,
