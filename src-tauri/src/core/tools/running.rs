@@ -183,10 +183,66 @@ const MAX_RUNNING: usize = 4;
 /// process everybody forgot about does not outlive the afternoon.
 const MAX_LIFETIME: std::time::Duration = std::time::Duration::from_secs(15 * 60);
 
+/// A process, and how it is attached to us.
+///
+/// **A pipe is not a terminal, and the tools worth supervising know it.** Run
+/// with its output piped, `claude` prints no prompts, no progress and sometimes
+/// no colour -- it takes the non-interactive path, because that is the sensible
+/// thing for a program to do when nobody is watching. Which is exactly why
+/// today's delegation has to choose a permission mode that never asks: there
+/// really is nobody there.
+///
+/// Supervising one means being somebody. That needs a pseudo-terminal: the child
+/// sees a tty, behaves as it does for a person, and its prompts arrive as it
+/// writes them rather than when a pipe buffer happens to fill.
+///
+/// Both kinds are kept, because most of what gets started -- a dev server, a
+/// build, a watcher -- has nothing to say to anybody and a pty would buy it
+/// nothing but a pile of escape codes.
+enum Kid {
+    /// Pipes. For work nobody needs to answer.
+    Plain(std::process::Child),
+    /// A terminal, and the handle to type back into it.
+    Watched {
+        child: Box<dyn portable_pty::Child + Send + Sync>,
+        /// No lock of its own: every process lives behind the one on `items`,
+        /// so reaching this at all already means holding it.
+        typing: Box<dyn std::io::Write + Send>,
+    },
+}
+
+impl Kid {
+    /// Has it ended, and how?
+    fn done(&mut self) -> Option<std::process::ExitStatus> {
+        match self {
+            Kid::Plain(c) => c.try_wait().ok().flatten(),
+            // portable-pty reports its own status type; only the code matters
+            // here, and `exit_code` is what every caller reads.
+            Kid::Watched { child, .. } => child.try_wait().ok().flatten().map(|s| {
+                use std::os::unix::process::ExitStatusExt;
+                std::process::ExitStatus::from_raw((s.exit_code() as i32) << 8)
+            }),
+        }
+    }
+
+    fn stop(&mut self) {
+        match self {
+            Kid::Plain(c) => {
+                let _ = c.kill();
+                let _ = c.wait();
+            }
+            Kid::Watched { child, .. } => {
+                let _ = child.kill();
+                let _ = child.wait();
+            }
+        }
+    }
+}
+
 pub struct Process {
     pub id: u64,
     pub command: String,
-    child: std::process::Child,
+    child: Kid,
     /// Filled by a reader thread; the child's pipes would otherwise fill and
     /// block it once nobody drained them.
     output: Arc<Mutex<Buffer>>,
@@ -288,12 +344,110 @@ impl Running {
         self.items.lock().unwrap().push(Process {
             id,
             command: command.to_string(),
-            child,
+            child: Kid::Plain(child),
             output,
             started: std::time::Instant::now(),
             finished: None,
         });
         Ok(id)
+    }
+
+    /// Start it on a terminal, so it behaves as it would for a person.
+    ///
+    /// The same refusals as [`start`](Self::start) -- a pty is a way of watching
+    /// something, not a way round what may be watched.
+    ///
+    /// The size is a real one on purpose. Given 0x0 or something tiny, tools
+    /// that draw boxes wrap every line and the output becomes unreadable to
+    /// anything trying to recognise a prompt in it.
+    pub fn watch(&self, workspace: &std::path::Path, command: &str) -> Result<u64> {
+        use portable_pty::{native_pty_system, CommandBuilder, PtySize};
+
+        if let Some(why) = Self::refuse(command) {
+            return Err(Error::Click(why));
+        }
+        if self.items.lock().unwrap().len() >= MAX_RUNNING {
+            return Err(Error::Click(format!(
+                "{MAX_RUNNING} things are already running -- stop one first"
+            )));
+        }
+
+        let pair = native_pty_system()
+            .openpty(PtySize {
+                rows: 40,
+                cols: 120,
+                pixel_width: 0,
+                pixel_height: 0,
+            })
+            .map_err(|e| Error::Click(format!("could not open a terminal: {e}")))?;
+
+        let mut cmd = CommandBuilder::new("/bin/sh");
+        cmd.args(["-c", command]);
+        cmd.cwd(workspace);
+        // Said plainly rather than left to be guessed. A tool that cannot tell
+        // what terminal it is in falls back to the dumbest possible output, and
+        // some refuse colour entirely -- which changes what its prompts look
+        // like, which is the thing being read.
+        cmd.env("TERM", "xterm-256color");
+
+        let child = pair
+            .slave
+            .spawn_command(cmd)
+            .map_err(|e| Error::Click(format!("could not start {command:?}: {e}")))?;
+        // Dropped now: holding the slave open means the reader never sees the
+        // end of the stream, so a finished child looks like a silent one for
+        // ever.
+        drop(pair.slave);
+
+        let reader = pair
+            .master
+            .try_clone_reader()
+            .map_err(|e| Error::Click(format!("could not read the terminal: {e}")))?;
+        let typing = pair
+            .master
+            .take_writer()
+            .map_err(|e| Error::Click(format!("could not write to the terminal: {e}")))?;
+
+        let output = Arc::new(Mutex::new(Buffer::default()));
+        let sink = Arc::clone(&output);
+        std::thread::spawn(move || Pipe::Terminal(reader).drain_into(sink));
+
+        let id = self.next.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+        self.items.lock().unwrap().push(Process {
+            id,
+            command: command.to_string(),
+            child: Kid::Watched { child, typing },
+            output,
+            started: std::time::Instant::now(),
+            finished: None,
+        });
+        Ok(id)
+    }
+
+    /// Type something into one that is watching for it.
+    ///
+    /// A newline is added unless one is already there: every prompt this exists
+    /// to answer is waiting on Return, and an answer without one looks exactly
+    /// like a program that has hung.
+    pub fn answer(&self, id: u64, said: &str) -> Result<()> {
+        use std::io::Write;
+        let mut items = self.items.lock().unwrap();
+        let Some(p) = items.iter_mut().find(|p| p.id == id) else {
+            return Err(Error::Click(format!("nothing running with id {id}")));
+        };
+        let Kid::Watched { typing, .. } = &mut p.child else {
+            return Err(Error::Click(format!(
+                "{id} was not started on a terminal, so there is nothing listening"
+            )));
+        };
+        let line = match said.ends_with('\n') {
+            true => said.to_string(),
+            false => format!("{said}\n"),
+        };
+        typing
+            .write_all(line.as_bytes())
+            .and_then(|_| typing.flush())
+            .map_err(|e| Error::Click(format!("could not answer {id}: {e}")))
     }
 
     /// What it has printed, and whether it is still going.
@@ -328,11 +482,10 @@ impl Running {
                     return Err(Error::Click(format!("nothing running with id {id}")));
                 };
                 if p.finished.is_none() {
-                    p.finished = p.child.try_wait().ok().flatten();
+                    p.finished = p.child.done();
                 }
                 if p.finished.is_none() && p.started.elapsed() > MAX_LIFETIME {
-                    let _ = p.child.kill();
-                    let _ = p.child.wait();
+                    p.child.stop();
                     return Err(Error::Click(format!(
                         "{} ran for {} minutes without finishing, so I stopped it",
                         p.command,
@@ -382,13 +535,12 @@ impl Running {
                     return Err(Error::Click(format!("nothing running with id {id}")));
                 };
                 if p.finished.is_none() {
-                    p.finished = p.child.try_wait().ok().flatten();
+                    p.finished = p.child.done();
                 }
                 // Killed for running too long rather than left forever. A model
                 // that starts something and stops asking should not leave it.
                 if p.finished.is_none() && p.started.elapsed() > MAX_LIFETIME {
-                    let _ = p.child.kill();
-                    let _ = p.child.wait();
+                    p.child.stop();
                     return Err(Error::Click(format!(
                         "{} ran for {} minutes without finishing, so I stopped it",
                         p.command,
@@ -418,7 +570,7 @@ impl Running {
             .unwrap()
             .iter_mut()
             .map(|p| {
-                let alive = matches!(p.child.try_wait(), Ok(None));
+                let alive = p.child.done().is_none();
                 (p.id, p.command.clone(), alive)
             })
             .collect()
@@ -430,8 +582,8 @@ impl Running {
             return Err(Error::Click(format!("nothing running with id {id}")));
         };
         let mut p = items.remove(i);
-        let _ = p.child.kill();
-        let _ = p.child.wait();
+        // `stop` waits; a kill without one leaves a zombie until the app exits.
+        p.child.stop();
         Ok(())
     }
 
@@ -443,8 +595,7 @@ impl Running {
     pub fn stop_all(&self) {
         let mut items = self.items.lock().unwrap();
         for p in items.iter_mut() {
-            let _ = p.child.kill();
-            let _ = p.child.wait();
+            p.child.stop();
         }
         items.clear();
     }
@@ -453,6 +604,9 @@ impl Running {
 enum Pipe {
     Out(std::process::ChildStdout),
     Err(std::process::ChildStderr),
+    /// A terminal, which carries both streams down one channel -- that is what
+    /// a terminal is, and it is why a supervised run needs no second thread.
+    Terminal(Box<dyn Read + Send>),
 }
 
 impl Pipe {
@@ -461,6 +615,7 @@ impl Pipe {
         let mut reader: Box<dyn Read> = match self {
             Pipe::Out(o) => Box::new(o),
             Pipe::Err(e) => Box::new(e),
+            Pipe::Terminal(r) => r,
         };
         while let Ok(n) = reader.read(&mut buf) {
             if n == 0 {
@@ -489,6 +644,81 @@ impl Pipe {
 
 #[cfg(test)]
 mod tests {
+    /// The whole reason a pty exists here: a program can tell.
+    ///
+    /// `test -t 1` asks "is my output a terminal". Through a pipe it is false
+    /// and the tools worth supervising take their non-interactive path -- no
+    /// prompts, no progress, nothing to answer. Which is why the delegation this
+    /// is built for has to pick a permission mode that never asks: there really
+    /// is nobody there.
+    #[test]
+    fn a_watched_process_believes_it_has_a_terminal() {
+        let r = Running::default();
+
+        let piped = r
+            .start(&tmp(), "node -e 'console.log(process.stdout.isTTY===true)'")
+            .unwrap();
+        let out = r
+            .settle(piped, std::time::Duration::from_secs(10), || false)
+            .unwrap();
+        assert!(
+            out.fresh.contains("false"),
+            "a pipe should not look like a tty: {:?}",
+            out.fresh
+        );
+
+        let watched = r
+            .watch(&tmp(), "node -e 'console.log(process.stdout.isTTY===true)'")
+            .unwrap();
+        let out = r
+            .settle(watched, std::time::Duration::from_secs(10), || false)
+            .unwrap();
+        assert!(
+            out.fresh.contains("true"),
+            "a pty should look like a tty: {:?}",
+            out.fresh
+        );
+    }
+
+    /// And we can type back into it, which is the other half.
+    #[test]
+    fn a_watched_process_can_be_answered() {
+        let r = Running::default();
+        // Waits for a line and repeats it -- the shape of every permission
+        // prompt this exists to answer.
+        //
+        // Written as one node expression because `sh` is not something we will
+        // leave running, and `&&` and `;` are refused: the rules that keep a
+        // background job honest apply to a watched one too.
+        let id = r
+            .watch(
+                &tmp(),
+                "node -e \"process.stdin.once('data',function(d){console.log('you said: '+d.toString().trim())})\"",
+            )
+            .unwrap();
+
+        // Give it a moment to reach the read.
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        r.answer(id, "yes").unwrap();
+
+        let out = r
+            .settle(id, std::time::Duration::from_secs(10), || false)
+            .unwrap();
+        assert!(out.fresh.contains("you said: yes"), "{:?}", out.fresh);
+    }
+
+    /// Answering something that was never watching says so.
+    #[test]
+    fn a_piped_process_has_nothing_listening() {
+        let r = Running::default();
+        let id = r
+            .start(&tmp(), "node -e 'setTimeout(function(){}, 2000)'")
+            .unwrap();
+        let e = r.answer(id, "yes").unwrap_err().to_string();
+        assert!(e.contains("not started on a terminal"), "{e}");
+        let _ = r.stop(id);
+    }
+
     /// Waiting covers the whole job in one go, rather than answering the moment
     /// the job says something.
     ///
