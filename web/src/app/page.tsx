@@ -1,4 +1,5 @@
 import Image from "next/image";
+import Link from "next/link";
 import { Check } from "lucide-react";
 
 import { Cat } from "@/components/cat";
@@ -434,6 +435,12 @@ function Footer() {
           >
             Source
           </a>
+          <Link href="/privacy" className="transition-colors hover:text-ink">
+            Privacy
+          </Link>
+          <Link href="/terms" className="transition-colors hover:text-ink">
+            Terms
+          </Link>
         </nav>
       </div>
     </footer>
