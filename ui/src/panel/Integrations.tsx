@@ -214,32 +214,39 @@ function Card({ it, onChanged }: { it: Listed; onChanged: () => void }) {
               every one, which made nine cards into a wall of scope names; it now
               lives one click in, on both panels, so it is still reachable before
               anybody agrees to anything rather than only after something fails. */}
-          <button
-            onClick={() => (it.connected ? setTools((t) => !t) : setOpen((o) => !o))}
-            className="mt-1 text-left text-[10.5px] leading-snug text-ink-2 transition-colors duration-150 hover:text-ink"
-          >
-            {it.about}
-          </button>
+          <p className="text-[10.5px] leading-snug text-ink-2">{it.about}</p>
           {it.connected && it.tools.length > 0 && (
-            // What the server said, not what the catalogue claimed -- and the
-            // way in to changing it, because a count nobody can act on is
-            // decoration.
-            <button
-              onClick={() => setTools((t) => !t)}
-              className="mt-1 text-[10px] text-ink-3 transition-colors duration-150 hover:text-ink-2"
-            >
+            // What the server said, not what the catalogue claimed.
+            <p className="text-[10px] text-ink-3">
               {it.allowed ? `${it.allowed.length} of ${it.tools.length}` : it.tools.length} tools
-              allowed · {tools ? "hide" : "choose"}
-            </button>
+              allowed
+            </p>
           )}
         </div>
 
         {it.connected ? (
+          // Disconnect used to sit here, one click from the front of the row --
+          // the only destructive thing on the page, and the easiest to hit by
+          // accident. It is behind this now, next to the tools it belongs with.
           <button
-            onClick={() => void invoke("disconnect", { key: it.key }).then(onChanged)}
-            className="shrink-0 rounded-full bg-raise px-2.5 py-[5px] text-[11px] font-medium text-ink-2 transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
+            onClick={() => setTools((t) => !t)}
+            aria-expanded={tools}
+            aria-label={tools ? `Hide ${it.name} settings` : `Show ${it.name} settings`}
+            className="grid size-6 shrink-0 place-items-center rounded-full text-ink-3 transition-colors duration-150 hover:bg-raise hover:text-ink-2"
           >
-            Disconnect
+            <svg
+              viewBox="0 0 16 16"
+              className="size-3.5 transition-transform duration-200 ease-out"
+              style={{ transform: tools ? "rotate(90deg)" : "none" }}
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+            >
+              <path d="M6 3l5 5-5 5" />
+            </svg>
           </button>
         ) : (
           <button
@@ -421,6 +428,17 @@ function Tools({ it, onChanged }: { it: Listed; onChanged: () => void }) {
         className="w-full rounded-lg bg-blue py-1.5 text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi disabled:opacity-50"
       >
         {saving ? "Saving…" : "Save"}
+      </button>
+
+      {/* Last, and quiet until you mean it. Taking the connection away is the one
+          thing here that cannot be undone with another click -- the token goes
+          from the Keychain with it -- so it is at the bottom, behind the arrow,
+          and does not look like the Save above it. */}
+      <button
+        onClick={() => void invoke("disconnect", { key: it.key }).then(onChanged)}
+        className="w-full rounded-lg py-1.5 text-[11px] font-medium text-ink-3 transition-colors duration-150 hover:bg-[#ff5f57] hover:text-white"
+      >
+        Disconnect {it.name}
       </button>
     </div>
   );
