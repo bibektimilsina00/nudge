@@ -1251,10 +1251,52 @@ const AGENT_RULES: &str = "## Knowing when you are done\n\n\
      nothing.\n\n";
 
 /// Models wrap JSON in prose and code fences no matter how firmly you ask.
+/// The one object to act on, out of whatever the model actually sent.
+///
+/// **A list is the interesting case.** Asked for the next step, a model that has
+/// worked out four of them sometimes sends all four as a JSON array. That is a
+/// reasonable thing to do and Nudge performs one step per turn, so the right
+/// answer is the first of them -- not, as this used to do, nothing at all.
+///
+/// It failed by accident rather than by rule: the span from the first `{` to the
+/// last `}` is `{...},{...}` for a two-element array, which is not JSON, so a
+/// perfectly good first step was discarded and the turn was spent saying "no
+/// usable point". Seen in a real run, where a write of a finished document was
+/// thrown away because a plan came with it.
 pub(crate) fn first_json(text: &str) -> Option<serde_json::Value> {
-    let start = text.find('{')?;
-    let end = text.rfind('}')?;
-    serde_json::from_str(text.get(start..=end)?).ok()
+    let trimmed = text
+        .trim()
+        .trim_start_matches("```json")
+        .trim_matches('`')
+        .trim();
+
+    // Whole-reply first, which is what a well-behaved model sends and what
+    // handles a list correctly.
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(trimmed) {
+        return match v {
+            serde_json::Value::Array(items) => items.into_iter().find(|i| i.is_object()),
+            v if v.is_object() => Some(v),
+            _ => None,
+        };
+    }
+
+    // A list with prose around it, or after it.
+    if let (Some(open), Some(close)) = (trimmed.find('['), trimmed.rfind(']')) {
+        if open < close {
+            if let Ok(serde_json::Value::Array(items)) =
+                serde_json::from_str::<serde_json::Value>(&trimmed[open..=close])
+            {
+                if let Some(first) = items.into_iter().find(|i| i.is_object()) {
+                    return Some(first);
+                }
+            }
+        }
+    }
+
+    // One object with prose around it, which is the ordinary untidy case.
+    let start = trimmed.find('{')?;
+    let end = trimmed.rfind('}')?;
+    serde_json::from_str(trimmed.get(start..=end)?).ok()
 }
 
 /// Unknown or missing means click: it is what most targets want, and a wrong
@@ -1467,6 +1509,55 @@ pub(crate) fn no_point(provider: &'static str, detail: impl Into<String>) -> Err
 
 #[cfg(test)]
 mod tests {
+    /// A model that plans ahead sends a list. The first of them is the step.
+    ///
+    /// Found in a real run: a finished document was written, the model sent the
+    /// write together with what it meant to do next, and the whole turn was
+    /// discarded as "no usable point".
+    #[test]
+    fn a_plan_arriving_as_a_list_still_yields_a_step() {
+        let v = super::first_json(
+            r#"[{"kind":"write","path":"a.md","content":"x","say":"writing"},
+                {"kind":"read","path":"a.md","say":"checking"}]"#,
+        )
+        .expect("a list is not nothing");
+        assert_eq!(v["kind"], "write");
+        assert_eq!(v["path"], "a.md");
+    }
+
+    #[test]
+    fn a_list_with_prose_around_it_still_works() {
+        let v = super::first_json(
+            "Here is my plan:\n[{\"kind\":\"done\",\"say\":\"finished\"}]\nHope that helps.",
+        )
+        .expect("prose is not a reason to lose the step");
+        assert_eq!(v["kind"], "done");
+    }
+
+    /// The ordinary case, and a fenced one.
+    #[test]
+    fn a_single_object_is_read_however_it_is_wrapped() {
+        for reply in [
+            r#"{"kind":"done","say":"ok"}"#,
+            "```json\n{\"kind\":\"done\",\"say\":\"ok\"}\n```",
+            "Sure.\n{\"kind\":\"done\",\"say\":\"ok\"}",
+        ] {
+            assert_eq!(
+                super::first_json(reply).expect(reply)["kind"],
+                "done",
+                "{reply}"
+            );
+        }
+    }
+
+    /// An empty list is not a step, and neither is prose.
+    #[test]
+    fn nothing_usable_is_still_nothing() {
+        assert!(super::first_json("[]").is_none());
+        assert!(super::first_json("I am not sure what to do.").is_none());
+        assert!(super::first_json("").is_none());
+    }
+
     use super::*;
 
     #[test]
