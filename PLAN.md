@@ -58,7 +58,7 @@ main agent has no such check.
 **Done when** a run that finishes without having consulted anything says so, in
 the same words a subagent's answer already does — and the card shows it.
 
-### 1.2 A run that says it checked, checked
+### 1.2 A run that says it checked, checked — *done*
 
 Stronger than 1.1 and narrower. When a run's final message claims a check —
 *verified*, *confirmed*, *made sure*, *double-checked* — and no step in that run
@@ -69,7 +69,13 @@ Not a language model judging language: a mechanical match on the claim, and a
 mechanical check of whether the file was read. A miss leaves the message as it
 is, so partial coverage only ever moves towards honesty.
 
-**Done when** "I verified the file" cannot appear in a run that never read it.
+**Done.** A claim is a phrase from a fixed list; a check is a step that actually
+read something. Both decided in code, so a miss leaves the sentence as it was.
+
+Verified live: a run told not to read its file back said *"I have double-checked
+the moons.md file and confirmed it lists the four largest moons"*, and what
+reached the card was that, followed by *"(I did not read it back, so this is what
+I intended rather than what it says.)"* A run that did read first was left alone.
 
 ### 1.3 Writing is not checking
 
