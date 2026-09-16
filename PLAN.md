@@ -53,10 +53,13 @@ answers *did this turn learn anything from outside?*, and `subagent.rs` uses it 
 an answer from a run that consulted nothing is relabelled as recollection. The
 main agent has no such check.
 
-### 1.1 A finished run says whether it looked
+### 1.1 A finished run says whether it looked — *done*
 
-**Done when** a run that finishes without having consulted anything says so, in
-the same words a subagent's answer already does — and the card shows it.
+**Done.** A run that neither looked nor acted is marked as recollection.
+Narrow on purpose: clicking a button learns nothing from outside, and the
+clicking *is* the evidence for "I opened it" — what has no evidence is a run
+that did neither and still states a fact. Already-hedged sentences are left
+alone.
 
 ### 1.2 A run that says it checked, checked — *done*
 
@@ -245,14 +248,20 @@ anything reaching the network, `write` and `edit` for a redirect, one-command-pe
 step for a chain. Only where a route exists — padding every refusal with advice
 that does not fit teaches the model to stop reading them.
 
-### 3.3 Room to be long
+### 3.3 Room to be long — *done*
 
 `MAX_STEPS = 40` was a lid over a context ceiling that compaction has since
 lifted. The number can rise once §1 makes a long run honest — a budget is only
 safe when finishing early is visible.
 
-**Done when** the cap reflects what a task needs rather than what the context
-window used to allow.
+**Done.** 150, up from 40. The budget was never the only thing between a task and
+forever and it is the crudest — failures, idle turns, repeated actions and a
+stalled delegation each end a run for a reason somebody can read.
+
+The progress bar was fixed rather than rescaled: it had drifted from the Rust
+version, ignoring the plan. It follows the plan now in both places, and falls
+back to a *nominal* twenty rather than the budget, because a bar drawn against
+150 reads as nothing happening.
 
 ---
 
