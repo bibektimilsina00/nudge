@@ -122,15 +122,37 @@ pub fn keep_everywhere(app: &AppHandle) {
     // absence is cheap to ask about. So ask first, and on the overwhelming majority
     // of ticks, where the answer is "still there", touch nothing at all.
     if crate::app::ui::native::on_screen(ns.windowNumber()) {
-        REPAIRS.store(0, std::sync::atomic::Ordering::Relaxed);
+        // Seen once is not the same as settled.
+        //
+        // Resetting the budget here on a single sighting made the budget
+        // decorative: a repair puts the window back for exactly one poll, the
+        // next poll sees it and resets, and the one after that finds it evicted
+        // again with a full allowance. Evicted, repaired, seen, reset, evicted,
+        // forever, at ten times a second -- which is the flicker, and both
+        // windows do it in step because the repair touches the level and the
+        // collection behaviour that they share.
+        //
+        // Half a second of being continuously on screen is what counts as
+        // settled and hands the allowance back.
+        use std::sync::atomic::Ordering::Relaxed;
+        let seen = SETTLED.load(Relaxed).saturating_add(1);
+        SETTLED.store(seen.min(5), Relaxed);
+        if seen >= 5 {
+            REPAIRS.store(0, Relaxed);
+        }
         return;
     }
+    SETTLED.store(0, std::sync::atomic::Ordering::Relaxed);
 
     // Belt and braces, for the case where the overview itself takes the window out
     // of the list: the Space cannot change underneath Mission Control, so there is
     // nothing this could usefully repair while it is up, and putting the window
     // back is the exchange that shows as a flash.
-    if crate::app::ui::native::mission_control() {
+    // The panel's cached answer rather than a fresh look, and deliberately so:
+    // that one is sticky, needing four polls in a row to believe the overview is
+    // over. A raw call can come back unsure in the middle of a scrub, and unsure
+    // for one tick here is a repair, which is a flash.
+    if crate::app::ui::panel::overview() {
         return;
     }
 
@@ -154,6 +176,7 @@ pub fn keep_everywhere(app: &AppHandle) {
             return;
         }
         REPAIRS.store(tried + 1, Relaxed);
+        eprintln!("overlay: off screen, putting it back (try {})", tried + 1);
     }
 
     ns.setCollectionBehavior(behavior());
@@ -167,11 +190,16 @@ pub fn keep_everywhere(app: &AppHandle) {
     crate::app::ui::native::keep_front();
 }
 
-/// Repairs attempted since the overlay was last seen on screen.
+/// Repairs attempted since the overlay was last settled on screen.
 ///
 /// Main thread only, like everything else in here.
 #[cfg(target_os = "macos")]
 static REPAIRS: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Consecutive polls that have found the overlay on screen. The budget above is
+/// only handed back once this says the window has stopped being taken away.
+#[cfg(target_os = "macos")]
+static SETTLED: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 #[cfg(not(target_os = "macos"))]
 pub fn keep_everywhere(app: &AppHandle) {

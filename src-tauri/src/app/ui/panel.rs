@@ -86,14 +86,16 @@ pub fn watch_overview() {
 
     if crate::app::ui::native::mission_control() {
         CLEAR.store(0, Relaxed);
-        OVERVIEW.store(true, Relaxed);
+        if !OVERVIEW.swap(true, Relaxed) {
+            eprintln!("overview: up");
+        }
         return;
     }
 
     let seen = CLEAR.load(Relaxed).saturating_add(1);
     CLEAR.store(seen.min(ENOUGH), Relaxed);
-    if seen >= ENOUGH {
-        OVERVIEW.store(false, Relaxed);
+    if seen >= ENOUGH && OVERVIEW.swap(false, Relaxed) {
+        eprintln!("overview: over");
     }
 }
 
