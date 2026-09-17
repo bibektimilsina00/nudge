@@ -34,7 +34,7 @@ import { Settings } from "./panel/Settings";
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[252px]",
+  home: "h-[286px]",
   agents: "h-[320px]",
   settings: "h-[640px]",
   integrations: "h-[640px]",
@@ -115,7 +115,7 @@ export default function Panel() {
   // is one decision and it lives in notch.rs, next to the reasoning for it.
   useEffect(() => {
     const [w, h] = open
-      ? [540, view === "home" ? 266 : view === "agents" ? 320 : 640]
+      ? [540, view === "home" ? 300 : view === "agents" ? 320 : 640]
       : [248, 33];
     void invoke("set_open_size", { w, h });
   }, [open, view]);
