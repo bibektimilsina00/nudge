@@ -64,6 +64,18 @@ pub fn bind(app: &AppHandle, hotkey: &str) -> std::result::Result<(), Box<dyn st
 pub fn on_key(app: &AppHandle, state: ShortcutState) {
     match state {
         ShortcutState::Pressed => {
+            // Nothing works before there is an account, so the key that starts
+            // everything does nothing either. Silently: the panel already says
+            // what is needed, and an error on a bare modifier would fire on
+            // every ctrl+click somebody makes.
+            //
+            // Only the press. Releasing still runs, because that is the path
+            // that puts the microphone down -- gating it would strand a
+            // recording if the session ended mid-hold.
+            if !crate::core::account::signed_in() {
+                return;
+            }
+
             // Neither of these can be fixed by recording anyway, and both have a
             // real remedy the OS can show. The prompt does not block, so a
             // first-ever hold would otherwise record silence behind the dialog and

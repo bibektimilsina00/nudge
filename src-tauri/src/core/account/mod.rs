@@ -53,6 +53,28 @@ struct SignedIn {
     user: Account,
 }
 
+/// Whether there is an account, without going to disk to find out.
+///
+/// The hotkey asks this on every press, and the hotkey is usually a bare
+/// modifier -- Control fires on every ctrl+click anybody makes -- so reading a
+/// file here would put a filesystem hit on a key people hold down by accident
+/// all day. Read once, then kept in step by the two functions that can change
+/// the answer.
+static SIGNED_IN: std::sync::OnceLock<std::sync::atomic::AtomicBool> = std::sync::OnceLock::new();
+
+fn flag() -> &'static std::sync::atomic::AtomicBool {
+    SIGNED_IN.get_or_init(|| std::sync::atomic::AtomicBool::new(current().is_some()))
+}
+
+/// Is anybody signed in?
+pub fn signed_in() -> bool {
+    flag().load(std::sync::atomic::Ordering::Relaxed)
+}
+
+fn note(yes: bool) {
+    flag().store(yes, std::sync::atomic::Ordering::Relaxed);
+}
+
 fn profile() -> std::path::PathBuf {
     dirs::home_dir()
         .unwrap_or_default()
@@ -93,7 +115,9 @@ fn remember(account: &Account, token: &str) -> Result<(), String> {
     }
     let body = serde_json::to_string_pretty(account)
         .map_err(|e| format!("could not save the sign-in: {e}"))?;
-    std::fs::write(&path, body).map_err(|e| format!("could not save the sign-in: {e}"))
+    std::fs::write(&path, body).map_err(|e| format!("could not save the sign-in: {e}"))?;
+    note(true);
+    Ok(())
 }
 
 /// Forget this device locally, whatever the server thinks.
@@ -104,6 +128,7 @@ fn remember(account: &Account, token: &str) -> Result<(), String> {
 fn forget_locally() {
     secret::forget_keychain(ITEM);
     let _ = std::fs::remove_file(profile());
+    note(false);
 }
 
 /// Trade a provider's proof for a session, and keep it.
@@ -200,6 +225,15 @@ mod tests {
         if std::env::var("NUDGE_API").is_err() {
             assert_eq!(api(), "https://nudge.runmycrew.com");
         }
+    }
+
+    #[test]
+    fn the_cached_answer_starts_from_what_is_actually_stored() {
+        // The hotkey is gated on this, so an inverted first read is the
+        // difference between an app that cannot be used and one that lets
+        // anybody in. Cheap to assert, and the only part of the cache that is
+        // not a plain atomic.
+        assert_eq!(signed_in(), current().is_some());
     }
 
     #[test]
