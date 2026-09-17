@@ -28,7 +28,7 @@ export default function App() {
           that exists for 150ms at a target cannot be judged; this one holds
           still. It yields whenever there is a real one, so debugging never
           shows two. */}
-      {hand && !point && <Pointer at={hand} act="click" />}
+      {hand && !point && <Pointer at={hand} act="hover" following />}
       {/* No status bubble. The notch already says Listening, Thinking and
           Speaking, and the step itself is spoken aloud -- repeating both at the
           bottom of the screen was two captions for one event.

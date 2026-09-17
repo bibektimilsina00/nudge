@@ -19,7 +19,16 @@ const MACHINE = "State Machine 1";
 const TIP = { x: 0.3, y: 0.22 };
 const SIZE = 56;
 
-export function Pointer({ at, act = "click" }: { at: Point; act?: Act }) {
+export function Pointer({
+  at,
+  act = "click",
+  following = false,
+}: {
+  at: Point;
+  act?: Act;
+  /** Riding the real cursor rather than sitting on a target. Debug only. */
+  following?: boolean;
+}) {
   const { rive, RiveComponent } = useRive({
     src: pointer,
     stateMachines: MACHINE,
@@ -45,17 +54,30 @@ export function Pointer({ at, act = "click" }: { at: Point; act?: Act }) {
 
   // Once per target. A new point means a new thing being pressed; the same point
   // arriving twice is the loop looking again, not a second click.
+  //
+  // Never while following. The cursor moves sixty times a second and each move
+  // is a new point, so this fired the press animation sixty times a second and
+  // the hand never finished one.
   useEffect(() => {
-    if (act !== "hover") click?.fire();
-  }, [at.x, at.y, act, click]);
+    if (!following && act !== "hover") click?.fire();
+  }, [at.x, at.y, act, click, following]);
 
   return (
     <div
       aria-hidden
-      className="pointer-events-none fixed motion-safe:transition-[left,top] motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.23,1,0.32,1)]"
+      className={[
+        "pointer-events-none fixed top-0 left-0",
+        // Moving to a target is a journey worth watching, so it eases. Riding
+        // the cursor is not: an ease is a lag, and at sixty updates a second it
+        // reads as the hand being dragged along behind on a piece of elastic.
+        following
+          ? ""
+          : "motion-safe:transition-transform motion-safe:duration-300 motion-safe:ease-[cubic-bezier(0.23,1,0.32,1)]",
+      ].join(" ")}
       style={{
-        left: at.x - SIZE * TIP.x,
-        top: at.y - SIZE * TIP.y,
+        // `transform`, not `left`/`top`. The old pair moved this by relayout on
+        // every frame; a translate is composited and never touches layout.
+        transform: `translate3d(${at.x - SIZE * TIP.x}px, ${at.y - SIZE * TIP.y}px, 0)`,
         width: SIZE,
         height: SIZE,
       }}
