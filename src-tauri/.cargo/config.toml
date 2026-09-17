@@ -1,0 +1,7 @@
+# Sign every binary before running it. See scripts/signed-run.sh for why.
+#
+# The path is relative to the working directory, not to this file -- and cargo only
+# reads this file when the working directory is src-tauri or below, which is the
+# same condition. Every entry point here does `cd src-tauri && cargo ...`.
+[target.'cfg(target_os = "macos")']
+runner = "../scripts/signed-run.sh"

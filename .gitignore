@@ -4,6 +4,9 @@ shot.png
 hit-*.png
 .DS_Store
 config.toml
+# ...except cargo's, which carries the signing runner and has to be shared: an
+# unsigned dev binary makes the Keychain re-prompt after every build.
+!src-tauri/.cargo/config.toml
 .env
 .env.*
 dist/
