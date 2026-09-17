@@ -108,6 +108,15 @@ fn overlay() -> Option<&'static NSWindow> {
 ///
 /// So this is the signal to get out of the way rather than push harder.
 ///
+/// Two tests, and the first one is the one to believe. WindowManager puts a
+/// window called `ExposeShieldWindow` across the display for as long as the
+/// overview is up, which is a name rather than a shape and so does not go vague
+/// while the thing is still animating.
+///
+/// The second is kept underneath it because window names need Screen Recording
+/// to be readable at all, and an app that has had that permission pulled should
+/// degrade to the old guess rather than to nothing.
+///
 /// Measured rather than guessed, in and out of the overview: the Dock owns exactly
 /// one extra on-screen window while it is up, at layer 20, and nothing of the sort
 /// while it is not. Size is the other half of the test, because the Dock's own
@@ -122,7 +131,8 @@ pub fn mission_control() -> bool {
     use core_foundation::number::CFNumber;
     use core_foundation::string::CFString;
     use core_graphics::window::{
-        copy_window_info, kCGWindowBounds, kCGWindowListOptionOnScreenOnly, kCGWindowOwnerName,
+        copy_window_info, kCGWindowBounds, kCGWindowListOptionOnScreenOnly, kCGWindowName,
+        kCGWindowOwnerName,
     };
 
     let Some(list) = copy_window_info(kCGWindowListOptionOnScreenOnly, 0) else {
@@ -139,6 +149,7 @@ pub fn mission_control() -> bool {
     let Some(screen) = screen else { return false };
 
     let owner_key = unsafe { CFString::wrap_under_get_rule(kCGWindowOwnerName) };
+    let name_key = unsafe { CFString::wrap_under_get_rule(kCGWindowName) };
     let bounds_key = unsafe { CFString::wrap_under_get_rule(kCGWindowBounds) };
     let w_key = CFString::from_static_string("Width");
     let h_key = CFString::from_static_string("Height");
@@ -152,6 +163,27 @@ pub fn mission_control() -> bool {
         let Some(owner) = win.find(&owner_key).and_then(|v| v.downcast::<CFString>()) else {
             continue;
         };
+
+        // The overview names itself. WindowManager puts up a shield across the
+        // whole display for the duration, and it is called what it is, so this
+        // asks a question about identity rather than about geometry -- which is
+        // the half of the Dock test below that cannot be trusted mid-gesture.
+        //
+        // Window names are only populated for a process holding Screen
+        // Recording. Nudge does, because reading the screen is the entire app,
+        // but if that is ever revoked this quietly returns nothing and the size
+        // test underneath is what answers.
+        if owner == "WindowManager" {
+            let named = win
+                .find(&name_key)
+                .and_then(|v| v.downcast::<CFString>())
+                .map(|n| n == "ExposeShieldWindow")
+                .unwrap_or(false);
+            if named {
+                return true;
+            }
+        }
+
         if owner != "Dock" {
             continue;
         }

@@ -61,12 +61,40 @@ pub fn overview() -> bool {
 }
 
 /// Look, and remember. Main thread only, which is where the poll calls it.
+///
+/// Quick to believe it is up, slow to believe it is over. A four-finger swipe
+/// does not toggle the overview, it *scrubs* it: the gesture holds the thing
+/// mid-animation for as long as the fingers are down, and any test for it can
+/// come back unsure somewhere in the middle. Taken at face value ten times a
+/// second, one unsure reading reopens the panel and the next closes it again,
+/// which is the flicker rather than a cure for it.
+///
+/// So a single "up" counts, and "over" has to be said four times running --
+/// four polls, a little under half a second. Nothing is lost by the delay:
+/// closing promptly is what matters here, and reopening half a second after
+/// somebody has already put the overview away is not something anybody waits
+/// for.
+///
+/// The counter is plain load-then-store rather than a real atomic dance
+/// because this only ever runs on the main thread, from one poll.
 #[cfg(target_os = "macos")]
 pub fn watch_overview() {
-    OVERVIEW.store(
-        crate::app::ui::native::mission_control(),
-        std::sync::atomic::Ordering::Relaxed,
-    );
+    use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
+    /// Consecutive polls that have said the overview is gone.
+    static CLEAR: AtomicU8 = AtomicU8::new(0);
+    const ENOUGH: u8 = 4;
+
+    if crate::app::ui::native::mission_control() {
+        CLEAR.store(0, Relaxed);
+        OVERVIEW.store(true, Relaxed);
+        return;
+    }
+
+    let seen = CLEAR.load(Relaxed).saturating_add(1);
+    CLEAR.store(seen.min(ENOUGH), Relaxed);
+    if seen >= ENOUGH {
+        OVERVIEW.store(false, Relaxed);
+    }
 }
 
 #[cfg(not(target_os = "macos"))]

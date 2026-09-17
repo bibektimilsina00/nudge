@@ -122,6 +122,7 @@ pub fn keep_everywhere(app: &AppHandle) {
     // absence is cheap to ask about. So ask first, and on the overwhelming majority
     // of ticks, where the answer is "still there", touch nothing at all.
     if crate::app::ui::native::on_screen(ns.windowNumber()) {
+        REPAIRS.store(0, std::sync::atomic::Ordering::Relaxed);
         return;
     }
 
@@ -131,6 +132,28 @@ pub fn keep_everywhere(app: &AppHandle) {
     // back is the exchange that shows as a flash.
     if crate::app::ui::native::mission_control() {
         return;
+    }
+
+    // Try a few times, then stop trying.
+    //
+    // Every branch above is a reason not to put the window back, and each one
+    // depends on recognising a situation correctly. This does not: whatever is
+    // holding the screen, an attempt that did not work is not worth making ten
+    // times a second, because the compositor draws every exchange and a fight
+    // nobody wins is what the flicker is made of.
+    //
+    // Three is enough for the case this exists for. A Space change evicts the
+    // window once and the first repair takes; anything still evicting it after
+    // three tries is winning on purpose, and the right move against that is to
+    // stop and wait for it to end. The count resets the moment the window is
+    // seen on screen again, so the next genuine eviction gets a full budget.
+    {
+        use std::sync::atomic::Ordering::Relaxed;
+        let tried = REPAIRS.load(Relaxed);
+        if tried >= 3 {
+            return;
+        }
+        REPAIRS.store(tried + 1, Relaxed);
     }
 
     ns.setCollectionBehavior(behavior());
@@ -143,6 +166,12 @@ pub fn keep_everywhere(app: &AppHandle) {
     // to stay in front; tao's is empty and ordered out.
     crate::app::ui::native::keep_front();
 }
+
+/// Repairs attempted since the overlay was last seen on screen.
+///
+/// Main thread only, like everything else in here.
+#[cfg(target_os = "macos")]
+static REPAIRS: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
 
 #[cfg(not(target_os = "macos"))]
 pub fn keep_everywhere(app: &AppHandle) {
