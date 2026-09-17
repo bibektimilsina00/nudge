@@ -83,9 +83,23 @@ pub fn anchor_overlay(app: &AppHandle) -> bool {
             false,
         )
     };
-    anchor.setOpaque(true);
-    anchor.setBackgroundColor(Some(&NSColor::blackColor()));
-    anchor.setAlphaValue(0.004);
+    // Honestly transparent, rather than opaque-and-then-faded.
+    //
+    // This used to claim `isOpaque` while carrying an alpha of 0.004, which is
+    // a contradiction the compositor has to resolve on every frame it draws --
+    // and Mission Control animates for the whole time it is up. Both real
+    // windows are children of this one, so anything it churns on, they churn on
+    // together, which is exactly the shape of the flicker: two windows blinking
+    // in perfect step.
+    //
+    // It still has to draw. A window that never draws gets no backing store and
+    // the window server stops tracking it, and an untracked anchor is no anchor
+    // -- the children go back to being evicted by full-screen Spaces. So the
+    // near-invisible black stays, it is just in the colour where it belongs
+    // instead of in a whole-window alpha that fights the opacity flag.
+    anchor.setOpaque(false);
+    let faint = NSColor::colorWithCalibratedWhite_alpha(0.0, 0.004);
+    anchor.setBackgroundColor(Some(&faint));
     anchor.setLevel(NSScreenSaverWindowLevel);
     anchor.setIgnoresMouseEvents(true);
     anchor.setCollectionBehavior(
@@ -224,13 +238,6 @@ pub fn mission_control() -> bool {
     // not a gap, and falling through to the guess there is what made an
     // ordinary swipe between desktops look like the overview.
     !any_name && dock_covers
-}
-
-/// Put it back in front, for whatever reason it fell behind.
-pub fn keep_front() {
-    if let Some(win) = overlay() {
-        win.orderFrontRegardless();
-    }
 }
 
 /// Give any Tauri window the overlay's Space behaviour and level.
