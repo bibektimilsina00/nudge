@@ -172,7 +172,10 @@ fn say_busy(app: &AppHandle, doing: &str) {
 /// Something to say while the model thinks.
 ///
 /// Rotated rather than random: the same phrase every time is a recording, and a
-/// random one is a slot machine.
+/// random one is a slot machine. Seven, because two alternating is its own kind
+/// of recording -- you hear the pattern by the third turn. The lengths differ as
+/// well as the words; a run of identically clipped two-word replies sounds like
+/// a machine even when the words change.
 ///
 /// Every line here has to stay true no matter how the turn ends, because it is
 /// said before anything is known -- before the screen is read, before the model
@@ -185,7 +188,15 @@ fn say_busy(app: &AppHandle, doing: &str) {
 fn acknowledgement() -> &'static str {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static N: AtomicUsize = AtomicUsize::new(0);
-    const LINES: [&str; 2] = ["One sec.", "One moment."];
+    const LINES: [&str; 7] = [
+        "One sec.",
+        "Just a moment.",
+        "Hold on.",
+        "Give me a second.",
+        "One moment.",
+        "Bear with me.",
+        "Two seconds.",
+    ];
     LINES[N.fetch_add(1, Ordering::Relaxed) % LINES.len()]
 }
 
