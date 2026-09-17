@@ -17,6 +17,45 @@ pub fn window(app: &AppHandle) -> Option<WebviewWindow> {
 
 /// Resize to whatever the content turned out to be, so the panel is never a box
 /// with empty space at the bottom.
+/// Grow the panel into a window, or put it back.
+///
+/// The panel hangs from the notch at a size chosen for glancing at. Some work is
+/// not a glance -- reading what an agent did, going through nineteen connectors,
+/// a settings page with five sections -- and for that it needs to be a window.
+///
+/// Sized against the screen rather than fixed, because the smallest Mac this
+/// runs on and the largest differ by a factor of three, and a number that suits
+/// one looks absurd on the other.
+pub fn widen(app: &AppHandle, wide: bool) {
+    let Some(win) = window(app) else { return };
+    if !wide {
+        let _ = win.set_size(LogicalSize::new(SIZE.0, SIZE.1));
+        dock_to_notch(app);
+        return;
+    }
+    let screen = win
+        .current_monitor()
+        .ok()
+        .flatten()
+        .map(|m| {
+            let s = m.scale_factor();
+            (m.size().width as f64 / s, m.size().height as f64 / s)
+        })
+        .unwrap_or((1440.0, 900.0));
+    // Most of the screen, not all of it: a panel that covers everything has
+    // stopped being a panel, and the thing it is for is usually behind it.
+    let w = (screen.0 * 0.62).clamp(760.0, 1180.0);
+    let h = (screen.1 * 0.68).clamp(480.0, 820.0);
+    let _ = win.set_size(LogicalSize::new(w, h));
+    let _ = win.set_position(tauri::LogicalPosition::new(
+        (screen.0 - w) / 2.0,
+        (screen.1 - h) / 2.5,
+    ));
+    let _ = win.set_ignore_cursor_events(false);
+    let _ = win.show();
+    let _ = win.set_focus();
+}
+
 pub fn fit(app: &AppHandle, height: f64) {
     let Some(win) = window(app) else { return };
     let _ = win.set_size(LogicalSize::new(420.0, height.clamp(160.0, 640.0)));

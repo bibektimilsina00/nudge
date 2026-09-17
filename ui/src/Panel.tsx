@@ -71,6 +71,10 @@ export default function Panel() {
     setView("integrations");
   };
   const [docked, setDocked] = useState(false);
+  // Expanded into a window, rather than hanging off the notch. Some work is not
+  // a glance -- reading what an agent did, nineteen connectors, a settings page
+  // with five sections -- and the panel is sized for glancing.
+  const [wide, setWide] = useState(false);
   // Heading this way, but not here yet. Its own ring, wider than the dock's --
   // see `is_near` in notch.rs for why this cannot be a delay before opening.
   const [near, setNear] = useState(false);
@@ -163,7 +167,9 @@ export default function Panel() {
           // two directions at slightly different rates.
           "transition-[width,height] duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           open
-            ? `${HEIGHT[view]} w-[540px]`
+            ? wide
+              ? "h-full w-full"
+              : `${HEIGHT[view]} w-[540px]`
             : busy
               // Both pills are the notch's own height, so the strip reads as the
               // hardware getting wider rather than as a bar hanging below it.
@@ -193,6 +199,12 @@ export default function Panel() {
             onGo={setView}
             docked={docked}
             onDock={() => dock(!docked)}
+            wide={wide}
+            onWide={() => {
+              const next = !wide;
+              setWide(next);
+              void invoke("widen_panel", { wide: next });
+            }}
           />
           <div className="flex min-w-0 flex-1 flex-col">
           {view === "agents" ? (
@@ -356,11 +368,15 @@ function Rail({
   onGo,
   docked,
   onDock,
+  wide,
+  onWide,
 }: {
   view: View;
   onGo: (v: View) => void;
   docked: boolean;
   onDock: () => void;
+  wide: boolean;
+  onWide: () => void;
 }) {
   const items: [View, string, React.ReactNode][] = [
     ["home", "Home", <Home key="h" />],
@@ -370,34 +386,98 @@ function Rail({
     ["settings", "Settings", <Gear key="g" />],
   ];
   return (
-    <nav className="flex w-[124px] shrink-0 flex-col gap-0.5 border-r border-line px-2 py-2.5">
+    <nav className="flex w-[46px] shrink-0 flex-col items-center gap-1 border-r border-line py-2.5">
       {items.map(([key, label, icon]) => {
         // Report is a page off Settings, so Settings stays lit while you are in
         // it -- otherwise the rail says you are nowhere.
         const on = view === key || (key === "settings" && view === "report");
         return (
-          <button
-            key={key}
-            onClick={() => onGo(key)}
-            aria-current={on ? "page" : undefined}
-            className={[
-              "flex items-center gap-2 rounded-lg px-2 py-[7px] text-left text-[11.5px]",
-              "transition-colors duration-150",
-              on ? "bg-raise-hi text-white" : "text-ink-2 hover:bg-raise hover:text-white/85",
-            ].join(" ")}
-          >
-            <span className="grid w-4 shrink-0 place-items-center">{icon}</span>
-            <span className="truncate">{label}</span>
-          </button>
+          <Hint key={key} label={label}>
+            <button
+              onClick={() => onGo(key)}
+              aria-label={label}
+              aria-current={on ? "page" : undefined}
+              className={[
+                "grid size-[30px] place-items-center rounded-[9px]",
+                "transition-colors duration-150",
+                on ? "bg-raise-hi text-white" : "text-ink-2 hover:bg-raise hover:text-white/85",
+              ].join(" ")}
+            >
+              {icon}
+            </button>
+          </Hint>
         );
       })}
 
-      {/* The companion's socket, at the foot of the rail. Not a section, so it
-          sits apart from them rather than reading as a sixth. */}
-      <div className="mt-auto flex justify-center pt-2">
+      <div className="mt-auto flex flex-col items-center gap-1.5">
+        <Hint label={wide ? "Shrink" : "Expand"}>
+          <button
+            onClick={onWide}
+            aria-label={wide ? "Shrink" : "Expand"}
+            aria-pressed={wide}
+            className="grid size-[30px] place-items-center rounded-[9px] text-ink-3 transition-colors duration-150 hover:bg-raise hover:text-white/85"
+          >
+            <Corners inward={wide} />
+          </button>
+        </Hint>
+        {/* The companion's socket, at the foot. Not a section, so it sits apart
+            from them rather than reading as a sixth. */}
         <Perch docked={docked} onToggle={onDock} />
       </div>
     </nav>
+  );
+}
+
+/**
+ * A label for an icon that has none.
+ *
+ * Icons alone are a memory test, and the rail is used a few times a day -- often
+ * enough to learn, rarely enough to forget. The tooltip is what makes the trade
+ * fair: the width goes back to the content, and the name is a hover away.
+ *
+ * Its own element rather than `title`, which the system draws after a delay it
+ * chooses, in a style nobody picked, outside the window -- so on a panel that
+ * sits over the menu bar it arrives late and looks like it belongs to something
+ * else.
+ */
+function Hint({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <span className="group relative flex">
+      {children}
+      <span
+        role="tooltip"
+        className={[
+          "pointer-events-none absolute top-1/2 left-[calc(100%+8px)] z-10 -translate-y-1/2",
+          "rounded-md bg-[#2b2b2e] px-2 py-1 text-[11px] whitespace-nowrap text-white",
+          "shadow-[0_4px_14px_rgba(0,0,0,0.5)] hairline",
+          // Fades and slides a little, from the side it belongs to. Fast,
+          // because this is read on the way to clicking something else.
+          "origin-left scale-95 opacity-0 transition-[opacity,transform] duration-150 ease-out",
+          "group-hover:scale-100 group-hover:opacity-100",
+        ].join(" ")}
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/** Arrows out of, or into, the corners. */
+function Corners({ inward }: { inward: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
+      {inward ? (
+        <>
+          <path d="M6.5 2.5v4h-4M9.5 13.5v-4h4" />
+          <path d="M2.5 9.5h4v4M13.5 6.5h-4v-4" />
+        </>
+      ) : (
+        <>
+          <path d="M9.5 2.5h4v4M6.5 13.5h-4v-4" />
+          <path d="M13.5 2.5 9.5 6.5M2.5 13.5 6.5 9.5" />
+        </>
+      )}
+    </svg>
   );
 }
 

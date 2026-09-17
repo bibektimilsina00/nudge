@@ -156,6 +156,11 @@ pub fn open_artifact(app: AppHandle, path: String) -> Result<()> {
 
 /// Let the panel size itself to its content.
 #[tauri::command]
+pub fn widen_panel(app: AppHandle, wide: bool) {
+    crate::app::ui::panel::widen(&app, wide);
+}
+
+#[tauri::command]
 pub fn fit_panel(app: AppHandle, height: f64) {
     crate::app::ui::panel::fit(&app, height);
 }
