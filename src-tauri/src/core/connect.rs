@@ -119,6 +119,84 @@ pub fn catalogue() -> Vec<Offer> {
             setup: None,
         },
         Offer {
+            key: "airtable",
+            name: "Airtable",
+            about: "Read and write records, and inspect table schemas.",
+            // Airtable is one of the few whose token is genuinely scoped, and it
+            // is worth saying so -- most of the tokens in this catalogue are all
+            // or nothing.
+            access: "Only the bases you tick when you create the token, and only \
+                     the scopes you tick with them. Not your whole workspace.",
+            command: "npx",
+            args: &["-y", "airtable-mcp-server"],
+            env: &[],
+            sign_in: None,
+            token: Some("AIRTABLE_API_KEY"),
+            where_from: Some("airtable.com/create/tokens → Create token → pick bases and scopes"),
+            setup: None,
+        },
+        Offer {
+            key: "asana",
+            name: "Asana",
+            about: "Search tasks and projects; create, update and comment.",
+            access: "Everything you can see in Asana. Their personal access token \
+                     is not scoped, so it carries your whole account.",
+            command: "npx",
+            args: &["-y", "@roychri/mcp-server-asana"],
+            env: &[],
+            sign_in: None,
+            token: Some("ASANA_ACCESS_TOKEN"),
+            where_from: Some("app.asana.com/0/my-apps → Personal access tokens → Create"),
+            setup: None,
+        },
+        Offer {
+            key: "miro",
+            name: "Miro",
+            about: "Read and edit boards, frames, shapes and sticky notes.",
+            access: "The boards the token's app has been given, and what you tick \
+                     when you install it.",
+            command: "npx",
+            args: &["-y", "@k-jarzyna/mcp-miro"],
+            env: &[],
+            sign_in: None,
+            token: Some("MIRO_ACCESS_TOKEN"),
+            where_from: Some("miro.com/app/settings/user-profile/apps → your app → Install and get OAuth token"),
+            setup: None,
+        },
+        Offer {
+            key: "zeplin",
+            name: "Zeplin",
+            about: "Read design specs, components and screen annotations.",
+            access: "The projects and styleguides your Zeplin account can see.",
+            command: "npx",
+            args: &["-y", "@zeplin/mcp-server"],
+            env: &[],
+            sign_in: None,
+            token: Some("ZEPLIN_ACCESS_TOKEN"),
+            where_from: Some("app.zeplin.com/profile/developer → Personal access tokens"),
+            setup: None,
+        },
+        Offer {
+            key: "youtube",
+            name: "YouTube",
+            about: "Search videos, read details, transcripts and channel statistics.",
+            // The only key in this catalogue that reaches nothing of yours, which
+            // is worth saying rather than leaving somebody to assume the worst.
+            access: "Public YouTube data only. An API key is not a sign-in: it \
+                     cannot see your account, your private videos or your history, \
+                     and it cannot upload or change anything.",
+            command: "npx",
+            args: &["-y", "youtube-data-mcp-server"],
+            env: &[],
+            sign_in: None,
+            token: Some("YOUTUBE_API_KEY"),
+            where_from: Some(
+                "console.cloud.google.com → APIs & Services → Credentials → Create \
+                 API key, with the YouTube Data API v3 enabled",
+            ),
+            setup: None,
+        },
+        Offer {
             key: "notion",
             name: "Notion",
             about: "Search pages, read content, query databases and create pages.",

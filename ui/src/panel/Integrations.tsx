@@ -4,6 +4,8 @@ import { listen } from "@tauri-apps/api/event";
 
 import { Label } from "../components/controls";
 
+import airtableLogo from "../assets/logos/airtable.svg?url";
+import asanaLogo from "../assets/logos/asana.svg?url";
 import calcomLogo from "../assets/logos/calcom.svg?url";
 import gcalLogo from "../assets/logos/google_calendar.svg?url";
 import githubLogo from "../assets/logos/github.svg?url";
@@ -13,10 +15,12 @@ import gscLogo from "../assets/logos/google_search_console.svg?url";
 import gsheetsLogo from "../assets/logos/google_sheets.svg?url";
 import gtasksLogo from "../assets/logos/google_tasks.svg?url";
 import hubspotLogo from "../assets/logos/hubspot.svg?url";
+import miroLogo from "../assets/logos/miro.svg?url";
 import notionLogo from "../assets/logos/notion.svg?url";
 import slackLogo from "../assets/logos/slack.svg?url";
 import supabaseLogo from "../assets/logos/supabase.svg?url";
 import todoistLogo from "../assets/logos/todoist.svg?url";
+import youtubeLogo from "../assets/logos/youtube.svg?url";
 
 /** Mirrors `Listed` in `app/commands/connect.rs`. */
 type Listed = {
@@ -75,6 +79,10 @@ type Listed = {
  * first attempt got a near-black mark on a near-black card.
  */
 const LOGO: Record<string, string> = {
+  airtable: airtableLogo,
+  asana: asanaLogo,
+  miro: miroLogo,
+  youtube: youtubeLogo,
   notion: notionLogo,
   todoist: todoistLogo,
   hubspot: hubspotLogo,
@@ -102,6 +110,7 @@ const DARK_TILE: Record<string, string> = { notion: "#0f0f0f" };
 /** Behind the monogram, for anything with no mark of its own. */
 const TINT: Record<string, string> = {
   files: "#8a8f98",
+  zeplin: "#ff3d77",
   google: "#1a73e8",
   github: "#24292f",
   slack: "#4a154b",
