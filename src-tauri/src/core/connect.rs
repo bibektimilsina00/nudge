@@ -581,9 +581,16 @@ pub async fn freshen() {
         // is no later moment to notice it has gone stale.
         if let Some((_, path)) = offer.env.iter().find(|(k, _)| *k == "GOOGLE_TOKEN_FILE") {
             match google_access(path).await {
-                Ok(access) => {
-                    let _ = crate::core::tools::secret::to_keychain(&keychain_item(&made.key), &access);
-                }
+                // Not `let _ =`. Storing can fail -- it did, silently, for every
+                // token longer than 128 characters -- and a swallowed failure
+                // here leaves a stale token and no sign of why.
+                Ok(access) => match crate::core::tools::secret::to_keychain(
+                    &keychain_item(&made.key),
+                    &access,
+                ) {
+                    Ok(()) => eprintln!("renewed the {} sign-in", made.key),
+                    Err(e) => eprintln!("renewed {} but could not store it: {e}", made.key),
+                },
                 Err(why) => eprintln!("could not renew {}: {why}", made.key),
             }
             continue;
@@ -872,6 +879,44 @@ mod tests {
             assert!(
                 parsed.unwrap().is_object(),
                 "{}/{tool} arguments must be an object",
+                o.key
+            );
+        }
+    }
+
+    /// Against the real Keychain and the real Google, because the parts that
+    /// break here are the ones no unit test reaches: whether the token file is
+    /// where the entry says, whether the client is readable, and whether what
+    /// comes back is a token that works.
+    ///
+    ///     cargo test --lib connect -- --ignored --nocapture
+    #[tokio::test]
+    #[ignore = "needs a signed-in Google connector and the network"]
+    async fn freshen_replaces_an_expired_google_token_with_a_working_one() {
+        let table: Vec<_> = catalogue()
+            .into_iter()
+            .filter(|o| o.env.iter().any(|(k, _)| *k == "GOOGLE_TOKEN_FILE"))
+            .collect();
+        assert!(!table.is_empty(), "no table-backed Google connector to test");
+
+        freshen().await;
+
+        for o in table {
+            let Some(token) = crate::core::tools::secret::from_keychain(&keychain_item(o.key))
+            else {
+                println!("  {}: not signed in, skipped", o.key);
+                continue;
+            };
+            let res = crate::core::http()
+                .get("https://www.googleapis.com/oauth2/v3/tokeninfo")
+                .query(&[("access_token", token.as_str())])
+                .send()
+                .await
+                .expect("could not reach Google");
+            println!("  {}: tokeninfo says {}", o.key, res.status());
+            assert!(
+                res.status().is_success(),
+                "{} was left with a token Google does not accept",
                 o.key
             );
         }

@@ -38,15 +38,20 @@ const PREFIX: &str = "keychain:";
 
 /// Look one up. `None` covers both "no such item" and "the Keychain said no".
 pub fn from_keychain(name: &str) -> Option<String> {
-    let out = std::process::Command::new("/usr/bin/security")
-        .args(["find-generic-password", "-s", name, "-w"])
-        .output()
-        .ok()?;
-    if !out.status.success() {
-        return None;
+    // The same API the write uses, so the two cannot disagree about where an
+    // item lives -- which they would have, silently, if one were changed and
+    // not the other.
+    #[cfg(target_os = "macos")]
+    {
+        let raw = security_framework::passwords::get_generic_password(name, "nudge").ok()?;
+        let found = String::from_utf8(raw).ok()?.trim().to_string();
+        (!found.is_empty()).then_some(found)
     }
-    let found = String::from_utf8_lossy(&out.stdout).trim().to_string();
-    (!found.is_empty()).then_some(found)
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = name;
+        None
+    }
 }
 
 /// Put a token in the Keychain, replacing whatever was there.
@@ -61,39 +66,32 @@ pub fn from_keychain(name: &str) -> Option<String> {
 /// where `ps` would show it to every other user on the machine. That is the
 /// whole reason this is not two lines.
 pub fn to_keychain(name: &str, token: &str) -> Result<()> {
-    use std::io::Write;
-    let mut child = std::process::Command::new("/usr/bin/security")
-        .args([
-            "add-generic-password",
-            "-s",
-            name,
-            "-a",
-            "nudge",
-            "-U",
-            "-w",
-        ])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .spawn()
-        .map_err(|e| Error::Config(format!("could not run security: {e}")))?;
+    // Through the Keychain's own API rather than the `security` command.
+    //
+    // That command has two ways to take a password and both are wrong here.
+    // Given on stdin it **silently truncates at 128 characters** -- measured,
+    // 253 in and 128 back -- and a truncated token authenticates as nothing
+    // while reporting itself invalid rather than cut. Given as an argument it
+    // survives, but sits in the process table for the life of the call.
+    //
+    // This has neither problem: no child process, no length limit, nothing to
+    // read from outside. `security-framework` was already in the tree via
+    // rustls, so it costs no new dependency either.
+    #[cfg(target_os = "macos")]
+    {
+        security_framework::passwords::set_generic_password(name, "nudge", token.as_bytes())
+            .map_err(|e| Error::Config(format!("the Keychain refused {name:?}: {e}")))?;
+    }
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = (name, token);
+        return Err(Error::Config("there is no Keychain on this platform".into()));
+    }
 
-    // Twice. `-w` with no value prompts for the password and then asks to retype
-    // it, and sending it once gets "passwords don't match" -- which it reports by
-    // printing a line and **exiting zero**.
-    child
-        .stdin
-        .take()
-        .ok_or_else(|| Error::Config("security took no input".into()))?
-        .write_all(format!("{token}\n{token}\n").as_bytes())
-        .map_err(|e| Error::Config(format!("could not hand security the token: {e}")))?;
-    let _ = child
-        .wait_with_output()
-        .map_err(|e| Error::Config(format!("security did not finish: {e}")))?;
-
-    // Checked by reading it back, because the exit status is not evidence: a
-    // failed store exits zero here, so trusting it would report success and
-    // leave a connection that fails later with somebody else's error message.
+    // Still read back. The write reporting success is not the same as the value
+    // being retrievable under the name everything else will look for, and that
+    // gap is exactly where the truncation hid.
+    #[cfg(target_os = "macos")]
     match from_keychain(name).as_deref() == Some(token) {
         true => Ok(()),
         false => Err(Error::Config(format!(
@@ -108,11 +106,13 @@ pub fn to_keychain(name: &str, token: &str) -> Result<()> {
 /// was already deleted by hand, should not be an error somebody has to think
 /// about -- the state afterwards is the one they asked for either way.
 pub fn forget_keychain(name: &str) {
-    let _ = std::process::Command::new("/usr/bin/security")
-        .args(["delete-generic-password", "-s", name])
-        .stdout(std::process::Stdio::null())
-        .stderr(std::process::Stdio::null())
-        .status();
+    // Same API as the other two, so all three agree on where an item lives.
+    // Failure is ignored on purpose: the only outcome that matters is that the
+    // item is gone afterwards, and "it was not there" satisfies that.
+    #[cfg(target_os = "macos")]
+    let _ = security_framework::passwords::delete_generic_password(name, "nudge");
+    #[cfg(not(target_os = "macos"))]
+    let _ = name;
 }
 
 /// Turn a configured value into the value to actually use.
@@ -269,14 +269,24 @@ mod tests {
     /// Round trip through the real Keychain, since that is the only thing that
     /// proves the arguments are right.
     ///
-    /// Now through `to_keychain` rather than by shelling out here, so the test
-    /// exercises what the app runs. The thing it is guarding: **the token never
-    /// appears in an argument.** Every other user on this machine can read the
-    /// process table, so `security ... -w <token>` publishes it to them for as
-    /// long as the command runs. Handed over on stdin instead.
+    /// It used to guard that the token never appeared in a process argument,
+    /// which mattered while this shelled out to `security`. It does not shell
+    /// out any more -- there is no child process and nothing in a process table
+    /// to read -- so what is left to prove is that what goes in comes back, at
+    /// any length.
     #[test]
     #[ignore = "writes to the login keychain"]
     fn a_stored_secret_comes_back() {
+        // Long on purpose. Through `security` this silently kept the first 128
+        // characters, and a Google access token is 253 -- so every short token
+        // in the catalogue round-tripped fine and the one that mattered came
+        // back as a prefix that authenticates as nothing.
+        let long = "A".repeat(253);
+        let name = "nudge-secret-roundtrip-long";
+        to_keychain(name, &long).unwrap();
+        assert_eq!(from_keychain(name).as_deref(), Some(long.as_str()));
+        forget_keychain(name);
+
         let name = "nudge-secret-roundtrip";
         to_keychain(name, "hunter2").unwrap();
         assert_eq!(resolve(&format!("keychain:{name}")).unwrap(), "hunter2");
