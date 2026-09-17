@@ -190,7 +190,24 @@ pub fn follow(app: &AppHandle) {
             // The hint, on a wider ring than the dock. Emitted separately and
             // only on change -- this runs sixty times a second, and an event per
             // tick would be sixty React renders a second to say nothing new.
-            let close = notch.is_near(x, y);
+            // Asked once per tick and used by both tests below.
+            let overview = crate::app::ui::panel::overview();
+
+            // Nothing is near the notch while the overview is up.
+            //
+            // This is the flicker, and it was never the window stack: Mission
+            // Control puts its Spaces Bar along the top of the screen, which is
+            // the same band the hint watches, so every drift of the pointer
+            // across those thumbnails crossed the boundary and the strip blinked
+            // "Hold control to ask" on and off. A recording of it showed 172
+            // changes in fifteen seconds, at irregular gaps of 8ms to 300ms --
+            // pointer-shaped, not poll-shaped, which is what ruled out every
+            // theory about polls fighting the compositor.
+            //
+            // The offer is wrong there regardless of how it looks. Holding the
+            // key during the overview does nothing, so advertising it is an
+            // invitation to press something that cannot work.
+            let close = notch.is_near(x, y) && !overview;
             if close != near {
                 near = close;
                 app.emit("near", close).ok();
@@ -216,8 +233,7 @@ pub fn follow(app: &AppHandle) {
             // through `hovering` is also what keeps `at_notch` honest -- closing
             // the panel behind the loop's back would leave it believing the
             // panel was open, and the next real hover would then change nothing.
-            let hovering =
-                (over || (at_notch && away < LINGER)) && !crate::app::ui::panel::overview();
+            let hovering = (over || (at_notch && away < LINGER)) && !overview;
 
             if hovering != at_notch {
                 at_notch = hovering;
