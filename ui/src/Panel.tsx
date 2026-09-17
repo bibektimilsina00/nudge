@@ -353,6 +353,11 @@ type View = "home" | "agents" | "settings" | "integrations" | "skills" | "report
  * the automation: a task handed over and left to run. A tab for something that
  * does not exist is worse than its absence -- it is a promise the app then
  * breaks.
+ *
+ * Settings sits at the foot rather than in the run of sections, because it is
+ * not one of the places you are going -- it is where you go to change how the
+ * others behave. Every rail people already use puts it there, under the same
+ * reasoning, which makes the bottom of the rail the first place anyone looks.
  */
 function Rail({
   view,
@@ -365,40 +370,44 @@ function Rail({
   docked: boolean;
   onDock: () => void;
 }) {
+  // Settings is missing from this list on purpose -- it is rendered at the foot.
   const items: [View, string, React.ReactNode][] = [
     ["home", "Home", <Home key="h" />],
     ["agents", "Agents", <Sparkle key="a" />],
     ["integrations", "Integrations", <Plug key="i" />],
     ["skills", "Skills", <Stack key="s" />],
-    ["settings", "Settings", <Gear key="g" />],
   ];
+
+  const tab = ([key, label, icon]: [View, string, React.ReactNode]) => {
+    // Report is a page off Settings, so Settings stays lit while you are in
+    // it -- otherwise the rail says you are nowhere.
+    const on = view === key || (key === "settings" && view === "report");
+    return (
+      <Hint key={key} label={label}>
+        <button
+          onClick={() => onGo(key)}
+          aria-label={label}
+          aria-current={on ? "page" : undefined}
+          className={[
+            "grid size-[30px] place-items-center rounded-[9px]",
+            "transition-colors duration-150",
+            on ? "bg-raise-hi text-white" : "text-ink-2 hover:bg-raise hover:text-white/85",
+          ].join(" ")}
+        >
+          {icon}
+        </button>
+      </Hint>
+    );
+  };
+
   return (
     <nav className="flex w-[46px] shrink-0 flex-col items-center gap-1 border-r border-line py-2.5">
-      {items.map(([key, label, icon]) => {
-        // Report is a page off Settings, so Settings stays lit while you are in
-        // it -- otherwise the rail says you are nowhere.
-        const on = view === key || (key === "settings" && view === "report");
-        return (
-          <Hint key={key} label={label}>
-            <button
-              onClick={() => onGo(key)}
-              aria-label={label}
-              aria-current={on ? "page" : undefined}
-              className={[
-                "grid size-[30px] place-items-center rounded-[9px]",
-                "transition-colors duration-150",
-                on ? "bg-raise-hi text-white" : "text-ink-2 hover:bg-raise hover:text-white/85",
-              ].join(" ")}
-            >
-              {icon}
-            </button>
-          </Hint>
-        );
-      })}
+      {items.map(tab)}
 
       <div className="mt-auto flex flex-col items-center gap-1.5">
+        {tab(["settings", "Settings", <Gear key="g" />])}
         {/* The companion's socket, at the foot. Not a section, so it sits apart
-            from them rather than reading as a sixth. */}
+            from them rather than reading as a fifth. */}
         <Hint label={docked ? "Release" : "Call back"}>
           <Perch docked={docked} onToggle={onDock} />
         </Hint>
