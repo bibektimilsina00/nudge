@@ -821,6 +821,60 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
                 .join("\n")
         ),
     };
+    // What the destination reads, when that is not what a chat reads.
+    //
+    // Asked for a report in Google Docs, a run wrote Markdown -- `## Findings`
+    // and `**bold**` -- and the document came out with those characters in it,
+    // because a Doc is not a text file and nothing in the prompt had ever said
+    // so. Markdown is the house style of chat, so it is the default a model
+    // falls back to for anything shaped like writing.
+    //
+    // Only said when a tool that would care is actually present, since a prompt
+    // that explains Google Docs to a run with no Google Docs is a paragraph
+    // spent on nothing -- and this is read on every single turn.
+    let styling = {
+        let has = |needle: &str| ask.tools.iter().any(|t| t.name.contains(needle));
+        let doc = has("Doc") || has("document") || has("Presentation") || has("Slide");
+        let sheet = has("preadsheet") || has("Sheet");
+        let mail = has("mail") || has("Gmail");
+        match doc || sheet || mail {
+            false => String::new(),
+            true => {
+                let mut says = vec![
+                    "\nMarkdown is how you talk here, not how these tools write. \
+                     Send the words themselves and nothing else -- no `#`, no `**`, \
+                     no `-` bullets -- or those characters end up in the thing you \
+                     made."
+                        .to_string(),
+                ];
+                if doc {
+                    says.push(
+                        " A document takes plain paragraphs, and its own tools do \
+                         the styling afterwards: applyTextStyle, \
+                         applyParagraphStyle, insertTable. Write it, then style \
+                         it."
+                        .into(),
+                    );
+                }
+                if sheet {
+                    says.push(
+                        " A spreadsheet takes values, one per cell, in rows. A \
+                         table drawn with pipes is one long string in one cell."
+                            .into(),
+                    );
+                }
+                if mail {
+                    says.push(
+                        " Mail is read as plain text unless you send HTML, so \
+                         asterisks stay asterisks."
+                            .into(),
+                    );
+                }
+                says.push("\n".into());
+                says.concat()
+            }
+        }
+    };
     // Said plainly, because from a screenshot alone nothing distinguishes "not
     // done yet" from "did not work", and the model assumes the former.
     let stalled = if ask.stalled {
@@ -869,7 +923,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
          {facts}{here}{memory}{earlier}{skills}{controls}{tools}{reach}\
-         Steps already completed:\n{history}{stalled}\n\n\
+         Steps already completed:\n{history}{stalled}{styling}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
          the screen, and whether the goal is already met. Describe what is there, \
@@ -1602,6 +1656,46 @@ pub(crate) fn no_point(provider: &'static str, detail: impl Into<String>) -> Err
 
 #[cfg(test)]
 mod tests {
+
+    fn tool_named(server: &str, name: &str) -> crate::core::tools::mcp::Tool {
+        crate::core::tools::mcp::Tool {
+            server: server.into(),
+            name: name.into(),
+            about: String::new(),
+            schema: serde_json::json!({}),
+        }
+    }
+
+    #[test]
+    fn a_run_with_a_document_tool_is_told_not_to_write_markdown() {
+        // The bug: asked for a report in Google Docs, a run wrote `## Findings`
+        // and `**bold**`, and those characters ended up in the document. Nothing
+        // had ever said a Doc is not a text file, and Markdown is the house
+        // style of chat, so it is what a model falls back to for writing.
+        let tools = vec![tool_named("google", "createDocument")];
+        let mut a = ask("write up the findings", &[], false);
+        a.tools = &tools;
+        let p = prompt(&a);
+        assert!(
+            p.contains("Markdown is how you talk here"),
+            "no styling note: {p}"
+        );
+        assert!(
+            p.contains("applyTextStyle"),
+            "does not say how to style instead"
+        );
+    }
+
+    #[test]
+    fn a_run_with_no_such_tool_is_told_nothing_about_it() {
+        // Read on every turn. A paragraph explaining Google Docs to a run with
+        // no Google Docs is tokens spent on nothing, every single step.
+        let tools = vec![tool_named("files", "read_text_file")];
+        let mut a = ask("read a file", &[], false);
+        a.tools = &tools;
+        assert!(!prompt(&a).contains("Markdown is how you talk here"));
+    }
+
     /// Handing the same job over twice is the same action.
     ///
     /// These fell through to "not a repeat", which is how four identical
