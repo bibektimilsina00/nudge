@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Alignment, Fit, Layout, useRive, useStateMachineInput } from "@rive-app/react-canvas";
 import pointer from "../assets/pointer.riv?url";
 import type { Act, Point } from "../lib/nudge";
@@ -18,6 +18,11 @@ const MACHINE = "State Machine 1";
 /** Where the hand's fingertip sits inside its own box, as a fraction. */
 const TIP = { x: 0.3, y: 0.22 };
 const SIZE = 56;
+
+/** The flat grey the artboard is published with, per channel. */
+const PLATE = 49;
+/** How far from it still counts as plate, summed across the three channels. */
+const FRINGE = 90;
 
 export function Pointer({
   at,
@@ -62,6 +67,48 @@ export function Pointer({
     if (!following && act !== "hover") click?.fire();
   }, [at.x, at.y, act, click, following]);
 
+  // The artboard's own background, keyed out.
+  //
+  // Rive draws the artboard's background colour beneath everything and offers no
+  // way to change it: `Artboard` exposes bounds, size and `node()`, and nothing
+  // about colour. Measured off a screenshot, the plate is a flat #313131 filling
+  // exactly the artboard's 56 points -- the editor's default, left in the file
+  // by whoever published it. Nobody noticed because it normally exists for 150ms.
+  //
+  // So the frame is copied to a second canvas with that colour turned
+  // transparent. Proportionally, not as a threshold: a hard cut leaves a grey
+  // fringe wherever the hand is antialiased against the plate, so alpha rises
+  // with distance from the key and the edge stays soft.
+  const source = useRef<HTMLDivElement>(null);
+  const keyed = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    let frame = 0;
+    const paint = () => {
+      frame = requestAnimationFrame(paint);
+      const from = source.current?.querySelector("canvas");
+      const to = keyed.current;
+      if (!from || !to || !from.width) return;
+      if (to.width !== from.width || to.height !== from.height) {
+        to.width = from.width;
+        to.height = from.height;
+      }
+      const ctx = to.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.clearRect(0, 0, to.width, to.height);
+      ctx.drawImage(from, 0, 0);
+      const image = ctx.getImageData(0, 0, to.width, to.height);
+      const px = image.data;
+      for (let i = 0; i < px.length; i += 4) {
+        const off =
+          Math.abs(px[i] - PLATE) + Math.abs(px[i + 1] - PLATE) + Math.abs(px[i + 2] - PLATE);
+        if (off < FRINGE) px[i + 3] = Math.round(px[i + 3] * (off / FRINGE));
+      }
+      ctx.putImageData(image, 0, 0);
+    };
+    frame = requestAnimationFrame(paint);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   return (
     <div
       aria-hidden
@@ -82,7 +129,13 @@ export function Pointer({
         height: SIZE,
       }}
     >
-      <RiveComponent />
+      {/* Drawn, but never shown: this is the frame the one below is made from.
+          `opacity-0` rather than `hidden`, because a canvas that is not laid out
+          is a canvas Rive stops advancing. */}
+      <div ref={source} className="absolute inset-0 opacity-0">
+        <RiveComponent />
+      </div>
+      <canvas ref={keyed} className="absolute inset-0 size-full" />
     </div>
   );
 }
