@@ -37,6 +37,21 @@ class Settings(BaseSettings):
     # it, and `/api/update` says so when it is not set.
     public_url: str = ""
 
+    # Which application a Google sign-in must have been issued to. The desktop
+    # client id, and the same one the app itself uses -- an ID token names the
+    # client it was minted for, and checking it is what stops a token from
+    # somebody else's Google app being spent here. Public by design; it ships
+    # inside the app either way.
+    #
+    # Empty means Google sign-in is refused rather than waved through. A missing
+    # audience check is not a smaller check, it is no check at all.
+    google_client_id: str = ""
+
+    # How long a device stays signed in. Long, because the thing behind it is a
+    # menu-bar app somebody opens for ten seconds at a time, and an app that
+    # asks who you are every fortnight is an app people stop opening.
+    session_days: int = 90
+
 
 @lru_cache
 def settings() -> Settings:

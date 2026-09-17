@@ -5,11 +5,13 @@
 //! share a file: the loop that does the work, the controls for an agent that is
 //! already running, and the settings. `advance` and `quit` do not belong
 //! together.
+mod account;
 mod agents;
 mod connect;
 mod settings;
 mod step;
 
+pub use account::*;
 pub use agents::*;
 pub use connect::*;
 pub use settings::*;

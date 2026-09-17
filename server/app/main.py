@@ -13,7 +13,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.db import create_tables
-from app.routes import releases
+from app.routes import auth, releases
 from app.settings import settings
 
 
@@ -43,6 +43,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+app.include_router(auth.router)
 app.include_router(releases.router)
 
 

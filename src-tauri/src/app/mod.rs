@@ -252,6 +252,11 @@ pub fn run() {
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
+            commands::account,
+            commands::check_account,
+            commands::sign_in_google,
+            commands::sign_in_github,
+            commands::sign_out,
             commands::start,
             commands::advance,
             commands::cancel,

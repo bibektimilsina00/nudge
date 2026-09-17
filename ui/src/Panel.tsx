@@ -9,6 +9,7 @@ import { Integrations } from "./panel/Integrations";
 import { Skills } from "./panel/Skills";
 import { Report, type Kind } from "./panel/Report";
 import { Settings } from "./panel/Settings";
+import { SignIn, type Account } from "./panel/SignIn";
 
 /**
  * The notch dock.
@@ -42,6 +43,10 @@ const HEIGHT = {
   // the room whether or not it is using it today.
   skills: "h-[640px]",
   report: "h-[400px]",
+  // Taller than Home. The companion is the same size, but underneath it there
+  // are two buttons and a line of small print that has to be readable rather
+  // than merely present.
+  signin: "h-[420px]",
 } as const;
 
 export default function Panel() {
@@ -57,6 +62,27 @@ export default function Panel() {
   // is the kind of small wrongness that makes a panel feel untrustworthy.
   const [cameFrom, setCameFrom] = useState<"home" | "settings">("home");
   const [status, setStatus] = useState<Status>("idle");
+  // Three states, and the third one matters: `undefined` is "not asked yet".
+  // Collapsing it into `null` would flash the sign-in page at somebody who is
+  // signed in, every single time the app starts.
+  const [account, setAccount] = useState<Account | null | undefined>(undefined);
+
+  useEffect(() => {
+    // The local answer first, because it is instant and is what the first paint
+    // needs. Then the server's, which is the only thing that can tell us the
+    // session was signed out from somewhere else -- and which is allowed to
+    // take as long as the network does, because by then there is already
+    // something on the screen.
+    void invoke<Account | null>("account")
+      .then((a) => setAccount(a ?? null))
+      .catch(() => setAccount(null));
+    void invoke("check_account").catch(() => {});
+
+    const sub = listen<Account | null>("account", (e) => setAccount(e.payload ?? null));
+    return () => {
+      void sub.then((off) => off());
+    };
+  }, []);
 
   // Both entry points -- the tile on the home page and the row in settings --
   // come back to where they were opened from, which is the only reason `cameFrom`
@@ -129,6 +155,10 @@ export default function Panel() {
   }, []);
 
   // Busy takes over the closed pill; the open panel keeps its own header.
+  // Which height to be. Signed out is a shape of its own rather than a view,
+  // because it is not somewhere you can navigate to or away from.
+  const shape: keyof typeof HEIGHT = account === null ? "signin" : view;
+
   const busy = status !== "idle";
   // Only at rest. Busy already says what is happening and open has the whole
   // panel to say it, so a hint over either would be a second caption. Not
@@ -165,7 +195,7 @@ export default function Panel() {
           // two directions at slightly different rates.
           "transition-[width,height] duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           open
-            ? `${HEIGHT[view]} w-[540px]`
+            ? `${HEIGHT[shape]} w-[540px]`
             : busy
               // Both pills are the notch's own height, so the strip reads as the
               // hardware getting wider rather than as a bar hanging below it.
@@ -185,10 +215,16 @@ export default function Panel() {
         <div
           className={[
             "flex flex-col transition-opacity duration-200",
-            HEIGHT[view],
+            HEIGHT[shape],
             open ? "opacity-100 delay-150" : "pointer-events-none opacity-0",
           ].join(" ")}
         >
+          {account === null ? (
+            // No rail, no sections. There is nowhere else to be yet, and
+            // drawing the furniture of an app somebody cannot use is an
+            // invitation to press things that will not work.
+            <SignIn />
+          ) : account === undefined ? null : (
           <div className="flex min-h-0 flex-1">
           <Rail
             view={view}
@@ -219,6 +255,7 @@ export default function Panel() {
           )}
           </div>
           </div>
+          )}
         </div>
       </div>
     </div>

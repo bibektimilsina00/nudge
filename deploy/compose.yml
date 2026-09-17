@@ -18,6 +18,11 @@ services:
       # the site, so the browser makes no cross-origin request at all.
       NUDGE_WEB_ORIGIN: https://nudge.runmycrew.com
       NUDGE_RELEASES_DIR: /srv/releases
+      # Which application a Google sign-in must have been minted for. Not a
+      # secret -- it is a desktop client id and ships inside every copy of the
+      # app -- but it is not optional either: with this unset the server refuses
+      # every Google sign-in rather than accepting tokens from anywhere.
+      NUDGE_GOOGLE_CLIENT_ID: 141497173619-dph3q1epsjo8i7d7pafoq1lbmd7hckme.apps.googleusercontent.com
     volumes:
       # Builds and the database outlive any deploy, so neither lives in the
       # image. A 20MB binary in a layer is a 20MB rebuild every time a line of
