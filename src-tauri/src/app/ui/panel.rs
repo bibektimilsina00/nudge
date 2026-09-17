@@ -35,6 +35,19 @@ pub fn dock_to_notch(app: &AppHandle) {
     let _ = win.set_size(LogicalSize::new(w, h));
     let _ = win.set_position(tauri::LogicalPosition::new(notch.center_x - w / 2.0, 0.0));
     let _ = win.set_ignore_cursor_events(true);
+    // Not focusable while it is just a strip.
+    //
+    // This is what keeps it on screen inside a full-screen app, and it is the
+    // same reason the companion sets it: tao's NSWindow subclass answers
+    // `canBecomeKeyWindow` from this flag, whatever the style mask says, and a
+    // window the system thinks can take focus is one it thinks belongs to a
+    // Space -- so a full-screen Space takes the screen and the strip goes with
+    // the Space it came from.
+    //
+    // There used to be a 1x1 parent window holding both windows in every Space
+    // instead. It did the job and it is also why they blinked in step through
+    // Mission Control, so this is the half of that trade worth keeping.
+    let _ = win.set_focusable(false);
     let _ = win.show();
 
     #[cfg(target_os = "macos")]
@@ -46,6 +59,13 @@ pub fn dock_to_notch(app: &AppHandle) {
 pub fn set_interactive(app: &AppHandle, on: bool) {
     if let Some(win) = window(app) {
         let _ = win.set_ignore_cursor_events(!on);
+        // Focusable only while it is open, because open is the only time there
+        // is anything to type into. Closed, it has to stay unfocusable or it
+        // stops being present in full-screen Spaces -- see `dock_to_notch`.
+        //
+        // The pointer already drives this exact boundary, so there is no second
+        // piece of state to keep in step with the first.
+        let _ = win.set_focusable(on);
     }
 }
 
@@ -96,16 +116,14 @@ pub fn watch_overview(_app: &AppHandle) {
 
     if crate::app::ui::native::mission_control() {
         CLEAR.store(0, Relaxed);
-        if !OVERVIEW.swap(true, Relaxed) {
-            eprintln!("overview: up");
-        }
+        OVERVIEW.store(true, Relaxed);
         return;
     }
 
     let seen = CLEAR.load(Relaxed).saturating_add(1);
     CLEAR.store(seen.min(ENOUGH), Relaxed);
-    if seen >= ENOUGH && OVERVIEW.swap(false, Relaxed) {
-        eprintln!("overview: over");
+    if seen >= ENOUGH {
+        OVERVIEW.store(false, Relaxed);
     }
 }
 
