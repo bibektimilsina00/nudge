@@ -91,6 +91,13 @@ export function Settings({
   const [brain, setBrain] = useState<Brain | null>(null);
   const [servers, setServers] = useState<Server[]>([]);
   const [setup, setSetup] = useState<Setup | null>(null);
+  // The clicking hand, pinned to the cursor. Debug only: it draws the same
+  // component a real step would, so it is the thing itself rather than a mock.
+  const [hand, setHand] = useState(false);
+  const showHand = (on: boolean) => {
+    setHand(on);
+    void invoke("set_show_hand", { on });
+  };
   const [problem, setProblem] = useState<string | null>(null);
   const [look, setLook] = useState(DEFAULT_LOOK);
   const [permits, setPermits] = useState<Permit[]>([]);
@@ -107,6 +114,7 @@ export function Settings({
     );
     void invoke<Allowed[]>("reach").then(setAllowed);
     void invoke<boolean>("reviewing").then(setReviewing);
+    void invoke<boolean>("show_hand").then(setHand);
     void invoke<Brain>("brain").then(setBrain);
     void invoke<string>("look").then(setLook);
     // Polled, not asked once. The entire shape of granting one of these is that
@@ -605,6 +613,15 @@ export function Settings({
           }
           chevron
           onClick={() => setWhere("permissions")}
+        />
+        {/* Here rather than in a page of its own, because it is one switch and
+            it is about the machine rather than about how Nudge behaves. It
+            changes nothing except what is drawn. */}
+        <Row
+          icon={<I.Cursor />}
+          label="Show the clicking hand"
+          sub="Park it on the cursor, to see how it looks"
+          trailing={<Toggle on={hand} onChange={showHand} />}
         />
       </Section>
 

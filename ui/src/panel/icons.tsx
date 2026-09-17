@@ -34,4 +34,6 @@ export const Copy = () => <Ico><rect x="2.5" y="4.5" width="8" height="9" rx="1.
 export const Out = () => <Ico><path d="M10 11.5v1.3a1.2 1.2 0 0 1-1.2 1.2H3.7a1.2 1.2 0 0 1-1.2-1.2V3.2A1.2 1.2 0 0 1 3.7 2h5.1A1.2 1.2 0 0 1 10 3.2v1.3M7 8h6.5m0 0-2-2m2 2-2 2" /></Ico>;
 export const Trash = () => <Ico><path d="M2.8 4.3h10.4M6 4.3V3a.8.8 0 0 1 .8-.8h2.4a.8.8 0 0 1 .8.8v1.3M4.3 4.3l.6 8.3a1 1 0 0 0 1 .9h4.2a1 1 0 0 0 1-.9l.6-8.3" /></Ico>;
 export const Power = () => <Ico><path d="M8 2v5.5M4.6 4.4a5 5 0 1 0 6.8 0" /></Ico>;
+// An arrow pointer, for the one row that is about the cursor itself.
+export const Cursor = () => <Ico><path d="M3.4 2.2 12 8.1l-3.7.7-1.9 3.4Z" /></Ico>;
 export const Shield = () => <Ico><path d="M8 1.8 13.2 4v4c0 3-2.2 5.3-5.2 6.2C5 13.3 2.8 11 2.8 8V4Z" /></Ico>;

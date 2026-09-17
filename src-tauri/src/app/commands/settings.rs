@@ -769,6 +769,24 @@ pub fn agent_setup(app: AppHandle) -> AgentSetup {
     }
 }
 
+/// Is the clicking hand pinned to the cursor?
+#[tauri::command]
+pub fn show_hand(app: AppHandle) -> bool {
+    app.state::<crate::app::state::ShowHand>().0.on()
+}
+
+/// Pin it, or stop.
+///
+/// Emitted as well as stored, because the window that draws it is not the window
+/// the switch is in -- the overlay has no reason to poll a setting it is told
+/// about the moment it changes.
+#[tauri::command]
+pub fn set_show_hand(app: AppHandle, on: bool) {
+    app.state::<crate::app::state::ShowHand>().0.set(on);
+    use tauri::Emitter as _;
+    app.emit("show-hand", on).ok();
+}
+
 #[tauri::command]
 pub fn set_suggesting(app: AppHandle, on: bool) {
     app.state::<crate::app::state::Suggesting>().0.set(on);
