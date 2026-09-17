@@ -75,6 +75,13 @@ export function SignIn() {
     <div className="flex min-h-0 flex-1 flex-col items-center px-8 pt-[calc(var(--notch-h)+14px)] pb-5">
       {/* Scaling grows it from the centre, so it reaches above its own box too
           -- part of what the clearance above is paying for. */}
+      {/* Everything above the small print, held together so it can settle into
+          the space rather than hang off the top of it. `my-auto` against the
+          footer's fixed place centres the block in whatever room is left, which
+          is why the padding above is a floor rather than a position: it keeps
+          the companion out of the notch on a machine with a deeper one, and
+          otherwise stays out of the way. */}
+      <div className="my-auto flex w-full flex-col items-center">
       <div className="pointer-events-none scale-[1.3]">
         <Companion mode="idle" anchored />
       </div>
@@ -109,9 +116,11 @@ export function SignIn() {
         )}
       </div>
 
+      </div>
+
       {/* Held at the foot rather than under the buttons, so that the page does
           not jump a row taller the moment something goes wrong. */}
-      <div className="mt-auto pt-4 text-center">
+      <div className="pt-4 text-center">
         {doing.at === "failed" ? (
           <button
             onClick={() => setDoing({ at: "resting" })}
