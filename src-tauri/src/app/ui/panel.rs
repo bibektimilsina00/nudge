@@ -48,3 +48,48 @@ pub fn set_interactive(app: &AppHandle, on: bool) {
         let _ = win.set_ignore_cursor_events(!on);
     }
 }
+
+/// Get out of the way while Mission Control is up.
+///
+/// The panel sits above the menu bar and follows you between Spaces, which is
+/// exactly the combination that makes it outstay its welcome: a four-finger
+/// swipe hands the whole screen to a system overview and the pill stays pinned
+/// over the top of it, belonging to nothing on screen.
+///
+/// Hidden rather than lowered. Dropping the window level would put it under
+/// Mission Control and also under everything else for as long as the overview
+/// lasts, and getting the level back afterwards is the exchange the overlay
+/// already learned shows up as a flash.
+///
+/// Edge-triggered: `hide` and `show` are cheap but not free, and this is asked
+/// ten times a second. Only a change does anything.
+///
+/// It deliberately does not touch the open or closed state of the contents.
+/// That belongs to the pointer loop, which owns `at_notch`; collapsing the
+/// panel from here would leave the loop believing it is still open, and the
+/// next hover would then be a no-op because nothing appeared to change.
+#[cfg(target_os = "macos")]
+pub fn yield_to_overview(app: &AppHandle) {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static HIDDEN: AtomicBool = AtomicBool::new(false);
+
+    let overview = crate::app::ui::native::mission_control();
+    if overview == HIDDEN.load(Ordering::Relaxed) {
+        return;
+    }
+    HIDDEN.store(overview, Ordering::Relaxed);
+
+    let Some(win) = window(app) else { return };
+    if overview {
+        let _ = win.hide();
+        return;
+    }
+    let _ = win.show();
+    // Coming back is not just becoming visible again. A window that has been
+    // out has to be told once more that it belongs on every Space and above the
+    // menu bar, for the same reason `keep_everywhere` exists.
+    crate::app::ui::native::float_everywhere(&win);
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn yield_to_overview(_app: &AppHandle) {}

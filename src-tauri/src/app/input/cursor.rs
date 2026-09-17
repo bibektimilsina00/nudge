@@ -64,6 +64,11 @@ pub fn follow(app: &AppHandle) {
                 let handle = app.clone();
                 let _ = app.run_on_main_thread(move || {
                     crate::app::ui::overlay::keep_everywhere(&handle);
+                    // Same trip, same cadence. Mission Control has to be asked
+                    // about from the main thread -- `MainThreadMarker::new()`
+                    // answers `None` anywhere else and the check would quietly
+                    // report "not up" forever.
+                    crate::app::ui::panel::yield_to_overview(&handle);
                 });
             }
 
