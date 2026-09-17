@@ -22,6 +22,22 @@ SIGN_ID ?= $(shell cat $(IDENTITY_FILE) 2>/dev/null \
                   | grep 'Apple Development' | sed -E 's/.*"(.*)"/\1/'; })
 export APPLE_SIGNING_IDENTITY = $(SIGN_ID)
 
+# The updater artifact is signed with a minisign key, separate from the Apple one
+# and for a different question: Apple's says who built it, this says the update
+# you just downloaded came from whoever built the version you are running.
+#
+# `tauri.conf.json` carries the public half, so a build that cannot sign fails at
+# the very last step -- after producing a perfectly good .app -- and takes `run`'s
+# restart down with it. That is what it did for a whole session here, for want of
+# two variables sitting in a gitignored file next to the one already being read.
+#
+# Empty password because the key was generated without one. Kept explicit: unset
+# and set-to-empty are different to the signer, and the failure for unset reads as
+# a missing key rather than a missing password.
+UPDATER_KEY := .signing/updater.key
+export TAURI_SIGNING_PRIVATE_KEY = $(shell cat $(UPDATER_KEY) 2>/dev/null)
+export TAURI_SIGNING_PRIVATE_KEY_PASSWORD =
+
 .DEFAULT_GOAL := help
 .PHONY: truth help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks release ship-check share site publish
 
