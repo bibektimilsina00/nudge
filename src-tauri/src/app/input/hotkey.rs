@@ -172,17 +172,20 @@ fn say_busy(app: &AppHandle, doing: &str) {
 /// Something to say while the model thinks.
 ///
 /// Rotated rather than random: the same phrase every time is a recording, and a
-/// random one is a slot machine. Cycling four is enough that it does not land on
-/// a pattern anyone notices.
+/// random one is a slot machine.
+///
+/// Every line here has to stay true no matter how the turn ends, because it is
+/// said before anything is known -- before the screen is read, before the model
+/// answers, before we find out the request needs a permission that is off. That
+/// rules out anything that makes a promise. "On it" is a promise to do the thing
+/// and reads as a lie when the next sentence is a refusal; "Let me take a look"
+/// promises the screen and is nonsense for a question that never looks at it.
+/// What is left is the only claim that survives every ending: you have been
+/// heard, and the answer is coming.
 fn acknowledgement() -> &'static str {
     use std::sync::atomic::{AtomicUsize, Ordering};
     static N: AtomicUsize = AtomicUsize::new(0);
-    const LINES: [&str; 4] = [
-        "Sure, one sec.",
-        "On it.",
-        "Let me take a look.",
-        "Right, one moment.",
-    ];
+    const LINES: [&str; 2] = ["One sec.", "One moment."];
     LINES[N.fetch_add(1, Ordering::Relaxed) % LINES.len()]
 }
 
@@ -245,19 +248,6 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
 pub(crate) async fn ask(app: AppHandle, heard: String) -> Result<()> {
     app.emit("heard", &heard).ok();
 
-    // Answer before thinking.
-    //
-    // The first model call takes two and a half seconds, and until now that was
-    // two and a half seconds of silence after someone had just spoken. A person
-    // says "one sec" in that gap; so does every assistant that feels quick. This
-    // costs nothing and changes how the whole thing feels, because the wait did
-    // not get shorter -- it stopped being a wait for a reply and became a wait
-    // for the answer.
-    //
-    // Two words, not a sentence: it has to be finished well before the real one
-    // starts, or it is a thing that gets interrupted.
-    commands::speak(&app, acknowledgement());
-
     // An agent asked something and is holding. What you just said is the answer,
     // not a new goal -- starting a fresh session here would abandon the task
     // mid-way and leave the question unanswered forever.
@@ -274,6 +264,24 @@ pub(crate) async fn ask(app: AppHandle, heard: String) -> Result<()> {
         say_busy(&app, &doing);
         return Ok(());
     }
+
+    // Answer before thinking.
+    //
+    // The first model call takes two and a half seconds, and until now that was
+    // two and a half seconds of silence after someone had just spoken. A person
+    // says "one sec" in that gap; so does every assistant that feels quick. This
+    // costs nothing and changes how the whole thing feels, because the wait did
+    // not get shorter -- it stopped being a wait for a reply and became a wait
+    // for the answer.
+    //
+    // Two words, not a sentence: it has to be finished well before the real one
+    // starts, or it is a thing that gets interrupted.
+    //
+    // Below the two branches above, not above them, because neither of them
+    // waits on a model and both then say something that contradicts it. "One
+    // sec" followed instantly by "I'm still on the last thing" is worse than the
+    // silence it was meant to fill.
+    commands::speak(&app, acknowledgement());
 
     // Counted before the work, so a session that goes wrong still counts as use.
     app.state::<crate::core::offers::Offers>().a_turn_happened();
