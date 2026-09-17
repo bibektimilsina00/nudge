@@ -16,7 +16,9 @@
 //! touches it again, and does not lose its overlay. This now does the same. If
 //! the companion ever disappears inside a full-screen app, this paragraph is
 //! where to start.
-use objc2_app_kit::{NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior};
+use objc2_app_kit::{
+    NSScreenSaverWindowLevel, NSWindow, NSWindowCollectionBehavior, NSWindowStyleMask,
+};
 use objc2_foundation::MainThreadMarker;
 
 /// Is Mission Control on screen?
@@ -150,6 +152,24 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
         return;
     }
     let ns: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+
+    // Borderless, like the companion.
+    //
+    // tao builds its windows as FullSizeContentView|Miniaturizable, and a
+    // miniaturizable window is one the system treats as an ordinary window
+    // belonging to an ordinary Space -- so a full-screen Space takes the screen
+    // and this goes with the Space it was created on. Measured: with everything
+    // else already right (canBecomeKey false, screen-saver level, joining all
+    // Spaces) the strip still disappeared inside a full-screen app, and this
+    // mask was the only thing left that differed from the companion.
+    //
+    // It costs nothing to set here, even though the panel takes the keyboard.
+    // tao overrides `canBecomeKeyWindow` to answer from its own `focusable`
+    // ivar rather than from the mask, so being borderless does not make the
+    // window unfocusable -- `set_interactive` still decides that, and still
+    // gets to say yes while the panel is open.
+    ns.setStyleMask(NSWindowStyleMask::Borderless);
+
     ns.setLevel(NSScreenSaverWindowLevel);
     ns.setCollectionBehavior(
         NSWindowCollectionBehavior::CanJoinAllSpaces
@@ -164,4 +184,17 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
     ns.setHidesOnDeactivate(false);
     ns.setHasShadow(false);
 
+    // Behind the same switch the companion's dump uses. This is the state that
+    // decides whether the strip survives a full-screen Space, and reading it
+    // took a round trip through a println that startup had not yet redirected.
+    if std::env::var("NUDGE_DEBUG_WINDOW").is_ok() {
+        eprintln!(
+            "nudge: panel style={:?} canBecomeKey={} level={} behavior={:?} onActiveSpace={}",
+            ns.styleMask(),
+            ns.canBecomeKeyWindow(),
+            ns.level(),
+            ns.collectionBehavior(),
+            ns.isOnActiveSpace(),
+        );
+    }
 }
