@@ -245,6 +245,7 @@ fn read_step(resp: &serde_json::Value) -> Option<Step> {
             say,
             act,
             control: None,
+            size: None,
         },
         None if reads_as_unsure(&say) => Step::Unsure { say, needed: None },
         // No `recalled` here, unlike the JSON providers: this reads a

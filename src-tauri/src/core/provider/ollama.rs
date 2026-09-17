@@ -109,6 +109,7 @@ impl Provider for Ollama {
         match (v["x"].as_f64(), v["y"].as_f64()) {
             (Some(x), Some(y)) => Ok(Step::Point {
                 control: None,
+                size: None,
                 at: Point { x, y },
                 say,
                 act: super::act_from(v["act"].as_str()),

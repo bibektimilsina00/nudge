@@ -874,6 +874,8 @@ impl Nudge {
                     c.role, c.label
                 );
                 Step::Point {
+                    // Pixels, not a named control: a ring, not a box.
+                    size: None,
                     control: Some(c.label.clone()),
                     at: shot.to_image(crate::core::screen::capture::Point {
                         x: c.at.0,

@@ -29,6 +29,9 @@ export function useNudge() {
   // the ring, so the name is beside the thing rather than in a caption
   // somewhere else on the screen.
   const [control, setControl] = useState<string | null>(null);
+  // Its size, when the system knew it. A thing with edges gets a box; a guessed
+  // pixel gets a ring.
+  const [span, setSpan] = useState<[number, number] | null>(null);
   /** Text to enter, when the step is a typing one. Shown verbatim so it can be
    *  copied by eye in guide mode, where Nudge does not type it for you. */
   const [typing, setTyping] = useState<string | null>(null);
@@ -51,6 +54,7 @@ export function useNudge() {
     setMessage("");
     setPoint(null);
     setControl(null);
+    setSpan(null);
     setTyping(null);
     target.current = null;
     void api.cancel(silence);
@@ -67,6 +71,7 @@ export function useNudge() {
       setPoint(at);
       setAct(step.kind === "point" ? step.act : "click");
       setControl(step.kind === "point" ? (step.control ?? null) : null);
+      setSpan(step.kind === "point" ? (step.size ?? null) : null);
       setTyping(step.kind === "type" ? step.text : null);
       setPhase(
         step.kind === "unsure"
@@ -104,6 +109,7 @@ export function useNudge() {
     target.current = null;
     setPoint(null);
     setControl(null);
+    setSpan(null);
     void run(() => api.advance());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -132,6 +138,7 @@ export function useNudge() {
         clearTimer();
         setPoint(null);
     setControl(null);
+    setSpan(null);
         setPhase("listening");
         setMessage("Listening…");
       }),
@@ -187,5 +194,5 @@ export function useNudge() {
     };
   }, [run, render, fail, dismiss]);
 
-  return { phase, message, point, act, control, typing, dismiss };
+  return { phase, message, point, act, control, span, typing, dismiss };
 }

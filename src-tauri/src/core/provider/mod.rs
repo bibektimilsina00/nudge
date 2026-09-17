@@ -41,6 +41,17 @@ pub enum Step {
         at: Point,
         say: String,
         act: Act,
+        /// How big the thing is, in the same screen points as `at`, when the
+        /// system told us.
+        ///
+        /// This is what lets the overlay draw a box round a *region* instead of
+        /// a ring at a spot. A ring says "there"; a box round the media pool
+        /// says "all of this is the media pool", which is the difference between
+        /// pointing and teaching.
+        ///
+        /// Absent when the point was a guessed pixel, and a ring is right for
+        /// that: it genuinely is a spot rather than a thing with edges.
+        size: Option<(f64, f64)>,
         /// The control's own name, when the system gave us one.
         ///
         /// With a name the application can be asked to press it, and the pointer
@@ -539,6 +550,7 @@ impl Step {
                 act,
                 say,
                 control,
+                size: _,
             } => match control {
                 Some(name) => format!("{act:?} on {name:?} -- {say}"),
                 None => format!("{act:?} at ({:.0}, {:.0}) -- {say}", at.x, at.y),
@@ -589,11 +601,16 @@ impl Step {
                 say,
                 act,
                 control,
+                size,
             } => Step::Point {
                 at: f(at),
                 say,
                 act,
                 control,
+                // Untouched. `f` moves a position between coordinate spaces, and
+                // a size is not a position: `Control` reports both in screen
+                // points, so there is nothing to convert.
+                size,
             },
             other => other,
         }
@@ -1959,6 +1976,7 @@ mod tests {
     #[test]
     fn the_same_action_is_recognised_through_different_words() {
         let here = |x: f64, y: f64, say: &str| Step::Point {
+            size: None,
             control: None,
             at: Point { x, y },
             say: say.into(),
@@ -1992,6 +2010,7 @@ mod tests {
         // what we had to write down when a pixel was all we knew; a name is what
         // the model can actually reason about next turn.
         let named = Step::Point {
+            size: None,
             control: Some("Send".into()),
             at: Point { x: 10.0, y: 20.0 },
             say: "Sending it".into(),
@@ -2002,6 +2021,7 @@ mod tests {
         assert!(!line.contains("10"), "a name beats a coordinate: {line:?}");
 
         let s = Step::Point {
+            size: None,
             control: None,
             at: Point {
                 x: 1106.4,

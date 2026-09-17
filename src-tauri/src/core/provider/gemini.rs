@@ -165,6 +165,7 @@ impl Provider for Gemini {
                 return Ok(Step::Point {
                     // Named, so this can be pressed rather than clicked at.
                     control: Some(c.label.clone()),
+                    size: Some(c.size),
                     at: shot.to_image(Point {
                         x: c.at.0,
                         y: c.at.1,
@@ -188,6 +189,8 @@ impl Provider for Gemini {
         }
         let (w, h) = shot.sent;
         Ok(Step::Point {
+            // A guessed pixel has no bounds to draw.
+            size: None,
             // A pixel the model picked out of a picture. Nothing named it, so
             // there is nothing to press -- this one is a real click.
             control: None,

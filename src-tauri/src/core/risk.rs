@@ -191,6 +191,7 @@ mod tests {
             Risk::Read
         );
         assert!(!of(&Step::Point {
+            size: None,
             at: crate::core::screen::capture::Point { x: 0.0, y: 0.0 },
             say: String::new(),
             act: crate::core::provider::Act::Click,
