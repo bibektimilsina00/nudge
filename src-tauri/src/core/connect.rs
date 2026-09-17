@@ -411,13 +411,17 @@ pub fn catalogue() -> Vec<Offer> {
             key: "google_search_console",
             name: "Google Search Console",
             about: "Search performance, indexing and sitemaps for your sites.",
-            access: "Read-only: webmasters.readonly. It cannot change anything, \
-                     and reaches only the properties the service account is added \
-                     to rather than everything you own.",
-            command: "npx",
-            args: &["-y", "mcp-server-gsc"],
-            env: &[("GOOGLE_APPLICATION_CREDENTIALS", "~/.config/gsc-service-account.json")],
-            check: None,
+            access: "Read-only: webmasters.readonly. The properties you already \
+                     own in Search Console, and nothing else — it cannot change a \
+                     property, submit a sitemap or add a user.",
+            // A table on the same sign-in as Tasks. The npm server wants a
+            // service account key: a second kind of credential to create,
+            // download, and then grant separately on every property -- for an
+            // API that answers an ordinary OAuth token perfectly well.
+            command: "",
+            args: &[],
+            env: &[("GOOGLE_TOKEN_FILE", "~/.config/nudge/tasks-gsc-token.json")],
+            check: Some(("gsc_sites", "{}")),
             sign_in: None,
             token: Some("GSC_TOKEN"),
             where_from: None,
@@ -671,6 +675,12 @@ async fn google_access(path: &str) -> Result<String, String> {
 
 pub fn spec(made: &Made) -> Option<crate::core::tools::mcp::Spec> {
     let offer = offer(&made.key)?;
+    // A table has no process. Handing an empty command to the spawner produced
+    // `could not run "": No such file or directory` on every session -- which
+    // reads as a broken connector, for one that works.
+    if offer.command.is_empty() {
+        return None;
+    }
     let mut args: Vec<String> = offer.args.iter().map(|a| a.to_string()).collect();
     // Slack is the one whose extra is not an argument. Its server wants the
     // workspace id in the environment, and unlike a folder nobody knows theirs
@@ -917,6 +927,29 @@ mod tests {
             assert!(
                 res.status().is_success(),
                 "{} was left with a token Google does not accept",
+                o.key
+            );
+        }
+    }
+
+    #[test]
+    fn a_table_is_not_offered_to_the_process_spawner() {
+        // It has no command, and an empty one reached `Command::new("")`, which
+        // fails with "No such file or directory" -- a working connector
+        // reporting itself broken on every session.
+        for o in catalogue().into_iter().filter(|o| o.command.is_empty()) {
+            let made = Made {
+                key: o.key.into(),
+                extra: Vec::new(),
+                tools: Vec::new(),
+                allowed: None,
+                declined: Vec::new(),
+                at: 0,
+            };
+            assert!(spec(&made).is_none(), "{} was handed to the spawner", o.key);
+            assert!(
+                crate::core::tools::services::find(o.key).is_some(),
+                "{} has no command and no table either, so nothing can run it",
                 o.key
             );
         }
