@@ -34,7 +34,7 @@ import { Settings } from "./panel/Settings";
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[224px]",
+  home: "h-[252px]",
   agents: "h-[320px]",
   settings: "h-[640px]",
   integrations: "h-[640px]",
@@ -213,7 +213,11 @@ export default function Panel() {
               }}
             />
           ) : (
-          <Ask hold={hold} onOpenIntegrations={() => openIntegrations("home")} />
+          <Ask
+            hold={hold}
+            onOpenIntegrations={() => openIntegrations("home")}
+            onOpenAgents={() => setView("agents")}
+          />
           )}
           </div>
           </div>

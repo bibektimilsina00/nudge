@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { listen } from "@tauri-apps/api/event";
+
+import { type Agent } from "../Agent";
 
 /**
  * The home screen: a place to say what you want.
@@ -22,20 +25,53 @@ import { invoke } from "@tauri-apps/api/core";
  * description, and one that fails because you never connected Gmail is worse
  * than none.
  */
-export function Ask({ hold, onOpenIntegrations }: { hold: string; onOpenIntegrations: () => void }) {
+export function Ask({
+  hold,
+  onOpenIntegrations,
+  onOpenAgents,
+}: {
+  hold: string;
+  onOpenIntegrations: () => void;
+  onOpenAgents: () => void;
+}) {
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
-  const [have, setHave] = useState<string[]>([]);
+  const [have, setHave] = useState<{ key: string; name: string }[]>([]);
+  const [agents, setAgents] = useState<Agent[]>([]);
   const field = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     // Focus on arrival: the panel opens because somebody wants something, and a
     // field they have to click first is a field that asks them to say so twice.
     field.current?.focus();
-    void invoke<{ key: string; connected: boolean }[]>("connections")
-      .then((all) => setHave(all.filter((c) => c.connected).map((c) => c.key)))
+    void invoke<{ key: string; name: string; connected: boolean }[]>("connections")
+      .then((all) => setHave(all.filter((c) => c.connected).map(({ key, name }) => ({ key, name }))))
       .catch(() => {});
+    void invoke<Agent[]>("agents").then(setAgents).catch(() => {});
+    const sub = listen<Agent[]>("agents", (e) => setAgents(e.payload));
+    return () => void sub.then((un) => un());
   }, []);
+
+  // Anything live first, then the most recent finished ones. Three, because the
+  // field and its hint own the bottom half and a list that fills the rest is a
+  // list nobody reads the end of.
+  const recent = useMemo(() => {
+    const live = agents.filter((a) => a.state === "running" || a.state === "waiting");
+    const past = agents
+      .filter((a) => a.state !== "running" && a.state !== "waiting")
+      .sort((a, b) => b.started - a.started);
+    return [...live, ...past].slice(0, 3);
+  }, [agents]);
+
+  const nothing = have.length === 0;
+  // Their own names, not keys. Trimmed to three so the sentence stays a
+  // sentence -- nineteen connectors listed is a wall, not an invitation.
+  const reach = useMemo(() => {
+    const names = have.map((h) => h.name).slice(0, 3);
+    return names.length > 1
+      ? `${names.slice(0, -1).join(", ")} and ${names[names.length - 1]}`
+      : (names[0] ?? "");
+  }, [have]);
 
   const send = () => {
     const goal = text.trim();
@@ -46,35 +82,45 @@ export function Ask({ hold, onOpenIntegrations }: { hold: string; onOpenIntegrat
       .finally(() => setSending(false));
   };
 
-  const tries = useMemo(() => suggestions(have), [have]);
-
   return (
     <div className="flex flex-1 flex-col px-3.5 pt-2.5">
-      {/* Above the field, because that is where an answer will appear and this
-          is what stands in for one until there is anything to show. */}
+      {/* Above the field, because that is where an answer appears. What was
+          here was a row of example tasks -- a tutorial, shown forever, to
+          somebody who has used the thing a hundred times. This is what actually
+          happened instead: the run in progress, or the last few that finished.
+          A home screen that shows work beats one that only accepts it. */}
       <div className="min-h-0 flex-1 overflow-y-auto">
-        {tries.length > 0 ? (
-          <>
-            <p className="mb-1.5 text-[10.5px] text-ink-3">Try</p>
-            <div className="flex flex-wrap gap-1.5">
-              {tries.map((t) => (
-                <button
-                  key={t}
-                  onClick={() => {
-                    setText(t);
-                    field.current?.focus();
-                  }}
-                  // Filled in rather than sent. A suggestion is a starting point
-                  // and most of them want a word changed before they are what
-                  // somebody meant.
-                  className="rounded-full bg-raise px-2.5 py-[5px] text-[10.5px] text-ink-2 transition-colors duration-150 hover:bg-raise-hi hover:text-white"
-                >
-                  {t}
-                </button>
-              ))}
-            </div>
-          </>
-        ) : (
+        {recent.length > 0 ? (
+          <div className="space-y-1">
+            {recent.map((a) => (
+              <button
+                key={a.id}
+                onClick={onOpenAgents}
+                className="flex w-full items-center gap-2 rounded-lg px-1.5 py-[6px] text-left transition-colors duration-150 hover:bg-raise"
+              >
+                <span
+                  className={[
+                    "size-1.5 shrink-0 rounded-full",
+                    a.state === "running" || a.state === "waiting"
+                      ? "animate-pulse bg-blue"
+                      : a.state === "failed"
+                        ? "bg-[#ff5f57]"
+                        : "bg-[#30d158]",
+                  ].join(" ")}
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[11.5px] text-ink">{a.title || a.goal}</span>
+                  {/* Its own words about what it is doing, or what it ended up
+                      saying. Not a state name -- "Done" tells nobody anything
+                      they did not already know from the green dot. */}
+                  <span className="block truncate text-[10.5px] text-ink-3">
+                    {a.state === "failed" ? a.why : a.status}
+                  </span>
+                </span>
+              </button>
+            ))}
+          </div>
+        ) : nothing ? (
           // Nothing connected: the honest empty state is the reason it is empty
           // and the way out of it, not a shrug.
           <button
@@ -87,6 +133,12 @@ export function Ask({ hold, onOpenIntegrations }: { hold: string; onOpenIntegrat
               code and it can reach those too.
             </p>
           </button>
+        ) : (
+          // Connected, and nothing has been asked yet. Says what it can reach,
+          // because that is the useful fact and it is different on every machine.
+          <p className="px-1 py-1 text-[10.5px] leading-relaxed text-ink-3">
+            Ask for anything on your screen, or in {reach}.
+          </p>
         )}
       </div>
 
@@ -140,27 +192,6 @@ export function Ask({ hold, onOpenIntegrations }: { hold: string; onOpenIntegrat
       </div>
     </div>
   );
-}
-
-/**
- * Examples drawn from what is connected, so every one of them works.
- *
- * Ordered by how ordinary the task is rather than how impressive, because the
- * first one somebody tries decides whether they try a second.
- */
-function suggestions(have: string[]): string[] {
-  const has = (...keys: string[]) => keys.some((k) => have.includes(k));
-  const out: string[] = [];
-  if (has("gmail", "google")) out.push("Summarise my unread mail");
-  if (has("google_calendar", "google")) out.push("What's on my calendar today?");
-  if (has("github")) out.push("What changed in my repo this week?");
-  if (has("google_tasks")) out.push("What's on my task list?");
-  if (has("slack")) out.push("Catch me up on Slack");
-  if (has("google_sheets", "google")) out.push("Make a sheet of this week's spend");
-  // Always last, and always available: the one thing that needs nothing
-  // connected at all, because it is what Nudge was before any of this.
-  out.push("Open the settings pane for my display");
-  return out.slice(0, 4);
 }
 
 function Key({ children }: { children: React.ReactNode }) {
