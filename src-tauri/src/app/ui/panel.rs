@@ -29,8 +29,20 @@ pub fn window(app: &AppHandle) -> Option<WebviewWindow> {
 pub fn widen(app: &AppHandle, wide: bool) {
     let Some(win) = window(app) else { return };
     if !wide {
+        // Size and position back, and nothing else.
+        //
+        // This called `dock_to_notch`, which is the *collapsed pill* path: it
+        // also turns on click-through, because a pill sitting in the menu bar
+        // must not eat clicks meant for the menu bar. Applied to an open panel
+        // that made it a slab you could see and not touch, parked wherever the
+        // expanded window had been -- which is what it looked like on screen: a
+        // black rectangle in the middle of an editor, holding nothing.
+        let notch = crate::app::ui::notch::measure();
         let _ = win.set_size(LogicalSize::new(SIZE.0, SIZE.1));
-        dock_to_notch(app);
+        let _ = win.set_position(tauri::LogicalPosition::new(
+            notch.center_x - SIZE.0 / 2.0,
+            0.0,
+        ));
         return;
     }
     let screen = win
@@ -51,7 +63,10 @@ pub fn widen(app: &AppHandle, wide: bool) {
         (screen.0 - w) / 2.0,
         (screen.1 - h) / 2.5,
     ));
-    let _ = win.set_ignore_cursor_events(false);
+    // Through the one function that owns this, rather than a second opinion
+    // about it. Click-through is the difference between a panel and a pill, and
+    // two places setting it is how they disagree.
+    set_interactive(app, true);
     let _ = win.show();
     let _ = win.set_focus();
 }

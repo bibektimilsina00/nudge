@@ -96,11 +96,11 @@ export function Ask({
               <button
                 key={a.id}
                 onClick={onOpenAgents}
-                className="flex w-full items-center gap-2 rounded-lg px-1.5 py-[6px] text-left transition-colors duration-150 hover:bg-raise"
+                className="flex w-full items-start gap-2 rounded-lg px-1.5 py-[6px] text-left transition-colors duration-150 hover:bg-raise"
               >
                 <span
                   className={[
-                    "size-1.5 shrink-0 rounded-full",
+                    "mt-[5px] size-1.5 shrink-0 rounded-full",
                     a.state === "running" || a.state === "waiting"
                       ? "animate-pulse bg-blue"
                       : a.state === "failed"
@@ -113,7 +113,11 @@ export function Ask({
                   {/* Its own words about what it is doing, or what it ended up
                       saying. Not a state name -- "Done" tells nobody anything
                       they did not already know from the green dot. */}
-                  <span className="block truncate text-[10.5px] text-ink-3">
+                  {/* Two lines, clamped. One line threw away the half that
+                      matters -- a refusal cut off at "It can be turned on under
+                      Allowed to in setti…" has dropped the sentence somebody
+                      needed and kept the one they already knew. */}
+                  <span className="line-clamp-2 text-[10.5px] leading-snug text-ink-3">
                     {a.state === "failed" ? a.why : a.status}
                   </span>
                 </span>

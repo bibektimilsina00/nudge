@@ -252,11 +252,16 @@ export default function Panel() {
  * it in from larger with a small overshoot, like something landing.
  */
 function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) {
+  // Just the socket. The label it used to carry ("Call back" / "Release") made
+  // this a pill wider than the rail it now lives in, so it was clipped down the
+  // middle and its own text read as a tooltip stranded over the content. The
+  // name is in the tooltip with every other one.
   return (
     <button
       onClick={onToggle}
       aria-pressed={docked}
-      className="flex h-[30px] items-center gap-2 rounded-full bg-raise pr-3 pl-[3px] text-[11.5px] font-medium transition-colors duration-150 hover:bg-raise-hi hairline"
+      aria-label={docked ? "Release the companion" : "Call the companion back"}
+      className="grid size-[30px] shrink-0 place-items-center rounded-full bg-raise transition-colors duration-150 hover:bg-raise-hi hairline"
     >
       <span
         className={[
@@ -277,7 +282,7 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
           <Companion mode="idle" anchored />
         </span>
       </span>
-      {docked ? "Release" : "Call back"}
+
     </button>
   );
 }
@@ -422,7 +427,9 @@ function Rail({
         </Hint>
         {/* The companion's socket, at the foot. Not a section, so it sits apart
             from them rather than reading as a sixth. */}
-        <Perch docked={docked} onToggle={onDock} />
+        <Hint label={docked ? "Release" : "Call back"}>
+          <Perch docked={docked} onToggle={onDock} />
+        </Hint>
       </div>
     </nav>
   );
