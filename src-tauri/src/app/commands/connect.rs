@@ -379,15 +379,85 @@ pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::s
     Ok(waiting)
 }
 
-/// The first line of a server's complaint.
+/// The sentence inside a server's complaint, without the envelopes.
 ///
-/// They tend to answer a bad credential with a stack trace, and the sentence
-/// worth showing is always the first one. The rest belongs in the log.
+/// A failed check arrives wrapped three deep -- Nudge's error kind, then which
+/// tool on which server, then the protocol's own code -- before anything a
+/// person can act on:
+///
+/// ```text
+/// config: google_calendar/list-calendars failed: MCP error -32600: Authentication tokens are no longer valid.
+/// ```
+///
+/// Every layer is true and none of it is the answer. What somebody needs is the
+/// last part, and the card already says which integration it is.
 fn first_line(s: &str) -> String {
-    let line = s.lines().find(|l| !l.trim().is_empty()).unwrap_or(s).trim();
-    match line.char_indices().nth(160) {
+    let mut line = s.lines().find(|l| !l.trim().is_empty()).unwrap_or(s).trim();
+
+    // Peeled rather than pattern-matched, because each layer is added by a
+    // different piece of code and any of them can be absent.
+    for _ in 0..4 {
+        let before = line;
+        if let Some(rest) = line.strip_prefix("config: ") {
+            line = rest.trim();
+        }
+        if let Some(i) = line.find(" failed: ") {
+            // `server/tool failed: ` -- only when the head really is one, so a
+            // message that happens to contain the word survives.
+            if line[..i].split('/').count() == 2 && !line[..i].contains(' ') {
+                line = line[i + " failed: ".len()..].trim();
+            }
+        }
+        if let Some(rest) = line.split_once("MCP error ") {
+            if let Some((_, after)) = rest.1.split_once(": ") {
+                line = after.trim();
+            }
+        }
+        if line == before {
+            break;
+        }
+    }
+
+    let line = line.trim_end_matches(['.', ' ']);
+    match line.char_indices().nth(150) {
         Some((i, _)) => format!("{}…", &line[..i]),
         None => line.to_string(),
+    }
+}
+
+#[cfg(test)]
+mod complaints {
+    use super::first_line;
+
+    #[test]
+    fn the_envelopes_come_off_and_the_sentence_stays() {
+        assert_eq!(
+            first_line(
+                "config: google_calendar/list-calendars failed: MCP error -32600: \
+                 Authentication tokens are no longer valid. Please restart."
+            ),
+            "Authentication tokens are no longer valid. Please restart"
+        );
+    }
+
+    #[test]
+    fn a_plain_message_is_left_alone() {
+        assert_eq!(first_line("Bad credentials"), "Bad credentials");
+    }
+
+    #[test]
+    fn a_message_that_merely_contains_failed_keeps_its_words() {
+        // `the upload failed: disk full` has no server/tool head, so stripping
+        // at " failed: " would throw away the half that names what went wrong.
+        assert_eq!(
+            first_line("the upload failed: disk full"),
+            "the upload failed: disk full"
+        );
+    }
+
+    #[test]
+    fn only_the_first_line_of_a_stack_trace_survives() {
+        assert_eq!(first_line("Error: no token\n    at auth.js:172\n    at main"), "Error: no token");
     }
 }
 
