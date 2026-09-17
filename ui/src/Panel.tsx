@@ -71,10 +71,6 @@ export default function Panel() {
     setView("integrations");
   };
   const [docked, setDocked] = useState(false);
-  // Expanded into a window, rather than hanging off the notch. Some work is not
-  // a glance -- reading what an agent did, nineteen connectors, a settings page
-  // with five sections -- and the panel is sized for glancing.
-  const [wide, setWide] = useState(false);
   // Heading this way, but not here yet. Its own ring, wider than the dock's --
   // see `is_near` in notch.rs for why this cannot be a delay before opening.
   const [near, setNear] = useState(false);
@@ -169,9 +165,7 @@ export default function Panel() {
           // two directions at slightly different rates.
           "transition-[width,height] duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           open
-            ? wide
-              ? "h-full w-full"
-              : `${HEIGHT[view]} w-[540px]`
+            ? `${HEIGHT[view]} w-[540px]`
             : busy
               // Both pills are the notch's own height, so the strip reads as the
               // hardware getting wider rather than as a bar hanging below it.
@@ -201,12 +195,6 @@ export default function Panel() {
             onGo={setView}
             docked={docked}
             onDock={() => dock(!docked)}
-            wide={wide}
-            onWide={() => {
-              const next = !wide;
-              setWide(next);
-              void invoke("widen_panel", { wide: next });
-            }}
           />
           <div className="flex min-w-0 flex-1 flex-col">
           {view === "agents" ? (
@@ -375,15 +363,11 @@ function Rail({
   onGo,
   docked,
   onDock,
-  wide,
-  onWide,
 }: {
   view: View;
   onGo: (v: View) => void;
   docked: boolean;
   onDock: () => void;
-  wide: boolean;
-  onWide: () => void;
 }) {
   const items: [View, string, React.ReactNode][] = [
     ["home", "Home", <Home key="h" />],
@@ -417,16 +401,6 @@ function Rail({
       })}
 
       <div className="mt-auto flex flex-col items-center gap-1.5">
-        <Hint label={wide ? "Shrink" : "Expand"}>
-          <button
-            onClick={onWide}
-            aria-label={wide ? "Shrink" : "Expand"}
-            aria-pressed={wide}
-            className="grid size-[30px] place-items-center rounded-[9px] text-ink-3 transition-colors duration-150 hover:bg-raise hover:text-white/85"
-          >
-            <Corners inward={wide} />
-          </button>
-        </Hint>
         {/* The companion's socket, at the foot. Not a section, so it sits apart
             from them rather than reading as a sixth. */}
         <Hint label={docked ? "Release" : "Call back"}>
@@ -471,24 +445,6 @@ function Hint({ label, children }: { label: string; children: React.ReactNode })
   );
 }
 
-/** Arrows out of, or into, the corners. */
-function Corners({ inward }: { inward: boolean }) {
-  return (
-    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
-      {inward ? (
-        <>
-          <path d="M6.5 2.5v4h-4M9.5 13.5v-4h4" />
-          <path d="M2.5 9.5h4v4M13.5 6.5h-4v-4" />
-        </>
-      ) : (
-        <>
-          <path d="M9.5 2.5h4v4M6.5 13.5h-4v-4" />
-          <path d="M13.5 2.5 9.5 6.5M2.5 13.5 6.5 9.5" />
-        </>
-      )}
-    </svg>
-  );
-}
 
 /** A plug, for the things Nudge is joined to. */
 function Plug() {

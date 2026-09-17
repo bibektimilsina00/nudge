@@ -258,7 +258,6 @@ pub fn run() {
             commands::docked,
             commands::set_docked,
             commands::fit_panel,
-            commands::widen_panel,
             commands::fit_agents,
             commands::pending_offer,
             commands::answer_offer,
