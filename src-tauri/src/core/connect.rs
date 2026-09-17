@@ -56,6 +56,18 @@ pub struct Offer {
     /// Public on purpose. GitHub's device flow has no client secret, which is
     /// exactly why it suits a program anybody can download and read.
     pub sign_in: Option<&'static str>,
+    /// A cheap read that proves the credential works, not just that the server
+    /// runs.
+    ///
+    /// The whole reason this exists: Gmail, Calendar and GitHub all start
+    /// happily and list every tool they have with no valid token at all. So
+    /// "the server answered" was never evidence of a working connection, and
+    /// the card went green on connections that failed at the first real task.
+    ///
+    /// Named here rather than guessed, because there is no convention -- one
+    /// server's cheapest read is `list_email_labels` and another's is
+    /// `list-calendars`, and calling the wrong thing fails for the wrong reason.
+    pub check: Option<(&'static str, &'static str)>,
     /// For the ones that are not a token at all.
     ///
     /// Google's server keeps its own credential file and its own account store,
@@ -82,6 +94,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-filesystem"],
             env: &[],
+            check: None,
             sign_in: None,
             token: None,
             where_from: None,
@@ -96,6 +109,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-github"],
             env: &[],
+            check: None,
             sign_in: Some("Iv23liZbf0DVYN4oVPZt"),
             token: Some("GITHUB_PERSONAL_ACCESS_TOKEN"),
             // Still offered, because a fine-grained token you minted yourself is
@@ -113,6 +127,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@modelcontextprotocol/server-slack"],
             env: &[],
+            check: None,
             sign_in: None,
             token: Some("SLACK_BOT_TOKEN"),
             where_from: Some("api.slack.com/apps → your app → OAuth & Permissions"),
@@ -130,6 +145,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "airtable-mcp-server"],
             env: &[],
+            check: Some(("list_bases", "{}")),
             sign_in: None,
             token: Some("AIRTABLE_API_KEY"),
             where_from: Some("airtable.com/create/tokens → Create token → pick bases and scopes"),
@@ -144,6 +160,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@roychri/mcp-server-asana"],
             env: &[],
+            check: Some(("asana_list_workspaces", "{}")),
             sign_in: None,
             token: Some("ASANA_ACCESS_TOKEN"),
             where_from: Some("app.asana.com/0/my-apps → Personal access tokens → Create"),
@@ -158,6 +175,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@k-jarzyna/mcp-miro"],
             env: &[],
+            check: None,
             sign_in: None,
             token: Some("MIRO_ACCESS_TOKEN"),
             where_from: Some("miro.com/app/settings/user-profile/apps → your app → Install and get OAuth token"),
@@ -171,6 +189,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@zeplin/mcp-server"],
             env: &[],
+            check: None,
             sign_in: None,
             token: Some("ZEPLIN_ACCESS_TOKEN"),
             where_from: Some("app.zeplin.com/profile/developer → Personal access tokens"),
@@ -188,6 +207,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "youtube-data-mcp-server"],
             env: &[],
+            check: None,
             sign_in: None,
             token: Some("YOUTUBE_API_KEY"),
             where_from: Some(
@@ -208,6 +228,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@notionhq/notion-mcp-server"],
             env: &[],
+            check: None,
             sign_in: None,
             token: Some("AUTH_TOKEN"),
             where_from: Some(
@@ -225,6 +246,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@doist/todoist-mcp"],
             env: &[],
+            check: Some(("get-projects", "{}")),
             sign_in: None,
             token: Some("TODOIST_API_KEY"),
             where_from: Some("todoist.com → Settings → Integrations → Developer → API token"),
@@ -240,6 +262,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@hubspot/mcp-server"],
             env: &[],
+            check: None,
             sign_in: None,
             token: Some("HUBSPOT_ACCESS_TOKEN"),
             where_from: Some(
@@ -256,6 +279,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@calcom/cal-mcp"],
             env: &[],
+            check: None,
             sign_in: None,
             token: Some("CAL_API_KEY"),
             where_from: Some("cal.com → Settings → Developer → API keys"),
@@ -274,6 +298,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@supabase/mcp-server-supabase"],
             env: &[],
+            check: None,
             sign_in: None,
             token: Some("SUPABASE_ACCESS_TOKEN"),
             where_from: Some("supabase.com/dashboard/account/tokens → Generate new token"),
@@ -293,6 +318,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "@gongrzhe/server-gmail-autoauth-mcp"],
             env: &[],
+            check: Some(("list_email_labels", "{}")),
             sign_in: None,
             token: None,
             where_from: None,
@@ -313,6 +339,7 @@ pub fn catalogue() -> Vec<Offer> {
             // export a variable before clicking a button is asking them to do
             // the part that is not theirs to do.
             env: &[("GOOGLE_OAUTH_CREDENTIALS", "~/.config/gcp-oauth.keys.json")],
+            check: Some(("list-calendars", "{}")),
             sign_in: None,
             token: None,
             where_from: None,
@@ -341,6 +368,7 @@ pub fn catalogue() -> Vec<Offer> {
                 // this works once by hand and never again from the app.
                 ("TOKEN_PATH", "~/.mcp-google-sheets-token.json"),
             ],
+            check: Some(("list_spreadsheets", "{}")),
             sign_in: None,
             token: None,
             where_from: None,
@@ -361,6 +389,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "mcp-google-tasks"],
             env: &[],
+            check: None,
             sign_in: None,
             token: None,
             where_from: None,
@@ -381,6 +410,7 @@ pub fn catalogue() -> Vec<Offer> {
             command: "npx",
             args: &["-y", "mcp-server-gsc"],
             env: &[("GOOGLE_APPLICATION_CREDENTIALS", "~/.config/gsc-service-account.json")],
+            check: None,
             sign_in: None,
             token: None,
             where_from: None,
@@ -402,6 +432,7 @@ pub fn catalogue() -> Vec<Offer> {
             // `server-gdrive` is deprecated and covers only Drive.
             args: &["-y", "google-workspace-mcp", "serve"],
             env: &[],
+            check: None,
             sign_in: None,
             token: None,
             where_from: None,
@@ -743,6 +774,23 @@ mod tests {
         assert!(!offer.env.is_empty());
         for (_, v) in offer.env {
             assert!(!v.contains("~/") || v.starts_with("~/"), "{v}");
+        }
+    }
+
+    #[test]
+    fn every_proving_call_has_arguments_that_parse() {
+        // The arguments are a string in a table, so a stray brace is a typo the
+        // compiler cannot see. Left unchecked it would surface as a connection
+        // that fails for a reason having nothing to do with the credential.
+        for o in catalogue() {
+            let Some((tool, args)) = o.check else { continue };
+            let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
+            assert!(parsed.is_ok(), "{}/{tool} has unparseable arguments: {args}", o.key);
+            assert!(
+                parsed.unwrap().is_object(),
+                "{}/{tool} arguments must be an object",
+                o.key
+            );
         }
     }
 

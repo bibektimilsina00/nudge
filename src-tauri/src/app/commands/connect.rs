@@ -180,6 +180,22 @@ pub async fn connect(
         });
     }
 
+    // Listing tools proves the server runs. It does not prove the credential
+    // works -- Gmail, Calendar and GitHub all list everything they have with no
+    // valid token, so this used to go green on connections that failed at the
+    // first real task. If the entry names a cheap read, do it.
+    if let Some((tool, args)) = offer.check {
+        let args: serde_json::Value = serde_json::from_str(args).unwrap_or(serde_json::json!({}));
+        if let Err(why) = started.call(&key, tool, args).await {
+            undo(&key, offer.token.is_some());
+            return Err(format!(
+                "{} started, but {}",
+                offer.name,
+                first_line(&why.to_string())
+            ));
+        }
+    }
+
     let mut all = connect::read(app.state::<Connections>().path.as_deref());
     all.retain(|m| m.key != key);
     all.push(Made {
@@ -264,6 +280,13 @@ async fn join(app: AppHandle, key: String) -> Result<usize, String> {
             Some(why) => format!("{} did not start: {why}", offer.name),
             None => format!("{} started but offered no tools", offer.name),
         });
+    }
+    if let Some((tool, args)) = offer.check {
+        let args: serde_json::Value = serde_json::from_str(args).unwrap_or(serde_json::json!({}));
+        if let Err(why) = started.call(&key, tool, args).await {
+            undo(&key, offer.token.is_some());
+            return Err(format!("{} started, but {}", offer.name, first_line(&why.to_string())));
+        }
     }
     let path = app.state::<Connections>().path.clone();
     let mut all = connect::read(path.as_deref());
@@ -354,6 +377,18 @@ pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::s
         .spawn();
 
     Ok(waiting)
+}
+
+/// The first line of a server's complaint.
+///
+/// They tend to answer a bad credential with a stack trace, and the sentence
+/// worth showing is always the first one. The rest belongs in the log.
+fn first_line(s: &str) -> String {
+    let line = s.lines().find(|l| !l.trim().is_empty()).unwrap_or(s).trim();
+    match line.char_indices().nth(160) {
+        Some((i, _)) => format!("{}…", &line[..i]),
+        None => line.to_string(),
+    }
 }
 
 /// Which workspace a Slack token belongs to.
