@@ -24,7 +24,9 @@
    * Real vibrancy is more opaque than it looks: the blur does the work of
    * feeling like glass, and the fill does the work of being legible. When the
    * two fight, legibility wins, because a panel nobody can read is not a panel. */
-  --color-window: rgba(28, 28, 30, 0.93);
+  /* Kept for anything still asking for a single window colour; the panel itself
+   * is a gradient now. Opaque -- nothing here should show the desktop. */
+  --color-window: #141417;
   /* A thing sitting on the window -- a card, a row, a field. */
   --color-raise: rgba(255, 255, 255, 0.07);
   /* The same thing under the pointer. */
@@ -191,13 +193,20 @@ body,
  * looks like frosted glass rather than like a grey rectangle with a soft edge.
  * Blur alone reads as fog. */
 .material {
-  background-color: var(--color-window);
-  /* More blur than seems necessary, which is what keeps it reading as glass now
-   * that the fill is nearly opaque. What comes through is the *colour* of what
-   * is behind, not its shapes -- a window over a blue lake should look faintly
-   * blue, and should never show the rocks. */
-  backdrop-filter: blur(48px) saturate(190%);
-  -webkit-backdrop-filter: blur(48px) saturate(190%);
+  /* Opaque, and a gradient down the panel.
+   *
+   * It was translucent with a heavy blur -- vibrancy, the material every macOS
+   * window is made of. Over a bright wallpaper that stopped being a window and
+   * became a smudge of it: the lake came through as a blue-green haze behind the
+   * text, different on every desktop and dirty on most.
+   *
+   * So: no blur, no transparency, and the panel supplies its own depth. Near
+   * black where it meets the notch, so the seam with the hardware is invisible,
+   * lifting to a lighter grey at the foot. Vertical rather than flat because the
+   * panel hangs from something -- the gradient is what says which end it is
+   * attached to. */
+  background-image: linear-gradient(to bottom, #0a0a0c 0%, #141417 42%, #1b1b1f 100%);
+  background-color: #141417;
 }
 
 /* A hairline that survives a Retina display.

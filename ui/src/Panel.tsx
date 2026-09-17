@@ -145,12 +145,14 @@ export default function Panel() {
       <div
         className={[
           "overflow-hidden text-ink select-none",
-          // Black while it is a pill, glass once it is a panel.
+          // Black while it is a pill, a dark gradient once it is a panel.
           //
-          // The pill has to read as part of the notch -- the same black, the same
-          // corners -- and frosted glass stuck to a piece of hardware reads as a
-          // sticker on it. Open, it is plainly a window and should be made of
-          // what every other macOS window is made of.
+          // The pill has to read as part of the notch: the same black, the same
+          // corners. Open, it used to be vibrancy -- the material every macOS
+          // window is made of -- and over a bright wallpaper that stopped being
+          // a window and became a smudge of one, the lake coming through as a
+          // haze behind the text. The panel makes its own depth now: near black
+          // at the notch so the seam is invisible, lifting toward the foot.
           open ? "material" : "bg-black",
           // The busy pill is a strip in the menu bar, not a panel: a big radius
           // on something 34px tall reads as a lozenge stuck to the notch.
