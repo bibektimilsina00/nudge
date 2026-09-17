@@ -536,6 +536,41 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             true => settled,
             false => format!("{settled}{}", crate::core::claimed::unchecked(&unread)),
         };
+        // A number stated that nothing returned.
+        //
+        // Asked how many unread emails there were, one run answered 201, then
+        // 10, then 2, then 0 across four attempts, against a true figure of
+        // 3,703 -- because no mail tool reports a count and the model was
+        // reading one off the size of whatever page it fetched. Every other
+        // guard passed it: something had been read, something had been called,
+        // nothing had been claimed about a file.
+        //
+        // Only on the way out, like the rest. Mid-run a number is working out
+        // loud; the one worth doubting is the one an answer ends on.
+        let settled = match matches!(step, crate::core::provider::Step::Done { .. }) {
+            false => settled,
+            true => {
+                let mut seen = app.state::<Nudge>().history();
+                // The question counts as evidence. "Summarise the top 20" puts
+                // 20 in the answer honestly, and accusing that would make the
+                // note fire on work that did exactly as it was told.
+                seen.push(goal_said.clone());
+                let invented = crate::core::claimed::uncounted(&settled, &seen);
+                let settled = match invented.is_empty() {
+                    true => settled,
+                    false => format!("{settled}{}", crate::core::claimed::unmeasured(&invented)),
+                };
+                // And the subtler one: a number the evidence hedged and the
+                // answer did not. "Found approximately 201 messages" became
+                // "you have 201 unread emails", and the word carrying all the
+                // uncertainty was dropped on the way out.
+                let soft = crate::core::claimed::overstated(&settled, &seen);
+                match soft.is_empty() {
+                    true => settled,
+                    false => format!("{settled}{}", crate::core::claimed::only_estimated(&soft)),
+                }
+            }
+        };
         // Asked to find something out, and never looked outside.
         //
         // Told to research three languages and find real figures, a run wrote

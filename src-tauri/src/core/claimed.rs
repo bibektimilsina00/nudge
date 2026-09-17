@@ -244,6 +244,161 @@ pub fn unread(made: &[String], steps: &[Step], elsewhere: &[String]) -> Vec<Stri
         .collect()
 }
 
+/// Numbers stated in an answer that nothing the run saw contained.
+///
+/// Asked how many unread emails there were, the same run answered 201, then 10,
+/// then 2, then 0 across four attempts. The true figure was 3,703. None of the
+/// mail servers expose a count, so the model was reading one off the length of
+/// whatever page it happened to fetch -- `maxResults: 10` becoming "10 unread".
+///
+/// That is this module's defect wearing a different coat: something asserted
+/// that nobody measured. A file that was never read is caught by [`unread`]; a
+/// number that was never counted was not caught by anything, and it is worse,
+/// because a wrong number reads exactly like a right one.
+///
+/// The rule is narrow on purpose: a quantity in the answer has to appear
+/// somewhere in what the tools returned, or in the question. It does not check
+/// the number is *correct* -- nothing here can -- only that it was seen rather
+/// than composed.
+///
+/// Deliberately blind to arithmetic. A run that legitimately adds two numbers
+/// gets accused, which is why the note says the figure is unverified rather than
+/// wrong, and why small numbers are left alone entirely: "the three most recent"
+/// is ordinary English, not a measurement.
+pub fn uncounted(say: &str, seen: &[String]) -> Vec<String> {
+    numbers(say)
+        .into_iter()
+        .filter(|n| !seen.iter().any(|s| contains_number(s, n)))
+        .collect()
+}
+
+/// Quantities worth checking, which is not every digit in a sentence.
+///
+/// Below ten is left alone: those are the counts people say without counting
+/// ("the three most recent"), and flagging them would make the note constant and
+/// therefore ignored. Years are left alone for the same reason -- a date is not
+/// a measurement of anything the run did.
+fn numbers(text: &str) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    for raw in text.split(|c: char| !c.is_ascii_digit() && c != ',') {
+        let digits: String = raw.chars().filter(char::is_ascii_digit).collect();
+        if digits.len() < 2 {
+            continue;
+        }
+        let Ok(n) = digits.parse::<u64>() else {
+            continue;
+        };
+        if n < 10 || (1900..=2100).contains(&n) {
+            continue;
+        }
+        if !out.contains(&digits) {
+            out.push(digits);
+        }
+    }
+    out
+}
+
+/// Whether some text contains this number, however it is punctuated.
+///
+/// `3703` and `3,703` are the same measurement, and a server that formats with
+/// separators would otherwise look like it never said it.
+fn contains_number(haystack: &str, digits: &str) -> bool {
+    let flat: String = haystack.chars().filter(|c| c.is_ascii_digit()).collect();
+    haystack.contains(digits) || flat.contains(digits)
+}
+
+/// Numbers the evidence hedged and the answer did not.
+///
+/// The case this was built for turned out not to be an invented number at all.
+/// Asked how many unread emails there were, the run answered "You have 201
+/// unread emails". The true figure was 3,703 -- but 201 was not made up. The
+/// tool said it:
+///
+/// ```text
+/// Found approximately 201 messages.
+/// Total estimate: 201 messages
+/// ```
+///
+/// Gmail's search returns an estimate, and a bad one. The tool was honest about
+/// that and the answer was not: "approximately 201" became "you have 201", and
+/// the one word carrying all the uncertainty was dropped on the way out.
+///
+/// So this is not about arithmetic or invention. It is about a hedge surviving
+/// the trip from evidence to sentence. Where the source said *about*, the answer
+/// has to as well.
+pub fn overstated(say: &str, seen: &[String]) -> Vec<String> {
+    numbers(say)
+        .into_iter()
+        .filter(|n| {
+            // Only numbers the evidence actually carried; one from nowhere is
+            // [`uncounted`]'s business, and reporting it twice would say the
+            // same thing in two voices.
+            let Some(source) = seen.iter().find(|s| contains_number(s, n)) else {
+                return false;
+            };
+            hedged_near(source, n) && !hedged_near(say, n)
+        })
+        .collect()
+}
+
+/// Whether a number is qualified where it appears.
+///
+/// Looked for beside the number rather than anywhere in the text, because a long
+/// tool result usually contains the word *estimate* about something else, and a
+/// check that fires on that would fire on nearly everything.
+fn hedged_near(text: &str, digits: &str) -> bool {
+    const SOFT: [&str; 8] = [
+        "approximately",
+        "estimate",
+        "estimated",
+        "about",
+        "around",
+        "roughly",
+        "at least",
+        "or so",
+    ];
+    let low = text.to_lowercase();
+    let Some(at) = low.find(digits) else {
+        return false;
+    };
+    // A narrow window either side: "approximately 201" and "201 or so" both
+    // qualify, and an "estimate" about something else two clauses away does not.
+    // Forty characters was too generous -- "Total estimate: 9 threads.
+    // Separately, 4200 messages" put the two thirty-two apart and read as a
+    // hedge on the wrong number. The longest real qualifier is
+    // "approximately " at fourteen.
+    let from = at.saturating_sub(20);
+    let to = (at + digits.len() + 12).min(low.len());
+    let Some(window) = low.get(from..to) else {
+        return false;
+    };
+    SOFT.iter().any(|w| window.contains(w))
+}
+
+/// What to append when a hedge was dropped.
+pub fn only_estimated(numbers: &[String]) -> String {
+    match numbers.is_empty() {
+        true => String::new(),
+        false => format!(
+            " {} is what the tool estimated, not what it counted — it said \
+             \"approximately\", and I should have too.",
+            numbers.join(" and ")
+        ),
+    }
+}
+
+/// What to append when a number came from nowhere.
+pub fn unmeasured(numbers: &[String]) -> String {
+    match numbers.is_empty() {
+        true => String::new(),
+        false => format!(
+            " I did not actually count {}; no tool I used returned that figure, \
+             so treat it as an impression rather than a number.",
+            numbers.join(" or ")
+        ),
+    }
+}
+
 /// What a run set itself and has not done.
 ///
 /// `Step::Plan` exists, the card renders it, and nothing ever looked at it
@@ -496,6 +651,105 @@ pub fn nothing_there(gone: &[String]) -> String {
 
 #[cfg(test)]
 mod tests {
+
+    /// The real transcript, not a made-up one. This is what the tools returned
+    /// and what the run said about it.
+    const AS_IT_HAPPENED: &str = "Found approximately 201 messages.  Showing 10 messages: \
+                                  1. ID: 1a0ae54e294df248";
+
+    #[test]
+    fn a_hedge_dropped_between_evidence_and_answer_is_caught() {
+        let seen = vec![AS_IT_HAPPENED.to_string()];
+        assert_eq!(
+            overstated("You have 201 unread emails.", &seen),
+            vec!["201"],
+            "the tool said approximately and the answer did not"
+        );
+    }
+
+    #[test]
+    fn keeping_the_hedge_passes() {
+        let seen = vec![AS_IT_HAPPENED.to_string()];
+        assert!(overstated("You have approximately 201 unread emails.", &seen).is_empty());
+        assert!(overstated("There are about 201 unread.", &seen).is_empty());
+    }
+
+    #[test]
+    fn a_number_the_tool_stated_plainly_is_left_alone() {
+        // Only a dropped hedge is a defect. A tool that counted and said so is
+        // evidence, and repeating it flatly is correct.
+        let seen = vec!["messagesUnread: 3703".to_string()];
+        assert!(overstated("You have 3703 unread emails.", &seen).is_empty());
+    }
+
+    #[test]
+    fn the_word_estimate_elsewhere_in_a_long_result_does_not_count() {
+        // Tool output is long and often mentions estimates about something else.
+        // Looked for beside the number, or this fires on nearly everything.
+        let seen =
+            vec!["Total estimate: 9 threads. Separately, 4200 messages were indexed.".to_string()];
+        assert!(overstated("There are 4200 messages.", &seen).is_empty());
+    }
+
+    #[test]
+    fn an_invented_number_is_left_to_the_other_check() {
+        // Saying the same thing in two voices in one answer is worse than
+        // saying it once.
+        let seen = vec!["Found approximately 201 messages.".to_string()];
+        assert!(overstated("You have 999 unread emails.", &seen).is_empty());
+        assert_eq!(uncounted("You have 999 unread emails.", &seen), vec!["999"]);
+    }
+
+    #[test]
+    fn the_note_says_which_figure_and_why() {
+        let n = only_estimated(&["201".to_string()]);
+        assert!(n.contains("201") && n.contains("estimated"), "{n}");
+        assert!(only_estimated(&[]).is_empty());
+    }
+
+    #[test]
+    fn a_number_that_appeared_in_a_tool_result_is_left_alone() {
+        let seen = vec!["Total estimate: 3703 messages".to_string()];
+        assert!(uncounted("You have 3703 unread emails.", &seen).is_empty());
+    }
+
+    #[test]
+    fn a_number_formatted_with_separators_still_counts_as_seen() {
+        // The server says 3703 and the answer says 3,703. Same measurement, and
+        // treating them as different would make the note fire on correct work.
+        let seen = vec!["messagesUnread: 3703".to_string()];
+        assert!(uncounted("You have 3,703 unread emails.", &seen).is_empty());
+    }
+
+    #[test]
+    fn a_number_from_nowhere_is_caught() {
+        // The bug this exists for: a page of ten results became "201 unread".
+        let seen = vec!["ID: 1a0ae54 Subject: Security alert".to_string()];
+        assert_eq!(uncounted("You have 201 unread emails.", &seen), vec!["201"]);
+    }
+
+    #[test]
+    fn small_numbers_are_ordinary_english_not_measurements() {
+        // "the three most recent" is how people talk. Flagging it would make the
+        // note appear on nearly every answer, and a note that always appears is
+        // one nobody reads.
+        assert!(uncounted("The three most recent are security alerts.", &[]).is_empty());
+        assert!(uncounted("I found 2 of them.", &[]).is_empty());
+    }
+
+    #[test]
+    fn a_year_is_not_a_quantity() {
+        assert!(uncounted("The repository was created in 2026.", &[]).is_empty());
+    }
+
+    #[test]
+    fn the_note_names_the_figure_it_doubts() {
+        let note = unmeasured(&["201".to_string()]);
+        assert!(note.contains("201"), "{note}");
+        assert!(note.contains("did not actually count"), "{note}");
+        assert!(unmeasured(&[]).is_empty());
+    }
+
     use super::*;
 
     fn wrote() -> Vec<Step> {
