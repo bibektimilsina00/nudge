@@ -49,50 +49,10 @@ export function Ask({ hold, onOpenIntegrations }: { hold: string; onOpenIntegrat
   const tries = useMemo(() => suggestions(have), [have]);
 
   return (
-    <div className="flex flex-1 flex-col px-3.5 pt-2">
-      <div className="relative">
-        <textarea
-          ref={field}
-          value={text}
-          onChange={(e) => setText(e.target.value)}
-          onKeyDown={(e) => {
-            // Enter sends; shift-enter is a newline. A task is usually one line
-            // and occasionally several, and the common case should not need a
-            // modifier.
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              send();
-            }
-          }}
-          rows={2}
-          spellCheck={false}
-          placeholder="What do you want done?"
-          className="w-full resize-none rounded-xl bg-black/35 px-3 py-2.5 pr-11 text-[13px] leading-snug text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
-        />
-        <button
-          onClick={send}
-          disabled={!text.trim() || sending}
-          aria-label="Start"
-          // Sits in the field rather than beside it: the button is the same
-          // action as the key, and putting it anywhere else implies otherwise.
-          className="absolute right-2 bottom-2 grid size-[26px] place-items-center rounded-lg bg-blue text-white transition-[background-color,opacity] duration-150 hover:bg-blue-hi disabled:bg-raise disabled:text-ink-3"
-        >
-          <svg viewBox="0 0 14 14" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-            <path d="M7 11V3M3.5 6.5 7 3l3.5 3.5" />
-          </svg>
-        </button>
-      </div>
-
-      {/* The other way in, stated once and quietly. */}
-      {hold ? (
-        <p className="mt-1.5 text-[10.5px] text-ink-3">
-          or hold <Key>{hold}</Key> and say it
-        </p>
-      ) : (
-        <p className="mt-1.5 text-[10.5px] text-ink-3">Press ⏎ to start</p>
-      )}
-
-      <div className="mt-auto pt-3 pb-3.5">
+    <div className="flex flex-1 flex-col px-3.5 pt-2.5">
+      {/* Above the field, because that is where an answer will appear and this
+          is what stands in for one until there is anything to show. */}
+      <div className="min-h-0 flex-1 overflow-y-auto">
         {tries.length > 0 ? (
           <>
             <p className="mb-1.5 text-[10.5px] text-ink-3">Try</p>
@@ -128,6 +88,55 @@ export function Ask({ hold, onOpenIntegrations }: { hold: string; onOpenIntegrat
             </p>
           </button>
         )}
+      </div>
+
+      {/* The field sits at the foot, where the thing you type into lives in
+          every other window that takes a sentence. Above it is where what comes
+          back will go. */}
+      <div className="pt-2.5 pb-3">
+        <div className="relative">
+          <textarea
+            ref={field}
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => {
+              // Enter sends; shift-enter is a newline. A task is usually one
+              // line and occasionally several, and the common case should not
+              // need a modifier.
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                send();
+              }
+            }}
+            rows={2}
+            spellCheck={false}
+            placeholder="What do you want done?"
+            className="w-full resize-none rounded-xl bg-black/35 px-3 py-2.5 pr-11 text-[13px] leading-snug text-white outline-none hairline placeholder:text-ink-3 focus:inset-ring-[#0a84ff]"
+          />
+          <button
+            onClick={send}
+            disabled={!text.trim() || sending}
+            aria-label="Start"
+            // Sits in the field rather than beside it: the button is the same
+            // action as the key, and putting it anywhere else implies otherwise.
+            className="absolute right-2 bottom-2 grid size-[26px] place-items-center rounded-lg bg-blue text-white transition-[background-color,opacity] duration-150 hover:bg-blue-hi disabled:bg-raise disabled:text-ink-3"
+          >
+            <svg viewBox="0 0 14 14" className="size-3.5" fill="none" stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+              <path d="M7 11V3M3.5 6.5 7 3l3.5 3.5" />
+            </svg>
+          </button>
+        </div>
+
+        {/* The other way in, stated once and quietly. */}
+        <p className="mt-1.5 text-[10.5px] text-ink-3">
+          {hold ? (
+            <>
+              or hold <Key>{hold}</Key> and say it
+            </>
+          ) : (
+            "Press ⏎ to start"
+          )}
+        </p>
       </div>
     </div>
   );
