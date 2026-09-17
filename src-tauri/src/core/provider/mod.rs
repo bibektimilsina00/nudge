@@ -849,6 +849,18 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     // Only said when a tool that would care is actually present, since a prompt
     // that explains Google Docs to a run with no Google Docs is a paragraph
     // spent on nothing -- and this is read on every single turn.
+    // How to explain a screen somebody is trying to learn.
+    //
+    // Only when there are controls, because that is what says a window is in
+    // front and there is something to point at. Asked to explain with no screen
+    // to explain, this would be a paragraph of advice about pointing.
+    let teaching = if ask.controls.is_empty() {
+        String::new()
+    } else {
+        "\n\n## Explaining what is on the screen\n\n         When somebody asks what an application is, or how to use it, or what a          part of it does, do NOT answer with one paragraph describing          everything. That is a manual read aloud. Teach it the way a person          sitting beside them would: one thing at a time, pointing at each one          as they name it.\n\n         So answer with a *sequence* of `point` steps, one per region, each with          a `say` of one short sentence naming that region and what it is for.          Prefer `control` numbers -- a numbered control carries its size, which          is what lets a whole panel be outlined rather than a spot marked          inside it.\n\n         Say where the thing is, not just what it is called. \"This top left          area is media storage, where you browse files on your Mac\" teaches;          \"the application has a media storage panel\" does not, because the          person is looking at the screen and does not know which part you mean.\n\n         Four or five regions is a tour. More is a lecture. Take the ones          somebody needs first and leave the rest.\n\n         Finish with one concrete thing to do next, as its own step -- \"first,          click the movies folder so we can find a video to import\" -- rather          than a list of everything that could be done. One next action, not a          menu of them.\n\n         Never stack clauses with semicolons. Each region is its own step and          its own sentence, because each one is spoken while its own outline is          on the screen."
+            .to_string()
+    };
+
     let styling = {
         let has = |needle: &str| ask.tools.iter().any(|t| t.name.contains(needle));
         let doc = has("Doc") || has("document") || has("Presentation") || has("Slide");
@@ -940,7 +952,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
          {facts}{here}{memory}{earlier}{skills}{controls}{tools}{reach}\
-         Steps already completed:\n{history}{stalled}{styling}\n\n\
+         Steps already completed:\n{history}{stalled}{styling}{teaching}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
          the screen, and whether the goal is already met. Describe what is there, \
@@ -1701,6 +1713,30 @@ mod tests {
             p.contains("applyTextStyle"),
             "does not say how to style instead"
         );
+    }
+
+    #[test]
+    fn a_screen_with_controls_is_told_how_to_explain_it() {
+        use crate::core::screen::ax::Control;
+        let controls = [Control {
+            role: "AXButton".into(),
+            label: "Media".into(),
+            at: (10.0, 10.0),
+            size: (40.0, 20.0),
+        }];
+        let mut a = ask("what is this app", &[], false);
+        a.controls = &controls;
+        let p = prompt(&a);
+        assert!(p.contains("Explaining what is on the screen"));
+        assert!(p.contains("one thing at a time"));
+    }
+
+    #[test]
+    fn a_run_with_no_screen_is_not_told_how_to_explain_one() {
+        // No controls means no window in front, and a paragraph about pointing
+        // at regions is a paragraph about nothing.
+        let a = ask("what is the weather", &[], false);
+        assert!(!prompt(&a).contains("Explaining what is on the screen"));
     }
 
     #[test]
