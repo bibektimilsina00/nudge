@@ -15,6 +15,22 @@ export function Agents() {
   // leaves the column heights fighting, and nobody compares two histories.
   const [opened, setOpened] = useState<number | null>(null);
 
+  // A run stopped by a permission opens itself.
+  //
+  // Finishing moves a run out of the live list and into a collapsed tile, so a
+  // failure and the button that fixes it both fold away the moment they become
+  // relevant. Watching this happen, the whole of it from outside was the status
+  // line saying "Checking your battery percentage" and then stopping -- no
+  // reason given, and a switch one unprompted click away.
+  //
+  // Only for this kind of failure. Everything else has already said what it
+  // needed to in the status line, and opening every failed tile would make the
+  // panel unfold itself constantly.
+  useEffect(() => {
+    const blocked = agents.find((a) => a.state === "failed" && a.needs);
+    if (blocked) setOpened(blocked.id);
+  }, [agents]);
+
   useEffect(() => {
     void invoke<Agent[]>("agents").then(setAgents);
     const sub = listen<Agent[]>("agents", (e) => setAgents(e.payload));

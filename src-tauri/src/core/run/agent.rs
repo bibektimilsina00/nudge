@@ -860,6 +860,67 @@ pub type Shared = Arc<Agents>;
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_failed_agent_tells_the_window_which_switch_it_needs() {
+        // `State` is `#[serde(flatten)]`ed into `Agent` and internally tagged.
+        // That combination is fussy enough to be worth proving rather than
+        // assuming -- a field that quietly does not serialise looks exactly like
+        // a button that was never added.
+        let a = Agent {
+            id: 1,
+            started: 0,
+            goal: "what is my battery percentage".into(),
+            title: "Battery".into(),
+            status: "Checking your battery percentage.".into(),
+            step: 1,
+            state: State::Failed {
+                why: "That needs \u{201c}Run any command\u{201d}, which is off.".into(),
+                needs: Some("shell".into()),
+            },
+            history: Vec::new(),
+            background: false,
+            ran: Vec::new(),
+            made: Vec::new(),
+            handed: Vec::new(),
+            plan: Vec::new(),
+        };
+        let j = serde_json::to_value(&a).unwrap();
+        assert_eq!(j["state"], "failed");
+        assert_eq!(
+            j["needs"], "shell",
+            "the window cannot offer a switch it is not told about: {j}"
+        );
+        assert!(j["why"].as_str().unwrap().contains("Run any command"));
+    }
+
+    #[test]
+    fn an_ordinary_failure_carries_no_switch() {
+        let a = Agent {
+            id: 1,
+            started: 0,
+            goal: String::new(),
+            title: String::new(),
+            status: String::new(),
+            step: 0,
+            state: State::Failed {
+                why: "network died".into(),
+                needs: None,
+            },
+            history: Vec::new(),
+            background: false,
+            ran: Vec::new(),
+            made: Vec::new(),
+            handed: Vec::new(),
+            plan: Vec::new(),
+        };
+        let j = serde_json::to_value(&a).unwrap();
+        assert!(
+            j.get("needs").is_none(),
+            "an empty needs must not reach the window: {j}"
+        );
+    }
+
     use super::*;
 
     /// Nothing here touches the real history file. See `Agents::ledger`.
