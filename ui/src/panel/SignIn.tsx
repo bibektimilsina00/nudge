@@ -67,7 +67,14 @@ export function SignIn() {
   const busy = doing.at === "google" || doing.at === "github";
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center px-8 pt-7 pb-5">
+    // Cleared past the notch rather than given a number that happened to look
+    // right. The panel is centred on the notch, so the middle of its top row is
+    // *behind* the hardware -- and this page puts its one hero dead centre,
+    // which is the worst possible place for it. `--notch-h` is measured from
+    // the real notch on launch, so the clearance follows the machine.
+    <div className="flex min-h-0 flex-1 flex-col items-center px-8 pt-[calc(var(--notch-h)+14px)] pb-5">
+      {/* Scaling grows it from the centre, so it reaches above its own box too
+          -- part of what the clearance above is paying for. */}
       <div className="pointer-events-none scale-[1.3]">
         <Companion mode="idle" anchored />
       </div>

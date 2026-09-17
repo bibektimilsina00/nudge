@@ -46,7 +46,7 @@ const HEIGHT = {
   // Taller than Home. The companion is the same size, but underneath it there
   // are two buttons and a line of small print that has to be readable rather
   // than merely present.
-  signin: "h-[420px]",
+  signin: "h-[440px]",
 } as const;
 
 export default function Panel() {
