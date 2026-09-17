@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Companion } from "./components/Companion";
@@ -187,36 +187,8 @@ export default function Panel() {
             open ? "opacity-100 delay-150" : "pointer-events-none opacity-0",
           ].join(" ")}
         >
-          <header className="flex items-center gap-1.5 px-3 pt-2.5">
-            <Tab active={view === "home"} icon={<Home />} onClick={() => setView("home")}>
-              Home
-            </Tab>
-            <Tab active={view === "agents"} icon={<Sparkle />} onClick={() => setView("agents")}>
-              Agents
-            </Tab>
-            <span className="flex-1" />
-            <Perch docked={docked} onToggle={() => dock(!docked)} />
-            <button
-              // Settings toggles against wherever you were, rather than always
-              // dumping you on Home when you leave it.
-              onClick={() => setView((v) => (v === "settings" ? "home" : "settings"))}
-              aria-label="Settings"
-              aria-pressed={view === "settings"}
-              // Same height as the tabs beside it, so the header reads as one row
-              // rather than a row with something floating in it -- and a 30px
-              // target instead of a 15px glyph with padding round it.
-              className={[
-                "grid size-[26px] shrink-0 place-items-center rounded-full",
-                "transition-colors duration-150",
-                view === "settings"
-                  ? "bg-raise-hi text-white"
-                  : "text-ink-2 hover:bg-raise hover:text-white/80",
-              ].join(" ")}
-            >
-              <Gear />
-            </button>
-          </header>
-
+          <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
           {view === "agents" ? (
             <Agents />
           ) : view === "integrations" ? (
@@ -237,6 +209,14 @@ export default function Panel() {
           ) : (
           <Ask hold={hold} onOpenIntegrations={() => openIntegrations("home")} />
           )}
+          </div>
+          <Rail
+            view={view}
+            onGo={setView}
+            docked={docked}
+            onDock={() => dock(!docked)}
+          />
+          </div>
         </div>
       </div>
     </div>
@@ -286,6 +266,17 @@ function Perch({ docked, onToggle }: { docked: boolean; onToggle: () => void }) 
   );
 }
 
+
+/** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
+
+const stroke = {
+  fill: "none",
+  stroke: "currentColor",
+  strokeWidth: 1.6,
+  strokeLinecap: "round" as const,
+  strokeLinejoin: "round" as const,
+};
+
 /**
  * Collapsed state: what sits in the notch.
  *
@@ -334,40 +325,97 @@ function Pill({ open, hint }: { open: boolean; hint: string }) {
   );
 }
 
-function Tab({
-  active = false,
-  icon,
-  children,
-  onClick,
+
+type View = "home" | "agents" | "settings" | "integrations" | "skills" | "report";
+
+/**
+ * The sections, down the right-hand edge.
+ *
+ * They used to be two tabs and a gear in a header, with Integrations and Skills
+ * reachable only from inside Home or Settings -- so the two things somebody
+ * sets up most often were the two hardest to find, and getting back meant
+ * remembering which door you came through.
+ *
+ * On the right rather than the left. A panel that hangs from the notch is
+ * reached from above, and the pointer arrives at the top-right corner where the
+ * menu bar is -- so the nearest edge is that one. Left would be the web habit,
+ * copied from pages nobody drops out of a menu bar.
+ *
+ * There is no Automation section because there is no such feature. Agents is
+ * the automation: a task handed over and left to run. A tab for something that
+ * does not exist is worse than its absence -- it is a promise the app then
+ * breaks.
+ */
+function Rail({
+  view,
+  onGo,
+  docked,
+  onDock,
 }: {
-  active?: boolean;
-  icon: ReactNode;
-  children: ReactNode;
-  onClick: () => void;
+  view: View;
+  onGo: (v: View) => void;
+  docked: boolean;
+  onDock: () => void;
 }) {
+  const items: [View, string, React.ReactNode][] = [
+    ["home", "Home", <Home key="h" />],
+    ["agents", "Agents", <Sparkle key="a" />],
+    ["integrations", "Integrations", <Plug key="i" />],
+    ["skills", "Skills", <Stack key="s" />],
+    ["settings", "Settings", <Gear key="g" />],
+  ];
   return (
-    <button
-      onClick={onClick}
-      className={[
-        "flex items-center gap-1.5 rounded-full px-2 py-[3px] text-[11px] transition-colors duration-150",
-        active ? "bg-raise-hi text-white" : "text-ink-3 hover:text-ink-2",
-      ].join(" ")}
-    >
-      {icon}
-      {children}
-    </button>
+    <nav className="flex w-[124px] shrink-0 flex-col gap-0.5 border-l border-line px-2 py-2.5">
+      {items.map(([key, label, icon]) => {
+        // Report is a page off Settings, so Settings stays lit while you are in
+        // it -- otherwise the rail says you are nowhere.
+        const on = view === key || (key === "settings" && view === "report");
+        return (
+          <button
+            key={key}
+            onClick={() => onGo(key)}
+            aria-current={on ? "page" : undefined}
+            className={[
+              "flex items-center gap-2 rounded-lg px-2 py-[7px] text-left text-[11.5px]",
+              "transition-colors duration-150",
+              on ? "bg-raise-hi text-white" : "text-ink-2 hover:bg-raise hover:text-white/85",
+            ].join(" ")}
+          >
+            <span className="grid w-4 shrink-0 place-items-center">{icon}</span>
+            <span className="truncate">{label}</span>
+          </button>
+        );
+      })}
+
+      {/* The companion's socket, at the foot of the rail. Not a section, so it
+          sits apart from them rather than reading as a sixth. */}
+      <div className="mt-auto flex justify-center pt-2">
+        <Perch docked={docked} onToggle={onDock} />
+      </div>
+    </nav>
   );
 }
 
-/** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
+/** A plug, for the things Nudge is joined to. */
+function Plug() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
+      <path d="M6 2.2v3.4M10 2.2v3.4M4 5.6h8v2.2a4 4 0 0 1-4 4 4 4 0 0 1-4-4Z" />
+      <path d="M8 11.8v2" />
+    </svg>
+  );
+}
 
-const stroke = {
-  fill: "none",
-  stroke: "currentColor",
-  strokeWidth: 1.6,
-  strokeLinecap: "round" as const,
-  strokeLinejoin: "round" as const,
-};
+/** Stacked layers: things saved to be used again. */
+function Stack() {
+  return (
+    <svg viewBox="0 0 16 16" className="size-[13px]" {...stroke}>
+      <path d="M8 2.4 14 5.4 8 8.4 2 5.4Z" />
+      <path d="M2 8.2 8 11.2l6-3" />
+      <path d="M2 10.9 8 13.9l6-3" />
+    </svg>
+  );
+}
 
 function Home() {
   return (
