@@ -50,7 +50,7 @@ const HEIGHT = {
   // Not as tall as it was. The block inside centres itself, so extra height
   // does not make the page more generous -- it just widens the gap between the
   // buttons and the small print until the two stop looking related.
-  signin: "h-[400px]",
+  signin: "h-[366px]",
 } as const;
 
 export default function Panel() {
