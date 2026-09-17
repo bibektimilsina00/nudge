@@ -108,10 +108,10 @@ fn overlay() -> Option<&'static NSWindow> {
 ///
 /// So this is the signal to get out of the way rather than push harder.
 ///
-/// Two tests, and the first one is the one to believe. WindowManager puts a
-/// window called `ExposeShieldWindow` across the display for as long as the
-/// overview is up, which is a name rather than a shape and so does not go vague
-/// while the thing is still animating.
+/// Two tests, and the first one is the one to believe. WindowManager draws a
+/// strip of desktop thumbnails called `Spaces Bar` for as long as the overview
+/// is up, which is a name rather than a shape and so does not go vague while
+/// the thing is still animating.
 ///
 /// The second is kept underneath it because window names need Screen Recording
 /// to be readable at all, and an app that has had that permission pulled should
@@ -141,18 +141,23 @@ pub fn mission_control() -> bool {
     let Some(mtm) = MainThreadMarker::new() else {
         return false;
     };
-    // The full screen it would have to cover, in the same points the window list
-    // reports. Compared loosely: the overview's window has matched the display
-    // exactly in every reading, but a few points of slack costs nothing and a
-    // strict equality that drifts one point costs the whole feature.
-    let screen = objc2_app_kit::NSScreen::mainScreen(mtm).map(|s| s.frame().size);
-    let Some(screen) = screen else { return false };
+    let Some(screen) = objc2_app_kit::NSScreen::mainScreen(mtm).map(|s| s.frame().size) else {
+        return false;
+    };
 
     let owner_key = unsafe { CFString::wrap_under_get_rule(kCGWindowOwnerName) };
     let name_key = unsafe { CFString::wrap_under_get_rule(kCGWindowName) };
     let bounds_key = unsafe { CFString::wrap_under_get_rule(kCGWindowBounds) };
     let w_key = CFString::from_static_string("Width");
     let h_key = CFString::from_static_string("Height");
+
+    // Gathered in one pass and decided afterwards, because the two tests are not
+    // equals and the window list is in z-order. Deciding inside the loop let
+    // whichever window happened to come first answer, and the Dock sits above
+    // WindowManager, so the guess kept beating the fact to the return.
+    let mut spaces_bar = false;
+    let mut any_name = false;
+    let mut dock_covers = false;
 
     for i in 0..list.len() {
         let win = unsafe {
@@ -163,53 +168,48 @@ pub fn mission_control() -> bool {
         let Some(owner) = win.find(&owner_key).and_then(|v| v.downcast::<CFString>()) else {
             continue;
         };
+        let name = win.find(&name_key).and_then(|v| v.downcast::<CFString>());
+        if name.is_some() {
+            any_name = true;
+        }
 
-        // The overview names itself. WindowManager puts up a shield across the
-        // whole display for the duration, and it is called what it is, so this
-        // asks a question about identity rather than about geometry -- which is
-        // the half of the Dock test below that cannot be trusted mid-gesture.
-        //
-        // Window names are only populated for a process holding Screen
-        // Recording. Nudge does, because reading the screen is the entire app,
-        // but if that is ever revoked this quietly returns nothing and the size
-        // test underneath is what answers.
-        if owner == "WindowManager" {
-            let named = win
-                .find(&name_key)
-                .and_then(|v| v.downcast::<CFString>())
-                .map(|n| n == "ExposeShieldWindow")
-                .unwrap_or(false);
-            if named {
-                return true;
+        if owner == "WindowManager" && name.map(|n| n == "Spaces Bar").unwrap_or(false) {
+            spaces_bar = true;
+        }
+
+        if owner == "Dock" {
+            let Some(bounds) = win.find(&bounds_key) else {
+                continue;
+            };
+            // Untyped on the way out: `CFDictionary<CFString, CFType>` is not a
+            // concrete CF type as far as the crate is concerned, so the bounds
+            // come back through the raw form and are read key by key.
+            let bounds = unsafe {
+                CFDictionary::<CFString, CFType>::wrap_under_get_rule(
+                    bounds.as_CFTypeRef() as core_foundation::dictionary::CFDictionaryRef
+                )
+            };
+            let num = |k: &CFString| {
+                bounds
+                    .find(k)
+                    .and_then(|v| v.downcast::<CFNumber>())
+                    .and_then(|n| n.to_f64())
+                    .unwrap_or(0.0)
+            };
+            if num(&w_key) > screen.width / 2.0 && num(&h_key) > screen.height / 2.0 {
+                dock_covers = true;
             }
         }
-
-        if owner != "Dock" {
-            continue;
-        }
-        let Some(bounds) = win.find(&bounds_key) else {
-            continue;
-        };
-        // Untyped on the way out: `CFDictionary<CFString, CFType>` is not a
-        // concrete CF type as far as the crate is concerned, so the bounds come
-        // back through the raw form and are read key by key.
-        let bounds = unsafe {
-            CFDictionary::<CFString, CFType>::wrap_under_get_rule(
-                bounds.as_CFTypeRef() as core_foundation::dictionary::CFDictionaryRef
-            )
-        };
-        let num = |k: &CFString| {
-            bounds
-                .find(k)
-                .and_then(|v| v.downcast::<CFNumber>())
-                .and_then(|n| n.to_f64())
-                .unwrap_or(0.0)
-        };
-        if num(&w_key) > screen.width / 2.0 && num(&h_key) > screen.height / 2.0 {
-            return true;
-        }
     }
-    false
+
+    if spaces_bar {
+        return true;
+    }
+    // Only when names were unreadable at all, which means Screen Recording is
+    // gone. A readable list that simply has no Spaces Bar in it is an answer,
+    // not a gap, and falling through to the guess there is what made an
+    // ordinary swipe between desktops look like the overview.
+    !any_name && dock_covers
 }
 
 /// Does the window server still have this window on screen?
