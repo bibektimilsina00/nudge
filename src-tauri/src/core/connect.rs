@@ -210,7 +210,7 @@ pub fn catalogue() -> Vec<Offer> {
             // `core::tools::services`.
             command: "",
             args: &[],
-            env: &[],
+            env: &[("GOOGLE_TOKEN_FILE", "~/.config/nudge/youtube-token.json")],
             check: Some(("youtube_my_channel", "{}")),
             sign_in: None,
             token: Some("YOUTUBE_OAUTH_TOKEN"),
@@ -390,18 +390,21 @@ pub fn catalogue() -> Vec<Offer> {
             about: "Read, create and complete tasks and task lists.",
             access: "Your task lists and their contents: tasks. Nothing else in \
                      the account.",
-            command: "npx",
-            args: &["-y", "mcp-google-tasks"],
-            env: &[],
-            check: None,
+            // A table, not a server: the npm one wants a client id, a client
+            // secret and a refresh token as three variables, and the API under
+            // it is four plain calls. See `core::tools::services`.
+            command: "",
+            args: &[],
+            env: &[("GOOGLE_TOKEN_FILE", "~/.config/nudge/tasks-gsc-token.json")],
+            check: Some(("tasks_lists", "{}")),
             sign_in: None,
-            token: None,
+            token: Some("GOOGLE_TASKS_TOKEN"),
             where_from: None,
             setup: Some(
-                "Wants a refresh token rather than doing the browser flow itself.\n\
-                 Set GOOGLE_TASKS_CLIENT_ID, GOOGLE_TASKS_CLIENT_SECRET and \
-                 GOOGLE_TASKS_REFRESH_TOKEN.\nIt connects without them and fails \
-                 only when asked to do something.",
+                "Sign in once, asking only for Tasks and Search Console:\n\
+                 SCOPES=\"https://www.googleapis.com/auth/tasks \
+                 https://www.googleapis.com/auth/webmasters.readonly\" \
+                 OUT=~/.config/nudge/tasks-gsc-token.json python3 scripts/google-token.py",
             ),
         },
         Offer {
@@ -416,12 +419,13 @@ pub fn catalogue() -> Vec<Offer> {
             env: &[("GOOGLE_APPLICATION_CREDENTIALS", "~/.config/gsc-service-account.json")],
             check: None,
             sign_in: None,
-            token: None,
+            token: Some("GSC_TOKEN"),
             where_from: None,
             setup: Some(
-                "A service account, not the OAuth client the others use.\n\
-                 Key JSON at ~/.config/gsc-service-account.json, then add that \
-                 account's email as a user on the property in Search Console.",
+                "Signed in together with Tasks — one sign-in covers both:\n\
+                 SCOPES=\"https://www.googleapis.com/auth/tasks \
+                 https://www.googleapis.com/auth/webmasters.readonly\" \
+                 OUT=~/.config/nudge/tasks-gsc-token.json python3 scripts/google-token.py",
             ),
         },
         Offer {
@@ -570,6 +574,21 @@ pub fn write(path: Option<&std::path::Path>, made: &[Made]) {
 pub async fn freshen() {
     for made in read(store().as_deref()) {
         let Some(offer) = offer(&made.key) else { continue };
+
+        // Google's table-backed connectors keep a refresh token in a file and
+        // need a fresh access token per session. Minted here for the same reason
+        // GitHub's is: the token is read once when tools are wired up, and there
+        // is no later moment to notice it has gone stale.
+        if let Some((_, path)) = offer.env.iter().find(|(k, _)| *k == "GOOGLE_TOKEN_FILE") {
+            match google_access(path).await {
+                Ok(access) => {
+                    let _ = crate::core::tools::secret::to_keychain(&keychain_item(&made.key), &access);
+                }
+                Err(why) => eprintln!("could not renew {}: {why}", made.key),
+            }
+            continue;
+        }
+
         let Some(client_id) = offer.sign_in else { continue };
         let name = keychain_item(&made.key);
         let refresh_name = refresh_item(&made.key);
@@ -591,6 +610,56 @@ pub async fn freshen() {
             Err(why) => eprintln!("could not renew {}: {why}", made.key),
         }
     }
+}
+
+/// Trade a stored Google refresh token for an access token.
+///
+/// The refresh token is what was granted; the access token is what a call
+/// carries, and it lasts an hour. Kept out of the Keychain in favour of the
+/// refresh token only because the file is what the sign-in script writes -- the
+/// access token goes to the Keychain, which is where everything else reads from.
+async fn google_access(path: &str) -> Result<String, String> {
+    let path = match path.strip_prefix("~/") {
+        Some(rest) => dirs::home_dir().ok_or("no home directory")?.join(rest),
+        None => std::path::PathBuf::from(path),
+    };
+    let stored: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(&path).map_err(|_| format!("no sign-in at {}", path.display()))?,
+    )
+    .map_err(|e| e.to_string())?;
+    let refresh = stored["refresh_token"]
+        .as_str()
+        .ok_or("that sign-in has no refresh token; sign in again")?;
+
+    let keys: serde_json::Value = serde_json::from_str(
+        &std::fs::read_to_string(
+            dirs::home_dir().ok_or("no home directory")?.join(".config/gcp-oauth.keys.json"),
+        )
+        .map_err(|_| "no OAuth client at ~/.config/gcp-oauth.keys.json".to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    let c = &keys["installed"];
+    let (id, secret) = (
+        c["client_id"].as_str().ok_or("that client has no id")?,
+        c["client_secret"].as_str().ok_or("that client has no secret")?,
+    );
+
+    let res = crate::core::http()
+        .post("https://oauth2.googleapis.com/token")
+        .form(&[
+            ("client_id", id),
+            ("client_secret", secret),
+            ("refresh_token", refresh),
+            ("grant_type", "refresh_token"),
+        ])
+        .send()
+        .await
+        .map_err(|e| format!("could not reach Google: {e}"))?;
+    let got: serde_json::Value = res.json().await.map_err(|e| e.to_string())?;
+    got["access_token"]
+        .as_str()
+        .map(str::to_string)
+        .ok_or_else(|| format!("Google renewed nothing: {}", got["error"]))
 }
 
 pub fn spec(made: &Made) -> Option<crate::core::tools::mcp::Spec> {

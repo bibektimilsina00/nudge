@@ -226,7 +226,25 @@ impl Nudge {
         if specs.is_empty() {
             return;
         }
-        let servers = crate::core::tools::mcp::Servers::start(&specs).await;
+        let mut servers = crate::core::tools::mcp::Servers::start(&specs).await;
+
+        // The table-backed ones have no process to start, so they are added after
+        // rather than spawned with the rest. From here on nothing distinguishes
+        // them -- same tool list, same filter, same `call`.
+        for made in crate::core::connect::read(crate::core::connect::store().as_deref()) {
+            let Some(service) = crate::core::tools::services::find(&made.key) else {
+                continue;
+            };
+            match crate::core::tools::secret::from_keychain(&crate::core::connect::keychain_item(
+                &made.key,
+            )) {
+                Some(token) => servers.add_table(service, token),
+                // Said rather than skipped silently: a connector that is
+                // configured and absent looks like one that was never added.
+                None => eprintln!("rest: {} has no token stored", made.key),
+            }
+        }
+        let servers = servers;
         // Losing the race means another caller already did it, which is fine and
         // is not worth an error -- the servers this one started are dropped, and
         // dropping them kills the children.

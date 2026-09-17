@@ -172,8 +172,114 @@ pub const YOUTUBE: Service = Service {
     ops: YOUTUBE_OPS,
 };
 
+/// Google Tasks. A table rather than the npm server, which wants a client id, a
+/// client secret and a refresh token as three separate variables -- an `Offer`
+/// carries one, and the API underneath is four plain calls.
+const TASKS_OPS: &[Op] = &[
+    Op {
+        name: "tasks_lists",
+        about: "Your task lists.",
+        method: "GET",
+        path: "/tasks/v1/users/@me/lists",
+        fixed: &[],
+        args: &[],
+    },
+    Op {
+        name: "tasks_in_list",
+        about: "The tasks in one list.",
+        method: "GET",
+        path: "/tasks/v1/lists/{tasklist}/tasks",
+        fixed: &[],
+        args: &[
+            Arg { name: "tasklist", kind: STR, about: "Which list, by id", put: Put::Path, needed: true },
+            Arg { name: "showCompleted", kind: "boolean", about: "Include finished ones", put: Put::Query, needed: false },
+            Arg { name: "maxResults", kind: NUM, about: "How many, up to 100", put: Put::Query, needed: false },
+        ],
+    },
+    Op {
+        name: "tasks_add",
+        about: "Add a task to a list.",
+        method: "POST",
+        path: "/tasks/v1/lists/{tasklist}/tasks",
+        fixed: &[],
+        args: &[
+            Arg { name: "tasklist", kind: STR, about: "Which list, by id", put: Put::Path, needed: true },
+            Arg { name: "title", kind: STR, about: "What the task says", put: Put::Body, needed: true },
+            Arg { name: "notes", kind: STR, about: "Longer detail", put: Put::Body, needed: false },
+            Arg { name: "due", kind: STR, about: "RFC3339, e.g. 2026-09-20T00:00:00Z", put: Put::Body, needed: false },
+        ],
+    },
+    Op {
+        name: "tasks_complete",
+        about: "Mark a task finished.",
+        method: "PATCH",
+        path: "/tasks/v1/lists/{tasklist}/tasks/{task}",
+        fixed: &[],
+        args: &[
+            Arg { name: "tasklist", kind: STR, about: "Which list, by id", put: Put::Path, needed: true },
+            Arg { name: "task", kind: STR, about: "Which task, by id", put: Put::Path, needed: true },
+            Arg { name: "status", kind: STR, about: "`completed` or `needsAction`", put: Put::Body, needed: true },
+        ],
+    },
+];
+
+pub const TASKS: Service = Service {
+    key: "google_tasks",
+    base: "https://tasks.googleapis.com",
+    auth: Auth::Bearer,
+    headers: &[],
+    ops: TASKS_OPS,
+};
+
+/// Search Console, signed in to rather than given a service account.
+///
+/// The npm server wants a service account key, which is a second kind of
+/// credential to create, download and then separately grant on each property.
+/// The same API answers an ordinary OAuth token, and `webmasters.readonly`
+/// reaches exactly the properties you already own.
+const GSC_OPS: &[Op] = &[
+    Op {
+        name: "gsc_sites",
+        about: "The properties you have access to in Search Console.",
+        method: "GET",
+        path: "/webmasters/v3/sites",
+        fixed: &[],
+        args: &[],
+    },
+    Op {
+        name: "gsc_performance",
+        about: "Clicks, impressions and position, grouped however you ask.",
+        method: "POST",
+        path: "/webmasters/v3/sites/{siteUrl}/searchAnalytics/query",
+        fixed: &[],
+        args: &[
+            Arg { name: "siteUrl", kind: STR, about: "e.g. https://example.com/ or sc-domain:example.com", put: Put::Path, needed: true },
+            Arg { name: "startDate", kind: STR, about: "YYYY-MM-DD", put: Put::Body, needed: true },
+            Arg { name: "endDate", kind: STR, about: "YYYY-MM-DD", put: Put::Body, needed: true },
+            Arg { name: "dimensions", kind: "array", about: "Any of query, page, country, device, date", put: Put::Body, needed: false },
+            Arg { name: "rowLimit", kind: NUM, about: "How many rows, up to 25000", put: Put::Body, needed: false },
+        ],
+    },
+    Op {
+        name: "gsc_sitemaps",
+        about: "Sitemaps submitted for a property, and what Google made of them.",
+        method: "GET",
+        path: "/webmasters/v3/sites/{siteUrl}/sitemaps",
+        fixed: &[],
+        args: &[Arg { name: "siteUrl", kind: STR, about: "The property", put: Put::Path, needed: true }],
+    },
+];
+
+pub const SEARCH_CONSOLE: Service = Service {
+    key: "google_search_console",
+    base: "https://searchconsole.googleapis.com",
+    auth: Auth::Bearer,
+    headers: &[],
+    ops: GSC_OPS,
+};
+
 /// Everything declared here.
-pub const ALL: &[Service] = &[LINEAR, HUNTER, YOUTUBE];
+pub const ALL: &[Service] = &[LINEAR, HUNTER, YOUTUBE, TASKS, SEARCH_CONSOLE];
 
 pub fn find(key: &str) -> Option<&'static Service> {
     ALL.iter().find(|s| s.key == key)
