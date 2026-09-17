@@ -327,6 +327,36 @@ where
                     true => answer,
                     false => recalled(answer),
                 };
+
+                // The same honesty checks the foreground run gets.
+                //
+                // They lived only in `app::agent`, so the moment work was
+                // delegated none of them applied -- and delegation is where this
+                // kind of failure has actually happened here: a research task
+                // that wrote nine kilobytes having searched nothing, a run that
+                // reported a count it had not counted. A subagent is the same
+                // work one level down and should answer to the same rules.
+                //
+                // `done` is every tool result this run saw, which is what the
+                // number checks weigh an answer against. The task itself counts
+                // too: asked for "the top 20", saying 20 is doing as it was told.
+                // `settled` is not among them: it appends "nobody checked that"
+                // when an answer claims a check and nothing was read, and
+                // `recalled` above already says exactly that whenever this run
+                // consulted nothing. Two notes making the same point in one
+                // answer is worse than one.
+                let mut seen = done.clone();
+                seen.push(task.to_string());
+                let invented = crate::core::claimed::uncounted(&answer, &seen);
+                let answer = match invented.is_empty() {
+                    true => answer,
+                    false => format!("{answer}{}", crate::core::claimed::unmeasured(&invented)),
+                };
+                let soft = crate::core::claimed::overstated(&answer, &seen);
+                let answer = match soft.is_empty() {
+                    true => answer,
+                    false => format!("{answer}{}", crate::core::claimed::only_estimated(&soft)),
+                };
                 return Ok(Found { answer, steps });
             }
             // Not a failure: a subagent that cannot answer says so, and the
@@ -377,6 +407,100 @@ where
 
 #[cfg(test)]
 mod tests {
+
+    use super::hedged;
+    use super::*;
+    use crate::core::screen::capture::Shot;
+    use async_trait::async_trait;
+
+    /// Answers from a script, so the loop is tested rather than a model.
+    struct Scripted(std::sync::Mutex<Vec<Step>>);
+
+    #[async_trait]
+    impl Provider for Scripted {
+        fn name(&self) -> &'static str {
+            "scripted"
+        }
+        async fn next_step(&self, _: &Shot, _: &Ask<'_>) -> Result<Step> {
+            unreachable!("a subagent never sees a screen")
+        }
+        async fn next_step_blind(&self, _: &Ask<'_>) -> Result<Step> {
+            Ok(self.0.lock().unwrap().remove(0))
+        }
+    }
+
+    fn say(s: &str) -> String {
+        s.to_string()
+    }
+
+    /// The gap this closes: every honesty check lived in the foreground agent,
+    /// so delegating work delegated away the checking with it.
+    #[tokio::test]
+    async fn a_delegated_answer_is_held_to_the_same_rules() {
+        let p = Scripted(std::sync::Mutex::new(vec![
+            Step::Run {
+                command: "wc -l inbox".into(),
+                say: say("counting"),
+            },
+            Step::Done {
+                say: say("There are 4210 messages."),
+                next: None,
+            },
+        ]));
+        let found = run(
+            &p,
+            std::path::Path::new("/tmp"),
+            "how many messages are there",
+            &[],
+            "",
+            true,
+            false,
+            // The tool returns a different number from the one the answer
+            // states, so nothing this run saw supports 4210.
+            |_| async { Ok("117 inbox".into()) },
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            found.answer.contains("did not actually count"),
+            "a number nothing returned went unremarked: {}",
+            found.answer
+        );
+    }
+
+    #[tokio::test]
+    async fn a_delegated_answer_keeps_the_hedge_its_evidence_had() {
+        let p = Scripted(std::sync::Mutex::new(vec![
+            Step::Run {
+                command: "search".into(),
+                say: say("searching"),
+            },
+            Step::Done {
+                say: say("There are 201 unread."),
+                next: None,
+            },
+        ]));
+        let found = run(
+            &p,
+            std::path::Path::new("/tmp"),
+            "how many unread",
+            &[],
+            "",
+            true,
+            false,
+            |_| async { Ok("Found approximately 201 messages.".into()) },
+        )
+        .await
+        .unwrap();
+
+        assert!(
+            found.answer.contains("estimated"),
+            "the hedge was dropped and nothing said so: {}",
+            found.answer
+        );
+    }
+
     #[test]
     fn a_refusal_counts_however_it_is_phrased() {
         // All four were produced by the real model on the first full run of the
@@ -402,31 +526,6 @@ mod tests {
         ] {
             assert!(!super::hedged(said), "wrongly counted as a refusal: {said}");
         }
-    }
-
-    use super::hedged;
-    use super::*;
-    use crate::core::screen::capture::Shot;
-    use async_trait::async_trait;
-
-    /// Answers from a script, so the loop is tested rather than a model.
-    struct Scripted(std::sync::Mutex<Vec<Step>>);
-
-    #[async_trait]
-    impl Provider for Scripted {
-        fn name(&self) -> &'static str {
-            "scripted"
-        }
-        async fn next_step(&self, _: &Shot, _: &Ask<'_>) -> Result<Step> {
-            unreachable!("a subagent never sees a screen")
-        }
-        async fn next_step_blind(&self, _: &Ask<'_>) -> Result<Step> {
-            Ok(self.0.lock().unwrap().remove(0))
-        }
-    }
-
-    fn say(s: &str) -> String {
-        s.to_string()
     }
 
     #[tokio::test]
