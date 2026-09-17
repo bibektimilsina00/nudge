@@ -21,6 +21,7 @@ const LINEAR_OPS: &[Op] = &[
         about: "Who this token belongs to, and which teams they are in.",
         method: "POST",
         path: "/graphql",
+        fixed: &[],
         args: &[Arg {
             name: "query",
             kind: STR,
@@ -49,6 +50,7 @@ const HUNTER_OPS: &[Op] = &[
         about: "Find the most likely email address for a person at a company.",
         method: "GET",
         path: "/v2/email-finder",
+        fixed: &[],
         args: &[
             Arg { name: "domain", kind: STR, about: "Company domain, e.g. example.com", put: Put::Query, needed: true },
             Arg { name: "first_name", kind: STR, about: "Their first name", put: Put::Query, needed: true },
@@ -60,6 +62,7 @@ const HUNTER_OPS: &[Op] = &[
         about: "Check whether an address exists and is deliverable.",
         method: "GET",
         path: "/v2/email-verifier",
+        fixed: &[],
         args: &[Arg { name: "email", kind: STR, about: "The address to check", put: Put::Query, needed: true }],
     },
     Op {
@@ -67,6 +70,7 @@ const HUNTER_OPS: &[Op] = &[
         about: "Addresses known at a domain.",
         method: "GET",
         path: "/v2/domain-search",
+        fixed: &[],
         args: &[
             Arg { name: "domain", kind: STR, about: "Company domain", put: Put::Query, needed: true },
             Arg { name: "limit", kind: NUM, about: "How many, up to 100", put: Put::Query, needed: false },
@@ -82,8 +86,94 @@ pub const HUNTER: Service = Service {
     ops: HUNTER_OPS,
 };
 
+/// YouTube, signed in to rather than keyed.
+///
+/// An API key reaches public data and nothing else -- it cannot see your
+/// channel, your private videos or your subscriptions, and cannot change
+/// anything. That is the safer thing and the right default for "find me a
+/// video". This is the other case: your own channel.
+///
+/// `youtube.readonly` and no more. It covers everything here, including private
+/// videos and drafts, and stops short of upload, delete and comment -- which are
+/// a different decision and should be made on purpose rather than inherited.
+const YOUTUBE_OPS: &[Op] = &[
+    Op {
+        name: "youtube_my_channel",
+        about: "Your own channel: title, description, subscriber and view counts.",
+        method: "GET",
+        path: "/youtube/v3/channels",
+        fixed: &[("part", "snippet,statistics,contentDetails"), ("mine", "true")],
+        args: &[],
+    },
+    Op {
+        name: "youtube_my_videos",
+        about: "Your own videos, newest first, including private and unlisted ones.",
+        method: "GET",
+        path: "/youtube/v3/search",
+        fixed: &[("part", "snippet"), ("forMine", "true"), ("type", "video"), ("order", "date")],
+        args: &[
+            Arg { name: "q", kind: STR, about: "Words to match, or leave out for all", put: Put::Query, needed: false },
+            Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false },
+        ],
+    },
+    Op {
+        name: "youtube_my_playlists",
+        about: "Your playlists.",
+        method: "GET",
+        path: "/youtube/v3/playlists",
+        fixed: &[("part", "snippet,contentDetails"), ("mine", "true")],
+        args: &[Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false }],
+    },
+    Op {
+        name: "youtube_playlist_items",
+        about: "The videos in one playlist.",
+        method: "GET",
+        path: "/youtube/v3/playlistItems",
+        fixed: &[("part", "snippet,contentDetails")],
+        args: &[
+            Arg { name: "playlistId", kind: STR, about: "Which playlist", put: Put::Query, needed: true },
+            Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false },
+        ],
+    },
+    Op {
+        name: "youtube_my_subscriptions",
+        about: "Channels you subscribe to.",
+        method: "GET",
+        path: "/youtube/v3/subscriptions",
+        fixed: &[("part", "snippet"), ("mine", "true")],
+        args: &[Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false }],
+    },
+    Op {
+        name: "youtube_video_details",
+        about: "Title, description, statistics and duration for one or more videos.",
+        method: "GET",
+        path: "/youtube/v3/videos",
+        fixed: &[("part", "snippet,statistics,contentDetails")],
+        args: &[Arg { name: "id", kind: STR, about: "Video id, or several separated by commas", put: Put::Query, needed: true }],
+    },
+    Op {
+        name: "youtube_search",
+        about: "Search YouTube generally, not only your own videos.",
+        method: "GET",
+        path: "/youtube/v3/search",
+        fixed: &[("part", "snippet"), ("type", "video")],
+        args: &[
+            Arg { name: "q", kind: STR, about: "What to search for", put: Put::Query, needed: true },
+            Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false },
+        ],
+    },
+];
+
+pub const YOUTUBE: Service = Service {
+    key: "youtube",
+    base: "https://www.googleapis.com",
+    auth: Auth::Bearer,
+    headers: &[],
+    ops: YOUTUBE_OPS,
+};
+
 /// Everything declared here.
-pub const ALL: &[Service] = &[LINEAR, HUNTER];
+pub const ALL: &[Service] = &[LINEAR, HUNTER, YOUTUBE];
 
 pub fn find(key: &str) -> Option<&'static Service> {
     ALL.iter().find(|s| s.key == key)

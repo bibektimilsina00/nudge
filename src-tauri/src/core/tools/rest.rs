@@ -63,6 +63,10 @@ pub struct Op {
     pub method: &'static str,
     /// Relative to the service's base, with `{arg}` for path arguments.
     pub path: &'static str,
+    /// Query parameters that are part of the call rather than part of the
+    /// question -- YouTube's `part=snippet`, say. Not arguments: a model has no
+    /// way to choose them well and no reason to be asked.
+    pub fixed: &'static [(&'static str, &'static str)],
     pub args: &'static [Arg],
 }
 
@@ -119,7 +123,8 @@ impl Service {
             .ok_or_else(|| format!("no tool called {tool:?} on {:?}", self.key))?;
 
         let mut url = format!("{}{}", self.base, op.path);
-        let mut query: Vec<(String, String)> = Vec::new();
+        let mut query: Vec<(String, String)> =
+            op.fixed.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
         let mut body = Map::new();
 
         for a in op.args {
@@ -233,6 +238,7 @@ mod tests {
         about: "Get a thing.",
         method: "GET",
         path: "/things/{id}",
+        fixed: &[("view", "full")],
         args: ARGS,
     }];
     const S: Service = Service {
@@ -242,6 +248,14 @@ mod tests {
         headers: &[],
         ops: OPS,
     };
+
+    #[test]
+    fn fixed_parameters_are_not_offered_as_arguments() {
+        // They are part of the call, not part of the question. Offering
+        // `part=snippet` to a model is offering it a way to get the call wrong.
+        let t = &S.tools()[0];
+        assert!(t.schema["properties"].get("view").is_none(), "{:?}", t.schema);
+    }
 
     #[test]
     fn a_table_becomes_tools_the_model_can_read() {

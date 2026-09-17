@@ -198,23 +198,27 @@ pub fn catalogue() -> Vec<Offer> {
         Offer {
             key: "youtube",
             name: "YouTube",
-            about: "Search videos, read details, transcripts and channel statistics.",
-            // The only key in this catalogue that reaches nothing of yours, which
-            // is worth saying rather than leaving somebody to assume the worst.
-            access: "Public YouTube data only. An API key is not a sign-in: it \
-                     cannot see your account, your private videos or your history, \
-                     and it cannot upload or change anything.",
-            command: "npx",
-            args: &["-y", "youtube-data-mcp-server"],
+            about: "Your channel, videos, playlists and subscriptions — and search.",
+            // Read-only on purpose, and the line says which half is missing.
+            // Upload, delete and comment are a separate decision; inheriting them
+            // from "let it see my channel" is how a connector becomes a risk
+            // nobody agreed to.
+            access: "Read-only: youtube.readonly. Your channel, your videos \
+                     including private and unlisted ones, your playlists and \
+                     subscriptions. It cannot upload, delete or comment.",
+            // No server: YouTube's API is plain REST, so it is a table. See
+            // `core::tools::services`.
+            command: "",
+            args: &[],
             env: &[],
-            check: None,
+            check: Some(("youtube_my_channel", "{}")),
             sign_in: None,
-            token: Some("YOUTUBE_API_KEY"),
-            where_from: Some(
-                "console.cloud.google.com → APIs & Services → Credentials → Create \
-                 API key, with the YouTube Data API v3 enabled",
+            token: Some("YOUTUBE_OAUTH_TOKEN"),
+            where_from: None,
+            setup: Some(
+                "Sign in once, asking only for YouTube:\nSCOPES=https://www.googleapis.com/auth/youtube.readonly \
+                 OUT=~/.config/nudge/youtube-token.json python3 scripts/google-token.py",
             ),
-            setup: None,
         },
         Offer {
             key: "notion",
@@ -666,11 +670,21 @@ mod tests {
     /// moment somebody goes hunting is the moment they give up.
     #[test]
     fn anything_that_needs_a_token_says_where_to_find_it() {
+        // The rule is "somebody can find out how to get this", not "there is a
+        // `where_from`". Signing in is the other way of answering it -- YouTube
+        // mints its token with a script rather than sending you to a page --
+        // and pairing `token` strictly with `where_from` would have forced a
+        // link to somewhere that does not explain it.
+        // One way round, not both. Wanting a token obliges the entry to say how
+        // to get one; explaining something does not oblige it to want a token --
+        // Gmail's instructions are a command to run, and it needs nothing pasted.
         for o in catalogue() {
-            assert_eq!(
-                o.token.is_some(),
-                o.where_from.is_some(),
-                "{} asks for a token without saying where from, or the reverse",
+            if o.token.is_none() {
+                continue;
+            }
+            assert!(
+                o.where_from.is_some() || o.setup.is_some() || o.sign_in.is_some(),
+                "{} asks for a token and says nothing about where one comes from",
                 o.key
             );
         }

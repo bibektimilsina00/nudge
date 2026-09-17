@@ -316,6 +316,10 @@ fn no_pipe(name: &str) -> Error {
 #[derive(Default)]
 pub struct Servers {
     running: Vec<Server>,
+    /// Services that are a table rather than a process, with the token each one
+    /// is called with. They have no child to own, which is why they sit beside
+    /// `running` rather than in it.
+    tables: Vec<(&'static super::rest::Service, String)>,
     tools: Vec<Tool>,
     /// Which ones did not start, and why.
     ///
@@ -327,6 +331,20 @@ pub struct Servers {
 }
 
 impl Servers {
+    /// Add a service that is a table rather than a process.
+    ///
+    /// No child to spawn and nothing to hand a token to at spawn time, so the
+    /// token is held here and attached per call. Everything downstream -- the
+    /// tool list, the filter, `call` -- treats it exactly like a server, which
+    /// is the point: the model should not be able to tell, and neither should
+    /// the reviewer or the risk classifier.
+    pub fn add_table(&mut self, service: &'static super::rest::Service, token: String) {
+        let allowed: Vec<Tool> = service.tools();
+        eprintln!("rest: {} offers {} tools", service.key, allowed.len());
+        self.tools.extend(allowed);
+        self.tables.push((service, token));
+    }
+
     /// Start them all, and carry on without the ones that will not start.
     ///
     /// A broken entry in a config file must not stop the assistant from
@@ -364,6 +382,10 @@ impl Servers {
         servers
     }
 
+    fn table(&self, key: &str) -> Option<&(&'static super::rest::Service, String)> {
+        self.tables.iter().find(|(s, _)| s.key == key)
+    }
+
     pub fn tools(&self) -> &[Tool] {
         &self.tools
     }
@@ -378,6 +400,13 @@ impl Servers {
 
     /// Run one, and give back whatever text it produced.
     pub async fn call(&self, server: &str, tool: &str, args: Value) -> Result<String> {
+        if let Some((service, token)) = self.table(server) {
+            return service
+                .call(token, tool, &args)
+                .await
+                .map_err(Error::Config);
+        }
+
         let Some(found) = self.running.iter().find(|s| s.spec.name == server) else {
             return Err(Error::Config(format!(
                 "no mcp server called {server:?} -- there is {}",

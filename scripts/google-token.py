@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Sign in to Google for the Sheets connector, and write the token it wants.
+"""Sign in to Google for a connector, and write the token it wants.
+
+Scopes and destination come from the environment so one flow serves several
+connectors, each asking for only its own:
+
+    SCOPES="https://www.googleapis.com/auth/youtube.readonly" \\
+    OUT=~/.config/nudge/youtube-token.json python3 scripts/google-token.py
+
+Defaults to the Sheets pair, which is what it was written for.
 
 `mcp-google-sheets` reads a token file and, if there is not one, raises an error
 telling you to authenticate in a browser -- which it has no code to do. There is
@@ -17,6 +25,7 @@ Workspace one, so it is worth not widening here.
 import base64
 import html
 import http.server
+import os
 import json
 import pathlib
 import secrets
@@ -26,12 +35,13 @@ import urllib.parse
 import urllib.request
 import webbrowser
 
-SCOPES = [
-    "https://www.googleapis.com/auth/spreadsheets",
+SCOPES = [s.strip() for s in os.environ.get(
+    "SCOPES",
+    "https://www.googleapis.com/auth/spreadsheets "
     "https://www.googleapis.com/auth/drive.file",
-]
+).split()]
 KEYS = pathlib.Path.home() / ".config/gcp-oauth.keys.json"
-OUT = pathlib.Path.home() / ".mcp-google-sheets-token.json"
+OUT = pathlib.Path(os.environ.get("OUT", pathlib.Path.home() / ".mcp-google-sheets-token.json"))
 ICON = pathlib.Path(__file__).resolve().parent.parent / "src-tauri/icons/64x64.png"
 
 
