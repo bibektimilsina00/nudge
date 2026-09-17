@@ -207,6 +207,13 @@ impl Nudge {
     /// Connections come second, so a hand-written entry wins on a name clash:
     /// somebody who wrote it themselves meant it.
     pub async fn connect_tools(&self) {
+        // Before the specs are built, not after: a token is handed to its server
+        // as an environment variable when the process is spawned, so a stale one
+        // cannot be fixed once the server is running -- it stays broken for the
+        // life of the session and says "Bad credentials", which reads as revoked
+        // rather than expired and sends you looking in the wrong place.
+        crate::core::connect::freshen().await;
+
         let mut specs = self.cfg.mcp.clone();
         for made in crate::core::connect::read(crate::core::connect::store().as_deref()) {
             if specs.iter().any(|s| s.name == made.key) {

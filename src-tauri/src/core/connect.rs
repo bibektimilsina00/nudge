@@ -423,6 +423,15 @@ pub fn offer(key: &str) -> Option<Offer> {
 ///
 /// Namespaced, so it is obvious in Keychain Access what put it there and what
 /// deleting it would break.
+/// Where the renewal half of a sign-in is kept.
+///
+/// Separate from the token rather than packed in with it, so that reading a
+/// token stays a read of one thing and the shape on disk does not change for
+/// the connectors that have no refresh token at all.
+pub fn refresh_item(key: &str) -> String {
+    format!("{}-refresh", keychain_item(key))
+}
+
 pub fn keychain_item(key: &str) -> String {
     format!("nudge-{key}")
 }
@@ -513,6 +522,42 @@ pub fn write(path: Option<&std::path::Path>, made: &[Made]) {
 }
 
 /// Turn a made connection into something `mcp` can start.
+/// Renew any sign-in that has gone stale, before the servers are started with it.
+///
+/// The token is handed to a server as an environment variable when the process
+/// is spawned, so there is no later moment to fix it in -- a server started with
+/// a dead token stays dead for as long as it runs, and reports it as "Bad
+/// credentials", which reads as revoked rather than expired.
+///
+/// Refresh tokens are single-use: GitHub returns a new one and invalidates the
+/// old, so the new one is written before the access token. Losing the access
+/// token means one failed call; losing the refresh token means signing in again.
+pub async fn freshen() {
+    for made in read(store().as_deref()) {
+        let Some(offer) = offer(&made.key) else { continue };
+        let Some(client_id) = offer.sign_in else { continue };
+        let name = keychain_item(&made.key);
+        let refresh_name = refresh_item(&made.key);
+        let Some(refresh) = crate::core::tools::secret::from_keychain(&refresh_name) else {
+            // No refresh half: either the app does not expire tokens, or this
+            // connection predates keeping it. Nothing to do either way.
+            continue;
+        };
+        // Cheap and definitive: ask for a new one rather than tracking a clock
+        // across restarts. GitHub is happy to be asked.
+        match crate::core::signin::refresh(client_id, &refresh).await {
+            Ok(fresh) => {
+                if let Some(next) = &fresh.refresh {
+                    let _ = crate::core::tools::secret::to_keychain(&refresh_name, next);
+                }
+                let _ = crate::core::tools::secret::to_keychain(&name, &fresh.access);
+                eprintln!("renewed the {} sign-in", made.key);
+            }
+            Err(why) => eprintln!("could not renew {}: {why}", made.key),
+        }
+    }
+}
+
 pub fn spec(made: &Made) -> Option<crate::core::tools::mcp::Spec> {
     let offer = offer(&made.key)?;
     let mut args: Vec<String> = offer.args.iter().map(|a| a.to_string()).collect();

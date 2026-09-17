@@ -317,10 +317,18 @@ pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::s
                     let _ = handle.emit("signed-in", why);
                     break;
                 }
-                Poll::Token(token) => {
+                Poll::Token(granted) => {
+                    // Both halves, or the connection works for eight hours and
+                    // then fails in a way that looks like a revoked token.
+                    if let Some(r) = &granted.refresh {
+                        let _ = secret::to_keychain(
+                            &connect::refresh_item(&for_task),
+                            r,
+                        );
+                    }
                     let said = match secret::to_keychain(
                         &connect::keychain_item(&for_task),
-                        &token,
+                        &granted.access,
                     ) {
                         // Signing in is half of it; a connection is only real
                         // once the server has started and said what it offers.
