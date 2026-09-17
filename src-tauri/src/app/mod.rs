@@ -122,12 +122,6 @@ pub fn run() {
             let handle = app.handle();
             app.manage(nudge);
             app.manage::<Screen>(ui::overlay::fit(handle)?);
-            // Give tao's overlay a parent window that full-screen Spaces do not
-            // evict; see native.rs for what was measured to get here.
-            println!(
-                "nudge: overlay anchored = {}",
-                ui::native::anchor_overlay(handle)
-            );
             app.manage(Mic::default());
             app.manage(voice);
             app.manage(Settle(std::sync::Mutex::new(None)));
