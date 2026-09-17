@@ -520,9 +520,73 @@ impl Grant {
     }
 }
 
+/// The half of [`Grant::denied`] that never changes, and the only reliable way
+/// to recognise one of these after it has been turned into an error string and
+/// passed through three layers.
+const OFF: &str = "which is off. It can be turned on under";
+
+/// Whether a failure is a switched-off permission rather than something that
+/// went wrong.
+///
+/// The difference matters because one of them is worth trying again and the
+/// other never is. Asked for a battery percentage, a run chose `pmset -g batt`,
+/// the reviewer agreed, the grant refused it -- and then it did the identical
+/// thing twice more and failed on the loop guard, seven seconds later, with the
+/// same sentence it had at the start.
+///
+/// Matched on the fixed clause rather than the grant's name, so it keeps working
+/// when a grant is renamed, and cannot be triggered by a tool that happens to
+/// mention a permission in passing.
+pub fn is_refusal(text: &str) -> bool {
+    text.contains(OFF)
+}
+
+/// Which grant a refusal is about.
+///
+/// `denied` puts the grant's own menu name in the sentence, so it can be read
+/// back out. Needed because "a permission is off" is not actionable and "turn on
+/// Run any command" is -- and the card can only offer the switch if it knows
+/// which one.
+pub fn refused_grant(text: &str) -> Option<Grant> {
+    if !is_refusal(text) {
+        return None;
+    }
+    Grant::ALL.iter().copied().find(|g| text.contains(g.menu()))
+}
+
 #[cfg(test)]
 mod decision_tests {
     use super::*;
+
+    #[test]
+    fn every_refusal_is_recognisable_as_one() {
+        // The detector is built from the same sentence the refusals are, so a
+        // reworded grant cannot leave it matching nothing -- which would be a
+        // silent return to retrying something that can never work.
+        for g in Grant::ALL {
+            assert!(is_refusal(&g.denied()), "{} is not recognisable", g.menu());
+        }
+    }
+
+    #[test]
+    fn a_refusal_says_which_switch_it_means() {
+        // Without this the card can say "a permission is off" and nothing more,
+        // which is the dead end the wording was written to avoid.
+        for g in Grant::ALL {
+            assert_eq!(refused_grant(&g.denied()), Some(g), "{}", g.menu());
+        }
+        assert_eq!(refused_grant("connection reset"), None);
+    }
+
+    #[test]
+    fn an_ordinary_failure_is_not_mistaken_for_a_refusal() {
+        // Retrying is right for these, and stopping the run on one would turn a
+        // recoverable hiccup into a failed task.
+        assert!(!is_refusal("connection reset by peer"));
+        assert!(!is_refusal("No such file or directory"));
+        // Even one that talks about permissions, as long as it is not ours.
+        assert!(!is_refusal("Permission denied (publickey)."));
+    }
 
     #[test]
     fn a_refusal_always_carries_a_reason() {

@@ -219,6 +219,7 @@ pub fn spawn(
         } else {
             State::Failed {
                 why: "Clicking needs Accessibility — System Settings › Privacy & Security".into(),
+                needs: None,
             }
         };
         // Nothing outlives the task that started it. A dev server still holding
@@ -292,6 +293,7 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             eprintln!("agent#{id} is not in the registry; stopping rather than looping");
             return State::Failed {
                 why: "lost track of this task".into(),
+                needs: None,
             };
         };
         let blocked = matches!(mine.state, State::Waiting { .. });
@@ -318,6 +320,7 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         {
             return State::Failed {
                 why: format!("Gave up after {MAX_STEPS} steps — this isn't converging."),
+                needs: None,
             };
         }
 
@@ -375,7 +378,10 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
             }
             Err(e) => {
                 eprintln!("agent#{id} turn {turn}: FAILED {e}");
-                return State::Failed { why: e.to_string() };
+                return State::Failed {
+                    why: e.to_string(),
+                    needs: None,
+                };
             }
         };
 
@@ -677,6 +683,7 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
                         "Went {idle} turns without being able to do anything. {}",
                         step.say()
                     ),
+                    needs: None,
                 };
             }
         } else {
@@ -701,6 +708,7 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
                          changed. It may already be done, or I cannot see the \
                          right control."
                     ),
+                    needs: None,
                 };
             }
             tokio::time::sleep(SETTLE_AGAIN).await;
@@ -753,8 +761,35 @@ async fn run(app: &AppHandle, id: u64, goal: String, carried: Vec<String>) -> St
         if let Err(e) = outcome {
             failures += 1;
             eprintln!("agent#{id} turn {turn}: could not perform it -- {e} (x{failures})");
+            // A switched-off permission is not a thing to try again.
+            //
+            // Asked for a battery percentage, a run chose `pmset -g batt`, the
+            // reviewer agreed, the grant refused it -- and then it ran the
+            // identical command twice more and failed on the loop guard seven
+            // seconds later with the sentence it already had on turn 0. Nothing
+            // about a permission changes between turns, so every one of those
+            // was spent restating the answer.
+            //
+            // Stopped here rather than handed back: the refusal already names
+            // the switch and where to find it, which is the whole of what
+            // somebody can do about it.
+            if let Some(grant) = crate::core::reach::refused_grant(&e.to_string()) {
+                eprintln!(
+                    "agent#{id}: stopping -- \u{201c}{}\u{201d} is off, retrying cannot help",
+                    grant.menu()
+                );
+                return State::Failed {
+                    why: e.to_string(),
+                    // Named, so the card can offer the switch instead of
+                    // describing where to find it.
+                    needs: Some(grant.key().to_string()),
+                };
+            }
             if failures >= FAILURE_LIMIT {
-                return State::Failed { why: e.to_string() };
+                return State::Failed {
+                    why: e.to_string(),
+                    needs: None,
+                };
             }
             // Hand the failure back as something that happened, so the next turn
             // can route around it or explain it. The model cannot react to an

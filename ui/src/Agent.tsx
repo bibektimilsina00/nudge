@@ -7,7 +7,7 @@ export type AgentState =
   | { state: "running" }
   | { state: "waiting"; question: string; choices: string[] }
   | { state: "done" }
-  | { state: "failed"; why: string }
+  | { state: "failed"; why: string; needs?: string }
   | { state: "stopped" }
   | { state: "interrupted" };
 
@@ -588,6 +588,9 @@ function Card({ agent, onCollapse }: { agent: Agent; onCollapse: () => void }) {
             {agent.state === "failed" ? agent.why : agent.status}
           </p>
         )}
+        {agent.state === "failed" && agent.needs && (
+          <Allow grant={agent.needs} goal={agent.goal} />
+        )}
 
         <Plan plan={agent.plan} />
         <Artifacts made={agent.made} />
@@ -685,6 +688,68 @@ function progress(agent: Agent) {
     return Math.min(0.97, done / agent.plan.length);
   }
   return Math.min(0.97, agent.step / 20);
+}
+
+/**
+ * The switch that would have let it work, offered where it failed.
+ *
+ * The refusal already says which permission is off and that it lives under
+ * "Allowed to" -- but sending somebody to a settings page to fix the thing they
+ * are looking at is a detour. The button turns it on and offers the task again,
+ * which is the whole of what anybody would have gone there to do.
+ *
+ * Deliberately not automatic. These three grants are the difference between an
+ * assistant that reads and one that runs commands, and a run failing is not
+ * consent to widen what the next one may do.
+ */
+function Allow({ grant, goal }: { grant: string; goal: string }) {
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState(false);
+  const [label, setLabel] = useState(grant);
+
+  useEffect(() => {
+    // Its own words, not the key. `run_shell` is not what the setting is called
+    // anywhere a person has seen it.
+    void invoke<{ key: string; label: string }[]>("reach")
+      .then((all) => {
+        const found = all.find((a) => a.key === grant);
+        if (found) setLabel(found.label);
+      })
+      .catch(() => {});
+  }, [grant]);
+
+  const turnOn = () => {
+    setBusy(true);
+    void invoke("set_reach", { key: grant, on: true })
+      .then(() => setDone(true))
+      .finally(() => setBusy(false));
+  };
+
+  if (done) {
+    return (
+      <div className="mt-2 flex items-center gap-2">
+        <p className="flex-1 text-[11px] text-ink-3">
+          “{label}” is on now. Ask again and it should work.
+        </p>
+        <button
+          onClick={() => void invoke("start_agent", { goal })}
+          className="shrink-0 rounded-full bg-blue px-2.5 py-[5px] text-[11px] font-medium text-white transition-colors duration-150 hover:bg-blue-hi"
+        >
+          Try again
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <button
+      onClick={turnOn}
+      disabled={busy}
+      className="mt-2 w-full rounded-lg bg-raise py-1.5 text-[11px] font-medium text-blue transition-colors duration-150 hover:bg-raise-hi disabled:opacity-50"
+    >
+      {busy ? "Turning it on…" : `Turn on “${label}”`}
+    </button>
+  );
 }
 
 function Question({

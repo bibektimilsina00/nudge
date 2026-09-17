@@ -67,6 +67,15 @@ pub enum State {
     Done,
     Failed {
         why: String,
+        /// The switch that would have let this work, when the failure was a
+        /// permission rather than something going wrong.
+        ///
+        /// Carried so the card can offer it. "That needs Run any command, which
+        /// is off" already says where to find the setting, but sending somebody
+        /// to a settings page to fix a thing they are looking at is a detour
+        /// nobody needs -- the button belongs beside the sentence.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        needs: Option<String>,
     },
     Stopped,
     /// The process ended while this was still going.
