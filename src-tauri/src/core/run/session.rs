@@ -238,7 +238,7 @@ impl Nudge {
             match crate::core::tools::secret::from_keychain(&crate::core::connect::keychain_item(
                 &made.key,
             )) {
-                Some(token) => servers.add_table(service, token),
+                Some(token) => servers.add_table(service, token, made.allowed.as_deref()),
                 // Said rather than skipped silently: a connector that is
                 // configured and absent looks like one that was never added.
                 None => eprintln!("rest: {} has no token stored", made.key),

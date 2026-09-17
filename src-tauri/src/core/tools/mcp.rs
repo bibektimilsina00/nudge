@@ -338,10 +338,38 @@ impl Servers {
     /// tool list, the filter, `call` -- treats it exactly like a server, which
     /// is the point: the model should not be able to tell, and neither should
     /// the reviewer or the risk classifier.
-    pub fn add_table(&mut self, service: &'static super::rest::Service, token: String) {
-        let allowed: Vec<Tool> = service.tools();
-        eprintln!("rest: {} offers {} tools", service.key, allowed.len());
-        self.tools.extend(allowed);
+    pub fn add_table(
+        &mut self,
+        service: &'static super::rest::Service,
+        token: String,
+        allowed: Option<&[String]>,
+    ) {
+        let offered = service.tools();
+        let n = offered.len();
+        // Filtered on the way in, exactly as a server's are. Without this a
+        // table's tools reached the model whatever the person had chosen --
+        // the switch was there, connected to nothing, which is worse than not
+        // offering it.
+        let keep: Vec<Tool> = match allowed {
+            None => offered,
+            Some(names) => offered
+                .into_iter()
+                .filter(|t| names.iter().any(|n| n == &t.name))
+                .collect(),
+        };
+        // A list that matches nothing is a list from before this connector
+        // changed shape, not a decision to switch everything off. Said rather
+        // than silently obeyed, because obeying it looks identical to the
+        // connector being broken.
+        if keep.is_empty() && n > 0 && allowed.is_some_and(|a| !a.is_empty()) {
+            eprintln!(
+                "rest: {} offers {n} tools, none of which are on its saved list -- \
+                 reconnect it to choose again",
+                service.key
+            );
+        }
+        eprintln!("rest: {} offers {n} tools, {} allowed", service.key, keep.len());
+        self.tools.extend(keep);
         self.tables.push((service, token));
     }
 
@@ -401,6 +429,13 @@ impl Servers {
     /// Run one, and give back whatever text it produced.
     pub async fn call(&self, server: &str, tool: &str, args: Value) -> Result<String> {
         if let Some((service, token)) = self.table(server) {
+            // Dispatched on a name a model produced, so the list being filtered
+            // is not enough -- the same rule the spawned servers follow.
+            if !self.tools.iter().any(|t| t.server == server && t.name == tool) {
+                return Err(Error::Config(format!(
+                    "no tool called {tool:?} on {server:?}"
+                )));
+            }
             return service
                 .call(token, tool, &args)
                 .await
