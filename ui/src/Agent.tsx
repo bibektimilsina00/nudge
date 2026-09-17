@@ -702,7 +702,7 @@ function progress(agent: Agent) {
  * assistant that reads and one that runs commands, and a run failing is not
  * consent to widen what the next one may do.
  */
-function Allow({ grant, goal }: { grant: string; goal: string }) {
+export function Allow({ grant, goal }: { grant: string; goal: string }) {
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(false);
   const [label, setLabel] = useState(grant);

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Artifacts, Commands, Plan, Steps, hue, type Agent } from "../Agent";
+import { Allow, Artifacts, Commands, Plan, Steps, hue, type Agent } from "../Agent";
 import { Section } from "./parts";
 import { Face } from "../components/Face";
 
@@ -135,6 +135,9 @@ function Tile({
         <p className="mt-1 text-[10.5px] leading-snug text-ink-2">
           {agent.state === "failed" ? agent.why : agent.status}
         </p>
+        {agent.state === "failed" && agent.needs && (
+          <Allow grant={agent.needs} goal={agent.goal} />
+        )}
         <Plan plan={agent.plan} />
         <Artifacts made={agent.made} />
         <Steps history={agent.history} />
