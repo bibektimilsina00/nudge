@@ -45,30 +45,25 @@ pub fn follow(app: &AppHandle) {
             std::thread::sleep(std::time::Duration::from_millis(16));
             tick = tick.wrapping_add(1);
 
-            // Check the overlay's Space membership ten times a second.
+            // Ask whether Mission Control is up, ten times a second.
             //
-            // Measured, not guessed: a poll of the window server showed Nudge's
-            // window ABSENT from the on-screen list the moment a full-screen Space
-            // activated -- not hidden behind the app, removed from the Space. The
-            // collection behaviour set at startup does not survive, and no window
-            // event we can subscribe to fires on a Space change, so there is nothing
-            // to hook.
+            // This used to also put the overlay back when the window server
+            // dropped it from a Space, re-applying the level and the collection
+            // behaviour on every tick. That is gone: Clicky does none of it and
+            // does not lose its overlay, because the behaviour set once at
+            // creation is enough, and a poll that re-applies it is the only
+            // thing here that could ever fight the compositor.
             //
-            // ponytail: polling instead of observing
-            // NSWorkspaceActiveSpaceDidChangeNotification, which needs an
-            // Objective-C observer object to carry a Rust callback. At 1Hz the
-            // overlay visibly blinked out on each Space change; at 10Hz the gap is
-            // under a frame or two, and the check is one getter that usually says
-            // "already fine".
+            // ponytail: polling rather than observing
+            // NSWorkspaceActiveSpaceDidChangeNotification, which would need an
+            // Objective-C observer object to carry a Rust callback.
             if tick % 6 == 0 {
+                // Mission Control has to be asked about from the main thread --
+                // `MainThreadMarker::new()` answers `None` anywhere else and the
+                // check would quietly report "not up" forever -- so the answer
+                // is cached here for the loop below, which is not on it.
                 let handle = app.clone();
                 let _ = app.run_on_main_thread(move || {
-                    crate::app::ui::overlay::keep_everywhere(&handle);
-                    // Same trip, same cadence. Mission Control has to be asked
-                    // about from the main thread -- `MainThreadMarker::new()`
-                    // answers `None` anywhere else and the check would quietly
-                    // report "not up" forever -- so the answer is cached here
-                    // for the loop below, which is not on the main thread.
                     crate::app::ui::panel::watch_overview(&handle);
                 });
             } else if crate::app::ui::panel::overview() {

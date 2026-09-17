@@ -102,7 +102,7 @@ fn overlay() -> Option<&'static NSWindow> {
 ///
 /// A four-finger swipe up takes the whole screen for a system overview, and an
 /// overlay pinned above it is both wrong and unwinnable: Mission Control keeps
-/// claiming the top, the poll in `keep_everywhere` kept claiming it back, and the
+/// claiming the top, a poll here kept claiming it back, and the
 /// compositor showed every exchange. Recorded at 120fps the notch pill changed
 /// state a hundred times in ten seconds -- the poll interval, almost exactly.
 ///
@@ -210,37 +210,6 @@ pub fn mission_control() -> bool {
     // not a gap, and falling through to the guess there is what made an
     // ordinary swipe between desktops look like the overview.
     !any_name && dock_covers
-}
-
-/// Does the window server still have this window on screen?
-///
-/// AppKit is not a witness worth calling here. `isOnActiveSpace` answers `true`
-/// unconditionally once `CanJoinAllSpaces` is set -- even while the server has the
-/// window out of the Space entirely -- and that eviction is the whole reason the
-/// poll in `keep_everywhere` exists. The server's own on-screen list is what showed
-/// the eviction in the first place, so it is what gets asked about it.
-///
-/// Ids only, not descriptions: `CGWindowListCreate` hands back a flat array of
-/// numbers, which is no allocation per window. The dictionary form of the same
-/// query builds one CFDictionary per window on screen to answer a yes-or-no
-/// question.
-#[cfg(target_os = "macos")]
-pub fn on_screen(number: isize) -> bool {
-    use core_foundation::array::{CFArrayGetCount, CFArrayGetValueAtIndex};
-    use core_foundation::base::TCFType;
-    use core_graphics::window::{create_window_list, kCGWindowListOptionOnScreenOnly};
-
-    let Some(list) = create_window_list(kCGWindowListOptionOnScreenOnly, 0) else {
-        // No answer is not the same as "gone". Treating a failed query as an
-        // eviction would put the repair back on every tick, which is the flicker.
-        return true;
-    };
-    let want = number as u32;
-    let raw = list.as_concrete_TypeRef();
-    // The array holds ids cast to pointers rather than CFTypes, so it is read as
-    // raw values; the typed iterator would dereference them as if they were.
-    (0..unsafe { CFArrayGetCount(raw) })
-        .any(|i| unsafe { CFArrayGetValueAtIndex(raw, i) } as u32 == want)
 }
 
 /// Put it back in front, for whatever reason it fell behind.
