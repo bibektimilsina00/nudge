@@ -67,8 +67,9 @@ pub fn follow(app: &AppHandle) {
                     // Same trip, same cadence. Mission Control has to be asked
                     // about from the main thread -- `MainThreadMarker::new()`
                     // answers `None` anywhere else and the check would quietly
-                    // report "not up" forever.
-                    crate::app::ui::panel::yield_to_overview(&handle);
+                    // report "not up" forever -- so the answer is cached here
+                    // for the loop below, which is not on the main thread.
+                    crate::app::ui::panel::watch_overview();
                 });
             }
 
@@ -201,7 +202,22 @@ pub fn follow(app: &AppHandle) {
             } else if at_notch {
                 away += 1;
             }
-            let hovering = over || (at_notch && away < LINGER);
+            // Mission Control counts as the pointer being elsewhere.
+            //
+            // The strip stays: collapsed it is the notch, and the notch belongs
+            // on screen during an overview of the screen. What does not belong
+            // is a 540-point panel hanging off the bottom of it, over a view
+            // that is about every window except ours.
+            //
+            // Closed this way rather than by hiding the window, so that nothing
+            // is taken down and nothing has to be put back: coming out of the
+            // overview, the strip is already there, and if the pointer is still
+            // at the notch the next tick opens it again by itself. Routing it
+            // through `hovering` is also what keeps `at_notch` honest -- closing
+            // the panel behind the loop's back would leave it believing the
+            // panel was open, and the next real hover would then change nothing.
+            let hovering =
+                (over || (at_notch && away < LINGER)) && !crate::app::ui::panel::overview();
 
             if hovering != at_notch {
                 at_notch = hovering;
