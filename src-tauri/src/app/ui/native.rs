@@ -212,13 +212,6 @@ pub fn mission_control() -> bool {
     !any_name && dock_covers
 }
 
-/// Put it back in front, for whatever reason it fell behind.
-pub fn keep_front() {
-    if let Some(win) = overlay() {
-        win.orderFrontRegardless();
-    }
-}
-
 /// Give any Tauri window the overlay's Space behaviour and level.
 ///
 /// The notch panel needs the same treatment as the companion: above the menu bar,
