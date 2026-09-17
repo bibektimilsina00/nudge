@@ -27,7 +27,11 @@ async fn go() {
     }
 
     let cfg = Config::load().unwrap_or_default();
-    println!("provider: {} / {}", cfg.provider, cfg.model.clone().unwrap_or_else(|| "default".into()));
+    println!(
+        "provider: {} / {}",
+        cfg.provider,
+        cfg.model.clone().unwrap_or_else(|| "default".into())
+    );
 
     let session = match Nudge::new(cfg) {
         Ok(s) => s,

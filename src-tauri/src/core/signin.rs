@@ -70,9 +70,7 @@ impl Granted {
             refresh: a.refresh_token,
             // A minute early on purpose: a token that expires between the check
             // and the call is the same bug with a smaller window.
-            until: a
-                .expires_in
-                .map(|s| now_ms() + s.saturating_sub(60) * 1000),
+            until: a.expires_in.map(|s| now_ms() + s.saturating_sub(60) * 1000),
         })
     }
 
@@ -187,7 +185,11 @@ mod tests {
     fn a_token_with_no_expiry_never_goes_stale() {
         // Apps that do not expire user tokens send no `expires_in`, and treating
         // that as "expired now" would refresh on every single session.
-        let g = Granted { access: "t".into(), refresh: None, until: None };
+        let g = Granted {
+            access: "t".into(),
+            refresh: None,
+            until: None,
+        };
         assert!(!g.stale());
     }
 
@@ -212,7 +214,10 @@ mod tests {
             error: None,
             interval: None,
         };
-        assert!(!Granted::from(b).unwrap().stale(), "a fresh 8 hour token is not stale");
+        assert!(
+            !Granted::from(b).unwrap().stale(),
+            "a fresh 8 hour token is not stale"
+        );
     }
 
     #[test]

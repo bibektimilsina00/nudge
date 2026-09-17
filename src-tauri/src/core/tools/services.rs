@@ -15,22 +15,20 @@ const NUM: &str = "integer";
 
 /// Linear. Chosen first because its API is small, its token is one string, and
 /// its scopes are visible on the page you make the token on.
-const LINEAR_OPS: &[Op] = &[
-    Op {
-        name: "linear_me",
-        about: "Who this token belongs to, and which teams they are in.",
-        method: "POST",
-        path: "/graphql",
-        fixed: &[],
-        args: &[Arg {
-            name: "query",
-            kind: STR,
-            about: "GraphQL query. Start with `{ viewer { id name email } }`.",
-            put: Put::Body,
-            needed: true,
-        }],
-    },
-];
+const LINEAR_OPS: &[Op] = &[Op {
+    name: "linear_me",
+    about: "Who this token belongs to, and which teams they are in.",
+    method: "POST",
+    path: "/graphql",
+    fixed: &[],
+    args: &[Arg {
+        name: "query",
+        kind: STR,
+        about: "GraphQL query. Start with `{ viewer { id name email } }`.",
+        put: Put::Body,
+        needed: true,
+    }],
+}];
 
 pub const LINEAR: Service = Service {
     key: "linear",
@@ -52,9 +50,27 @@ const HUNTER_OPS: &[Op] = &[
         path: "/v2/email-finder",
         fixed: &[],
         args: &[
-            Arg { name: "domain", kind: STR, about: "Company domain, e.g. example.com", put: Put::Query, needed: true },
-            Arg { name: "first_name", kind: STR, about: "Their first name", put: Put::Query, needed: true },
-            Arg { name: "last_name", kind: STR, about: "Their last name", put: Put::Query, needed: true },
+            Arg {
+                name: "domain",
+                kind: STR,
+                about: "Company domain, e.g. example.com",
+                put: Put::Query,
+                needed: true,
+            },
+            Arg {
+                name: "first_name",
+                kind: STR,
+                about: "Their first name",
+                put: Put::Query,
+                needed: true,
+            },
+            Arg {
+                name: "last_name",
+                kind: STR,
+                about: "Their last name",
+                put: Put::Query,
+                needed: true,
+            },
         ],
     },
     Op {
@@ -63,7 +79,13 @@ const HUNTER_OPS: &[Op] = &[
         method: "GET",
         path: "/v2/email-verifier",
         fixed: &[],
-        args: &[Arg { name: "email", kind: STR, about: "The address to check", put: Put::Query, needed: true }],
+        args: &[Arg {
+            name: "email",
+            kind: STR,
+            about: "The address to check",
+            put: Put::Query,
+            needed: true,
+        }],
     },
     Op {
         name: "hunter_domain_search",
@@ -72,8 +94,20 @@ const HUNTER_OPS: &[Op] = &[
         path: "/v2/domain-search",
         fixed: &[],
         args: &[
-            Arg { name: "domain", kind: STR, about: "Company domain", put: Put::Query, needed: true },
-            Arg { name: "limit", kind: NUM, about: "How many, up to 100", put: Put::Query, needed: false },
+            Arg {
+                name: "domain",
+                kind: STR,
+                about: "Company domain",
+                put: Put::Query,
+                needed: true,
+            },
+            Arg {
+                name: "limit",
+                kind: NUM,
+                about: "How many, up to 100",
+                put: Put::Query,
+                needed: false,
+            },
         ],
     },
 ];
@@ -102,7 +136,10 @@ const YOUTUBE_OPS: &[Op] = &[
         about: "Your own channel: title, description, subscriber and view counts.",
         method: "GET",
         path: "/youtube/v3/channels",
-        fixed: &[("part", "snippet,statistics,contentDetails"), ("mine", "true")],
+        fixed: &[
+            ("part", "snippet,statistics,contentDetails"),
+            ("mine", "true"),
+        ],
         args: &[],
     },
     Op {
@@ -110,10 +147,27 @@ const YOUTUBE_OPS: &[Op] = &[
         about: "Your own videos, newest first, including private and unlisted ones.",
         method: "GET",
         path: "/youtube/v3/search",
-        fixed: &[("part", "snippet"), ("forMine", "true"), ("type", "video"), ("order", "date")],
+        fixed: &[
+            ("part", "snippet"),
+            ("forMine", "true"),
+            ("type", "video"),
+            ("order", "date"),
+        ],
         args: &[
-            Arg { name: "q", kind: STR, about: "Words to match, or leave out for all", put: Put::Query, needed: false },
-            Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false },
+            Arg {
+                name: "q",
+                kind: STR,
+                about: "Words to match, or leave out for all",
+                put: Put::Query,
+                needed: false,
+            },
+            Arg {
+                name: "maxResults",
+                kind: NUM,
+                about: "How many, up to 50",
+                put: Put::Query,
+                needed: false,
+            },
         ],
     },
     Op {
@@ -122,7 +176,13 @@ const YOUTUBE_OPS: &[Op] = &[
         method: "GET",
         path: "/youtube/v3/playlists",
         fixed: &[("part", "snippet,contentDetails"), ("mine", "true")],
-        args: &[Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false }],
+        args: &[Arg {
+            name: "maxResults",
+            kind: NUM,
+            about: "How many, up to 50",
+            put: Put::Query,
+            needed: false,
+        }],
     },
     Op {
         name: "youtube_playlist_items",
@@ -131,8 +191,20 @@ const YOUTUBE_OPS: &[Op] = &[
         path: "/youtube/v3/playlistItems",
         fixed: &[("part", "snippet,contentDetails")],
         args: &[
-            Arg { name: "playlistId", kind: STR, about: "Which playlist", put: Put::Query, needed: true },
-            Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false },
+            Arg {
+                name: "playlistId",
+                kind: STR,
+                about: "Which playlist",
+                put: Put::Query,
+                needed: true,
+            },
+            Arg {
+                name: "maxResults",
+                kind: NUM,
+                about: "How many, up to 50",
+                put: Put::Query,
+                needed: false,
+            },
         ],
     },
     Op {
@@ -141,7 +213,13 @@ const YOUTUBE_OPS: &[Op] = &[
         method: "GET",
         path: "/youtube/v3/subscriptions",
         fixed: &[("part", "snippet"), ("mine", "true")],
-        args: &[Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false }],
+        args: &[Arg {
+            name: "maxResults",
+            kind: NUM,
+            about: "How many, up to 50",
+            put: Put::Query,
+            needed: false,
+        }],
     },
     Op {
         name: "youtube_video_details",
@@ -149,7 +227,13 @@ const YOUTUBE_OPS: &[Op] = &[
         method: "GET",
         path: "/youtube/v3/videos",
         fixed: &[("part", "snippet,statistics,contentDetails")],
-        args: &[Arg { name: "id", kind: STR, about: "Video id, or several separated by commas", put: Put::Query, needed: true }],
+        args: &[Arg {
+            name: "id",
+            kind: STR,
+            about: "Video id, or several separated by commas",
+            put: Put::Query,
+            needed: true,
+        }],
     },
     Op {
         name: "youtube_search",
@@ -158,8 +242,20 @@ const YOUTUBE_OPS: &[Op] = &[
         path: "/youtube/v3/search",
         fixed: &[("part", "snippet"), ("type", "video")],
         args: &[
-            Arg { name: "q", kind: STR, about: "What to search for", put: Put::Query, needed: true },
-            Arg { name: "maxResults", kind: NUM, about: "How many, up to 50", put: Put::Query, needed: false },
+            Arg {
+                name: "q",
+                kind: STR,
+                about: "What to search for",
+                put: Put::Query,
+                needed: true,
+            },
+            Arg {
+                name: "maxResults",
+                kind: NUM,
+                about: "How many, up to 50",
+                put: Put::Query,
+                needed: false,
+            },
         ],
     },
 ];
@@ -191,9 +287,27 @@ const TASKS_OPS: &[Op] = &[
         path: "/tasks/v1/lists/{tasklist}/tasks",
         fixed: &[],
         args: &[
-            Arg { name: "tasklist", kind: STR, about: "Which list, by id", put: Put::Path, needed: true },
-            Arg { name: "showCompleted", kind: "boolean", about: "Include finished ones", put: Put::Query, needed: false },
-            Arg { name: "maxResults", kind: NUM, about: "How many, up to 100", put: Put::Query, needed: false },
+            Arg {
+                name: "tasklist",
+                kind: STR,
+                about: "Which list, by id",
+                put: Put::Path,
+                needed: true,
+            },
+            Arg {
+                name: "showCompleted",
+                kind: "boolean",
+                about: "Include finished ones",
+                put: Put::Query,
+                needed: false,
+            },
+            Arg {
+                name: "maxResults",
+                kind: NUM,
+                about: "How many, up to 100",
+                put: Put::Query,
+                needed: false,
+            },
         ],
     },
     Op {
@@ -203,10 +317,34 @@ const TASKS_OPS: &[Op] = &[
         path: "/tasks/v1/lists/{tasklist}/tasks",
         fixed: &[],
         args: &[
-            Arg { name: "tasklist", kind: STR, about: "Which list, by id", put: Put::Path, needed: true },
-            Arg { name: "title", kind: STR, about: "What the task says", put: Put::Body, needed: true },
-            Arg { name: "notes", kind: STR, about: "Longer detail", put: Put::Body, needed: false },
-            Arg { name: "due", kind: STR, about: "RFC3339, e.g. 2026-09-20T00:00:00Z", put: Put::Body, needed: false },
+            Arg {
+                name: "tasklist",
+                kind: STR,
+                about: "Which list, by id",
+                put: Put::Path,
+                needed: true,
+            },
+            Arg {
+                name: "title",
+                kind: STR,
+                about: "What the task says",
+                put: Put::Body,
+                needed: true,
+            },
+            Arg {
+                name: "notes",
+                kind: STR,
+                about: "Longer detail",
+                put: Put::Body,
+                needed: false,
+            },
+            Arg {
+                name: "due",
+                kind: STR,
+                about: "RFC3339, e.g. 2026-09-20T00:00:00Z",
+                put: Put::Body,
+                needed: false,
+            },
         ],
     },
     Op {
@@ -216,9 +354,27 @@ const TASKS_OPS: &[Op] = &[
         path: "/tasks/v1/lists/{tasklist}/tasks/{task}",
         fixed: &[],
         args: &[
-            Arg { name: "tasklist", kind: STR, about: "Which list, by id", put: Put::Path, needed: true },
-            Arg { name: "task", kind: STR, about: "Which task, by id", put: Put::Path, needed: true },
-            Arg { name: "status", kind: STR, about: "`completed` or `needsAction`", put: Put::Body, needed: true },
+            Arg {
+                name: "tasklist",
+                kind: STR,
+                about: "Which list, by id",
+                put: Put::Path,
+                needed: true,
+            },
+            Arg {
+                name: "task",
+                kind: STR,
+                about: "Which task, by id",
+                put: Put::Path,
+                needed: true,
+            },
+            Arg {
+                name: "status",
+                kind: STR,
+                about: "`completed` or `needsAction`",
+                put: Put::Body,
+                needed: true,
+            },
         ],
     },
 ];
@@ -253,11 +409,41 @@ const GSC_OPS: &[Op] = &[
         path: "/webmasters/v3/sites/{siteUrl}/searchAnalytics/query",
         fixed: &[],
         args: &[
-            Arg { name: "siteUrl", kind: STR, about: "e.g. https://example.com/ or sc-domain:example.com", put: Put::Path, needed: true },
-            Arg { name: "startDate", kind: STR, about: "YYYY-MM-DD", put: Put::Body, needed: true },
-            Arg { name: "endDate", kind: STR, about: "YYYY-MM-DD", put: Put::Body, needed: true },
-            Arg { name: "dimensions", kind: "array", about: "Any of query, page, country, device, date", put: Put::Body, needed: false },
-            Arg { name: "rowLimit", kind: NUM, about: "How many rows, up to 25000", put: Put::Body, needed: false },
+            Arg {
+                name: "siteUrl",
+                kind: STR,
+                about: "e.g. https://example.com/ or sc-domain:example.com",
+                put: Put::Path,
+                needed: true,
+            },
+            Arg {
+                name: "startDate",
+                kind: STR,
+                about: "YYYY-MM-DD",
+                put: Put::Body,
+                needed: true,
+            },
+            Arg {
+                name: "endDate",
+                kind: STR,
+                about: "YYYY-MM-DD",
+                put: Put::Body,
+                needed: true,
+            },
+            Arg {
+                name: "dimensions",
+                kind: "array",
+                about: "Any of query, page, country, device, date",
+                put: Put::Body,
+                needed: false,
+            },
+            Arg {
+                name: "rowLimit",
+                kind: NUM,
+                about: "How many rows, up to 25000",
+                put: Put::Body,
+                needed: false,
+            },
         ],
     },
     Op {
@@ -266,7 +452,13 @@ const GSC_OPS: &[Op] = &[
         method: "GET",
         path: "/webmasters/v3/sites/{siteUrl}/sitemaps",
         fixed: &[],
-        args: &[Arg { name: "siteUrl", kind: STR, about: "The property", put: Put::Path, needed: true }],
+        args: &[Arg {
+            name: "siteUrl",
+            kind: STR,
+            about: "The property",
+            put: Put::Path,
+            needed: true,
+        }],
     },
 ];
 
@@ -305,7 +497,10 @@ mod tests {
     fn every_tool_name_is_unique_across_the_catalogue() {
         // They land in one list in front of the model. Two `search` tools from
         // different services would be a coin flip.
-        let mut names: Vec<_> = ALL.iter().flat_map(|s| s.ops.iter().map(|o| o.name)).collect();
+        let mut names: Vec<_> = ALL
+            .iter()
+            .flat_map(|s| s.ops.iter().map(|o| o.name))
+            .collect();
         names.sort_unstable();
         let before = names.len();
         names.dedup();
@@ -323,7 +518,9 @@ mod tests {
                     assert!(
                         op.args.iter().any(|a| a.name == name && a.put == Put::Path),
                         "{}/{} has {{{}}} in its path and no argument for it",
-                        s.key, op.name, name
+                        s.key,
+                        op.name,
+                        name
                     );
                 }
             }
@@ -334,9 +531,20 @@ mod tests {
     fn every_argument_says_what_it_is_for() {
         for s in ALL {
             for op in s.ops {
-                assert!(!op.about.is_empty(), "{}/{} has no description", s.key, op.name);
+                assert!(
+                    !op.about.is_empty(),
+                    "{}/{} has no description",
+                    s.key,
+                    op.name
+                );
                 for a in op.args {
-                    assert!(!a.about.is_empty(), "{}/{}/{} has none", s.key, op.name, a.name);
+                    assert!(
+                        !a.about.is_empty(),
+                        "{}/{}/{} has none",
+                        s.key,
+                        op.name,
+                        a.name
+                    );
                 }
             }
         }

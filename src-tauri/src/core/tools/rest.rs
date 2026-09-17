@@ -123,8 +123,11 @@ impl Service {
             .ok_or_else(|| format!("no tool called {tool:?} on {:?}", self.key))?;
 
         let mut url = format!("{}{}", self.base, op.path);
-        let mut query: Vec<(String, String)> =
-            op.fixed.iter().map(|(k, v)| (k.to_string(), v.to_string())).collect();
+        let mut query: Vec<(String, String)> = op
+            .fixed
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect();
         let mut body = Map::new();
 
         for a in op.args {
@@ -191,7 +194,12 @@ impl Service {
         // being read by a model as though it were data.
         match status.is_success() {
             true => Ok(text),
-            false => Err(format!("{} said {}: {}", self.key, status.as_u16(), clip(&text))),
+            false => Err(format!(
+                "{} said {}: {}",
+                self.key,
+                status.as_u16(),
+                clip(&text)
+            )),
         }
     }
 }
@@ -229,9 +237,27 @@ mod tests {
     use super::*;
 
     const ARGS: &[Arg] = &[
-        Arg { name: "id", kind: "string", about: "which one", put: Put::Path, needed: true },
-        Arg { name: "q", kind: "string", about: "search", put: Put::Query, needed: false },
-        Arg { name: "title", kind: "string", about: "new title", put: Put::Body, needed: false },
+        Arg {
+            name: "id",
+            kind: "string",
+            about: "which one",
+            put: Put::Path,
+            needed: true,
+        },
+        Arg {
+            name: "q",
+            kind: "string",
+            about: "search",
+            put: Put::Query,
+            needed: false,
+        },
+        Arg {
+            name: "title",
+            kind: "string",
+            about: "new title",
+            put: Put::Body,
+            needed: false,
+        },
     ];
     const OPS: &[Op] = &[Op {
         name: "thing_get",
@@ -254,7 +280,11 @@ mod tests {
         // They are part of the call, not part of the question. Offering
         // `part=snippet` to a model is offering it a way to get the call wrong.
         let t = &S.tools()[0];
-        assert!(t.schema["properties"].get("view").is_none(), "{:?}", t.schema);
+        assert!(
+            t.schema["properties"].get("view").is_none(),
+            "{:?}",
+            t.schema
+        );
     }
 
     #[test]
@@ -278,7 +308,10 @@ mod tests {
     async fn a_missing_required_argument_is_said_rather_than_sent() {
         // Without this the request goes out with a literal `{id}` in the path
         // and comes back as somebody else's confusing 404.
-        let e = S.call("t", "thing_get", &json!({"q": "x"})).await.unwrap_err();
+        let e = S
+            .call("t", "thing_get", &json!({"q": "x"}))
+            .await
+            .unwrap_err();
         assert!(e.contains("needs id"), "{e}");
     }
 

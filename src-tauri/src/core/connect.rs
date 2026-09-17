@@ -577,7 +577,9 @@ pub fn write(path: Option<&std::path::Path>, made: &[Made]) {
 /// token means one failed call; losing the refresh token means signing in again.
 pub async fn freshen() {
     for made in read(store().as_deref()) {
-        let Some(offer) = offer(&made.key) else { continue };
+        let Some(offer) = offer(&made.key) else {
+            continue;
+        };
 
         // Google's table-backed connectors keep a refresh token in a file and
         // need a fresh access token per session. Minted here for the same reason
@@ -600,7 +602,9 @@ pub async fn freshen() {
             continue;
         }
 
-        let Some(client_id) = offer.sign_in else { continue };
+        let Some(client_id) = offer.sign_in else {
+            continue;
+        };
         let name = keychain_item(&made.key);
         let refresh_name = refresh_item(&made.key);
         let Some(refresh) = crate::core::tools::secret::from_keychain(&refresh_name) else {
@@ -644,7 +648,9 @@ async fn google_access(path: &str) -> Result<String, String> {
 
     let keys: serde_json::Value = serde_json::from_str(
         &std::fs::read_to_string(
-            dirs::home_dir().ok_or("no home directory")?.join(".config/gcp-oauth.keys.json"),
+            dirs::home_dir()
+                .ok_or("no home directory")?
+                .join(".config/gcp-oauth.keys.json"),
         )
         .map_err(|_| "no OAuth client at ~/.config/gcp-oauth.keys.json".to_string())?,
     )
@@ -652,7 +658,9 @@ async fn google_access(path: &str) -> Result<String, String> {
     let c = &keys["installed"];
     let (id, secret) = (
         c["client_id"].as_str().ok_or("that client has no id")?,
-        c["client_secret"].as_str().ok_or("that client has no secret")?,
+        c["client_secret"]
+            .as_str()
+            .ok_or("that client has no secret")?,
     );
 
     let res = crate::core::http()
@@ -883,9 +891,15 @@ mod tests {
         // compiler cannot see. Left unchecked it would surface as a connection
         // that fails for a reason having nothing to do with the credential.
         for o in catalogue() {
-            let Some((tool, args)) = o.check else { continue };
+            let Some((tool, args)) = o.check else {
+                continue;
+            };
             let parsed: Result<serde_json::Value, _> = serde_json::from_str(args);
-            assert!(parsed.is_ok(), "{}/{tool} has unparseable arguments: {args}", o.key);
+            assert!(
+                parsed.is_ok(),
+                "{}/{tool} has unparseable arguments: {args}",
+                o.key
+            );
             assert!(
                 parsed.unwrap().is_object(),
                 "{}/{tool} arguments must be an object",
@@ -907,7 +921,10 @@ mod tests {
             .into_iter()
             .filter(|o| o.env.iter().any(|(k, _)| *k == "GOOGLE_TOKEN_FILE"))
             .collect();
-        assert!(!table.is_empty(), "no table-backed Google connector to test");
+        assert!(
+            !table.is_empty(),
+            "no table-backed Google connector to test"
+        );
 
         freshen().await;
 

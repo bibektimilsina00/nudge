@@ -85,7 +85,9 @@ pub fn to_keychain(name: &str, token: &str) -> Result<()> {
     #[cfg(not(target_os = "macos"))]
     {
         let _ = (name, token);
-        return Err(Error::Config("there is no Keychain on this platform".into()));
+        return Err(Error::Config(
+            "there is no Keychain on this platform".into(),
+        ));
     }
 
     // Still read back. The write reporting success is not the same as the value

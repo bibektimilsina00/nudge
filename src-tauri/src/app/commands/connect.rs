@@ -121,16 +121,12 @@ pub async fn connect(
         }
     }
 
-    let pasted = token
-        .as_deref()
-        .map(str::trim)
-        .filter(|t| !t.is_empty());
+    let pasted = token.as_deref().map(str::trim).filter(|t| !t.is_empty());
 
     if offer.token.is_some() {
         match pasted {
-            Some(token) => {
-                secret::to_keychain(&connect::keychain_item(&key), token).map_err(|e| e.to_string())?
-            }
+            Some(token) => secret::to_keychain(&connect::keychain_item(&key), token)
+                .map_err(|e| e.to_string())?,
             // Signing in already put one there, and this is called straight
             // afterwards to do the half that proves it works. Demanding a paste
             // here made the whole flow fail at the last step with "needs a
@@ -285,7 +281,11 @@ async fn join(app: AppHandle, key: String) -> Result<usize, String> {
         let args: serde_json::Value = serde_json::from_str(args).unwrap_or(serde_json::json!({}));
         if let Err(why) = started.call(&key, tool, args).await {
             undo(&key, offer.token.is_some());
-            return Err(format!("{} started, but {}", offer.name, first_line(&why.to_string())));
+            return Err(format!(
+                "{} started, but {}",
+                offer.name,
+                first_line(&why.to_string())
+            ));
         }
     }
     let path = app.state::<Connections>().path.clone();
@@ -303,7 +303,10 @@ async fn join(app: AppHandle, key: String) -> Result<usize, String> {
 
 /// Start a sign-in, and give back the code to show.
 #[tauri::command]
-pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::signin::Waiting, String> {
+pub async fn sign_in_begin(
+    app: AppHandle,
+    key: String,
+) -> Result<crate::core::signin::Waiting, String> {
     let offer = connect::offer(&key).ok_or_else(|| format!("no such integration: {key}"))?;
     let client_id = offer
         .sign_in
@@ -344,10 +347,7 @@ pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::s
                     // Both halves, or the connection works for eight hours and
                     // then fails in a way that looks like a revoked token.
                     if let Some(r) = &granted.refresh {
-                        let _ = secret::to_keychain(
-                            &connect::refresh_item(&for_task),
-                            r,
-                        );
+                        let _ = secret::to_keychain(&connect::refresh_item(&for_task), r);
                     }
                     let said = match secret::to_keychain(
                         &connect::keychain_item(&for_task),
@@ -367,7 +367,6 @@ pub async fn sign_in_begin(app: AppHandle, key: String) -> Result<crate::core::s
             }
         }
     });
-
 
     // Opened here rather than in the window, because that is how every other
     // link in this app is opened and adding a plugin to do it from JavaScript
@@ -457,7 +456,10 @@ mod complaints {
 
     #[test]
     fn only_the_first_line_of_a_stack_trace_survives() {
-        assert_eq!(first_line("Error: no token\n    at auth.js:172\n    at main"), "Error: no token");
+        assert_eq!(
+            first_line("Error: no token\n    at auth.js:172\n    at main"),
+            "Error: no token"
+        );
     }
 }
 

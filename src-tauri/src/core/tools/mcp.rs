@@ -368,7 +368,11 @@ impl Servers {
                 service.key
             );
         }
-        eprintln!("rest: {} offers {n} tools, {} allowed", service.key, keep.len());
+        eprintln!(
+            "rest: {} offers {n} tools, {} allowed",
+            service.key,
+            keep.len()
+        );
         self.tools.extend(keep);
         self.tables.push((service, token));
     }
@@ -431,7 +435,11 @@ impl Servers {
         if let Some((service, token)) = self.table(server) {
             // Dispatched on a name a model produced, so the list being filtered
             // is not enough -- the same rule the spawned servers follow.
-            if !self.tools.iter().any(|t| t.server == server && t.name == tool) {
+            if !self
+                .tools
+                .iter()
+                .any(|t| t.server == server && t.name == tool)
+            {
                 return Err(Error::Config(format!(
                     "no tool called {tool:?} on {server:?}"
                 )));
@@ -666,7 +674,9 @@ mod tests {
         // Absent from the list is half of it. The other half is that asking for
         // it by name does not work either -- this dispatches on a string, so a
         // model that guessed the name would otherwise be answered.
-        let refused = servers.call("files", &write, json!({"path": "x", "content": "y"})).await;
+        let refused = servers
+            .call("files", &write, json!({"path": "x", "content": "y"}))
+            .await;
         println!("  calling the excluded {write} -> {refused:?}");
         assert!(refused.is_err(), "an excluded tool was still callable");
 
