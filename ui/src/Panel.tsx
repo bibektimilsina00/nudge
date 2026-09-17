@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Companion } from "./components/Companion";
+import { Ask } from "./panel/Ask";
 import { Agents } from "./panel/Agents";
 import { StatusPill, type Status } from "./panel/Status";
 import { Integrations } from "./panel/Integrations";
@@ -24,13 +25,6 @@ import { Settings } from "./panel/Settings";
  * display. Only the bottom corners are rounded, because the illusion is that the
  * notch got wider.
  */
-const SHORTCUTS: [string, string[]][] = [
-  ["Talk", ["⌃ control", "⇧ shift", "space"]],
-  ["Next step", ["tap", "⌃⇧ space"]],
-  ["Type", ["tap", "then type"]],
-  ["Stop", ["esc"]],
-];
-
 /**
  * Each view gets the height it needs; the pill is a separate case.
  *
@@ -40,7 +34,7 @@ const SHORTCUTS: [string, string[]][] = [
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[238px]",
+  home: "h-[224px]",
   agents: "h-[320px]",
   settings: "h-[640px]",
   integrations: "h-[640px]",
@@ -201,6 +195,7 @@ export default function Panel() {
               Agents
             </Tab>
             <span className="flex-1" />
+            <Perch docked={docked} onToggle={() => dock(!docked)} />
             <button
               // Settings toggles against wherever you were, rather than always
               // dumping you on Home when you leave it.
@@ -240,60 +235,7 @@ export default function Panel() {
               }}
             />
           ) : (
-          <>
-          <div className="grid flex-1 grid-cols-[1fr_auto] gap-4 px-3.5 pt-1.5">
-            <section>
-              <h2 className="text-[13.5px] font-semibold tracking-tight">Add skills</h2>
-              <p className="mt-0.5 text-[10.5px] text-ink-3">
-                Skills give Nudge superpowers
-              </p>
-              <button
-                onClick={() => openSkills("home")}
-                aria-label="Add skills"
-                className="mt-2.5 grid size-[44px] place-items-center rounded-xl bg-raise text-[20px] font-light text-ink-2 transition-colors duration-150 hover:bg-raise-hi"
-              >
-                +
-              </button>
-            </section>
-
-            <section className="w-[214px]">
-              <h3 className="mb-1.5 text-[10.5px] text-ink-2">⌘ Shortcuts</h3>
-              <dl className="space-y-[6px]">
-                {SHORTCUTS.map(([name, keys]) => (
-                  <div key={name} className="flex items-center justify-between gap-2">
-                    <dt className="truncate text-[10.5px] text-ink-2">{name}</dt>
-                    <dd className="flex shrink-0 gap-1">
-                      {keys.map((k) => (
-                        <Key key={k}>{k}</Key>
-                      ))}
-                    </dd>
-                  </div>
-                ))}
-              </dl>
-            </section>
-          </div>
-
-          <div className="px-3.5 pb-3">
-            <p className="mb-1.5 text-[10.5px] text-ink-3">Integrations</p>
-            <div className="flex items-center gap-2">
-              {/* The whole field opens the browser, not just the little square --
-                  a 26px target inside a 34px row that looks pressable is a
-                  needlessly small thing to hit. */}
-              <button
-                onClick={() => openIntegrations("home")}
-                aria-label="Browse integrations"
-                className="flex h-[30px] flex-1 items-center rounded-[10px] bg-raise px-1.5 text-left transition-colors duration-150 hover:bg-raise-hi hairline"
-              >
-                <span className="grid size-[22px] place-items-center rounded-md bg-white/[0.11] text-[13px] font-light text-white/60">
-                  +
-                </span>
-                <span className="ml-2 text-[11px] text-ink-3">Add an integration</span>
-              </button>
-
-              <Perch docked={docked} onToggle={() => dock(!docked)} />
-            </div>
-          </div>
-          </>
+          <Ask hold={hold} onOpenIntegrations={() => openIntegrations("home")} />
           )}
         </div>
       </div>
@@ -418,13 +360,6 @@ function Tab({
 }
 
 /** A keycap: small, monospaced, faintly ringed -- the shape of a key, not a badge. */
-function Key({ children }: { children: ReactNode }) {
-  return (
-    <kbd className="rounded-[5px] bg-raise-hi px-1.5 py-[2.5px] font-mono text-[9px] leading-none whitespace-nowrap text-ink-2 inset-ring-1 inset-ring-white/[0.08]">
-      {children}
-    </kbd>
-  );
-}
 
 const stroke = {
   fill: "none",
