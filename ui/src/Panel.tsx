@@ -188,6 +188,12 @@ export default function Panel() {
           ].join(" ")}
         >
           <div className="flex min-h-0 flex-1">
+          <Rail
+            view={view}
+            onGo={setView}
+            docked={docked}
+            onDock={() => dock(!docked)}
+          />
           <div className="flex min-w-0 flex-1 flex-col">
           {view === "agents" ? (
             <Agents />
@@ -210,12 +216,6 @@ export default function Panel() {
           <Ask hold={hold} onOpenIntegrations={() => openIntegrations("home")} />
           )}
           </div>
-          <Rail
-            view={view}
-            onGo={setView}
-            docked={docked}
-            onDock={() => dock(!docked)}
-          />
           </div>
         </div>
       </div>
@@ -336,10 +336,11 @@ type View = "home" | "agents" | "settings" | "integrations" | "skills" | "report
  * sets up most often were the two hardest to find, and getting back meant
  * remembering which door you came through.
  *
- * On the right rather than the left. A panel that hangs from the notch is
- * reached from above, and the pointer arrives at the top-right corner where the
- * menu bar is -- so the nearest edge is that one. Left would be the web habit,
- * copied from pages nobody drops out of a menu bar.
+ * On the left. The argument for the right was that the pointer arrives from the
+ * menu bar at the top-right, so that edge is nearest -- true, and worth less
+ * than it sounds: the rail is read before it is clicked, and reading starts at
+ * the left. Every list of sections anybody has used sits there, and being
+ * cleverer than that costs more than the few pixels it saves.
  *
  * There is no Automation section because there is no such feature. Agents is
  * the automation: a task handed over and left to run. A tab for something that
@@ -365,7 +366,7 @@ function Rail({
     ["settings", "Settings", <Gear key="g" />],
   ];
   return (
-    <nav className="flex w-[124px] shrink-0 flex-col gap-0.5 border-l border-line px-2 py-2.5">
+    <nav className="flex w-[124px] shrink-0 flex-col gap-0.5 border-r border-line px-2 py-2.5">
       {items.map(([key, label, icon]) => {
         // Report is a page off Settings, so Settings stays lit while you are in
         // it -- otherwise the rail says you are nowhere.
