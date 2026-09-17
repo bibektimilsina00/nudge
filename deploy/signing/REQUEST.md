@@ -59,38 +59,15 @@ role that is missing.
 
 ---
 
-# Second thing, same visit: an App Store Connect API key
+<!-- An App Store Connect API key used to be asked for here as well, for the
+     notarisation half. It turned out not to be needed: an app-specific password
+     made by anybody on the team notarises fine, and that was checked rather than
+     assumed --
 
-Signing the app is half of it. The other half is **notarisation** — Apple scans
-the build and confirms it is not malware, and macOS checks that before letting
-anyone open it. That needs credentials for the team, and an API key is the
-cleanest kind: no password is shared, it works unattended, and it can be revoked
-on its own without touching anything else.
+       xcrun notarytool history --apple-id <you> --password <app-specific> \
+         --team-id 7MATTTWP83
 
-## Steps
-
-1. Go to **https://appstoreconnect.apple.com/access/integrations/api**
-
-2. Select the **Team Keys** tab (not Individual Keys).
-
-3. Click **+**, name it `Nudge Notarisation`, and set **Access** to
-   **Developer**. That is the lowest role that can notarise — it cannot publish
-   apps, see sales, or change team membership.
-
-4. Click **Generate**, then **Download the API key**. You get a file named
-   `AuthKey_XXXXXXXXXX.p8`.
-
-   **Apple only lets this be downloaded once.** If the page is closed before
-   downloading, the key has to be revoked and a new one made.
-
-5. Send back three things:
-   - the `AuthKey_XXXXXXXXXX.p8` file
-   - the **Key ID** (10 characters, shown in the list)
-   - the **Issuer ID** (a long uuid, shown at the top of the page)
-
-## Is this one secret?
-
-Yes — unlike the certificate, this `.p8` is a private key and should be sent
-somewhere private rather than over ordinary email or chat. It can be revoked
-from the same page at any time, instantly, with no effect on the certificate or
-on builds already released.
+     App Manager was enough. If a future role cannot notarise, that command says
+     so in one line (HTTP 401) and the API key is the fallback: App Store Connect
+     → Integrations → Team Keys → role Developer. The .p8 downloads exactly once.
+-->
