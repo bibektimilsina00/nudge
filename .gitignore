@@ -21,7 +21,9 @@ web/node_modules/
 web/.next/
 web/.env
 server/.venv/
-server/__pycache__/
+# Anywhere, not just `server/` -- `scripts/` grew one too, and a path-pinned
+# rule means the next directory to run Python sits untracked in every status.
+__pycache__/
 server/nudge.db
 server/releases/
 server/.env
