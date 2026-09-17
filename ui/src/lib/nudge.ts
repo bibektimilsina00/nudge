@@ -11,7 +11,7 @@ export type Act = "click" | "doubleClick" | "hover";
  * or finish will invent coordinates when shown a screen with no matching control.
  */
 export type Step =
-  | { kind: "point"; at: Point; say: string; act: Act }
+  | { kind: "point"; at: Point; say: string; act: Act; control?: string | null }
   | { kind: "done"; say: string }
   | { kind: "unsure"; say: string }
   | { kind: "launch"; app: string; say: string }

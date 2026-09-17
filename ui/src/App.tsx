@@ -10,7 +10,7 @@ import { useNudge } from "./lib/useNudge";
 import type { Point } from "./lib/nudge";
 
 export default function App() {
-  const { phase, message, point, act, typing } = useNudge();
+  const { phase, message, point, act, control, typing } = useNudge();
   const docked = useDocked();
   const hand = useHandOnCursor();
   const mode =
@@ -22,7 +22,7 @@ export default function App() {
       {!docked && <Companion mode={mode} />}
       {/* The ring says where; the hand does it. The real pointer goes there and
           comes straight back, so this is the part that is actually watchable. */}
-      {point && <Ring at={point} act={act} />}
+      {point && <Ring at={point} act={act} control={control} />}
       {point && <Pointer at={point} act={act} />}
       {/* The same hand, parked on the real cursor, for looking at it. A hand
           that exists for 150ms at a target cannot be judged; this one holds

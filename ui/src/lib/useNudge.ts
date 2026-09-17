@@ -25,6 +25,10 @@ export function useNudge() {
   const [message, setMessage] = useState("");
   const [point, setPoint] = useState<Point | null>(null);
   const [act, setAct] = useState<Act>("click");
+  // What the thing being pointed at is called, when the system knew. Shown on
+  // the ring, so the name is beside the thing rather than in a caption
+  // somewhere else on the screen.
+  const [control, setControl] = useState<string | null>(null);
   /** Text to enter, when the step is a typing one. Shown verbatim so it can be
    *  copied by eye in guide mode, where Nudge does not type it for you. */
   const [typing, setTyping] = useState<string | null>(null);
@@ -46,6 +50,7 @@ export function useNudge() {
     setPhase("idle");
     setMessage("");
     setPoint(null);
+    setControl(null);
     setTyping(null);
     target.current = null;
     void api.cancel(silence);
@@ -61,6 +66,7 @@ export function useNudge() {
       target.current = at && step.kind === "point" ? { at, act: step.act } : null;
       setPoint(at);
       setAct(step.kind === "point" ? step.act : "click");
+      setControl(step.kind === "point" ? (step.control ?? null) : null);
       setTyping(step.kind === "type" ? step.text : null);
       setPhase(
         step.kind === "unsure"
@@ -97,6 +103,7 @@ export function useNudge() {
     clearDwell();
     target.current = null;
     setPoint(null);
+    setControl(null);
     void run(() => api.advance());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -124,6 +131,7 @@ export function useNudge() {
       listen("listening", () => {
         clearTimer();
         setPoint(null);
+    setControl(null);
         setPhase("listening");
         setMessage("Listening…");
       }),
@@ -179,5 +187,5 @@ export function useNudge() {
     };
   }, [run, render, fail, dismiss]);
 
-  return { phase, message, point, act, typing, dismiss };
+  return { phase, message, point, act, control, typing, dismiss };
 }
