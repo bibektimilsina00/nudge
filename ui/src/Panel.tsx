@@ -215,11 +215,7 @@ export default function Panel() {
               }}
             />
           ) : (
-          <Ask
-            hold={hold}
-            onOpenIntegrations={() => openIntegrations("home")}
-            onOpenAgents={() => setView("agents")}
-          />
+          <Ask hold={hold} />
           )}
           </div>
           </div>

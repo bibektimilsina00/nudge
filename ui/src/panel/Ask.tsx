@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 
 import { type Agent } from "../Agent";
+import { Companion } from "../components/Companion";
 
 /**
  * Home: a greeting, what has happened, and the two ways to ask for more.
@@ -31,15 +32,7 @@ import { type Agent } from "../Agent";
  * establishes that something is addressing you, and everything under it can
  * then be quiet without the whole thing going flat.
  */
-export function Ask({
-  hold,
-  onOpenIntegrations,
-  onOpenAgents,
-}: {
-  hold: string;
-  onOpenIntegrations: () => void;
-  onOpenAgents: () => void;
-}) {
+export function Ask({ hold }: { hold: string }) {
   const [text, setText] = useState("");
   const [typing, setTyping] = useState(false);
   const [sending, setSending] = useState(false);
@@ -75,28 +68,6 @@ export function Ask({
   // Anything live first, then what finished most recently. Two, not three: the
   // greeting and the control own the ends of the panel, and a list that fills
   // whatever is left is a list nobody reads the end of.
-  // Live first, then newest finished -- and the same goal asked repeatedly
-  // collapses into one card with a count. Three attempts at a battery
-  // percentage are one fact about the machine, not three things that happened,
-  // and printing them separately filled the panel with the same sentence.
-  const recent = useMemo(() => {
-    const live = agents.filter((a) => a.state === "running" || a.state === "waiting");
-    const past = agents
-      .filter((a) => a.state !== "running" && a.state !== "waiting")
-      .sort((a, b) => b.started - a.started);
-    const seen = new Map<string, { agent: Agent; times: number }>();
-    for (const a of [...live, ...past]) {
-      // Keyed on the goal and how it ended: the same question that failed and
-      // then worked is two different facts and deserves two cards.
-      const key = `${a.goal}\u0000${a.state}`;
-      const at = seen.get(key);
-      if (at) at.times += 1;
-      // The first of a run of duplicates is the newest, so it is the one kept.
-      else seen.set(key, { agent: a, times: 1 });
-    }
-    return [...seen.values()].slice(0, 3);
-  }, [agents]);
-
   const reach = useMemo(() => {
     const names = have.map((h) => h.name).slice(0, 3);
     return names.length > 1
@@ -104,36 +75,44 @@ export function Ask({
       : (names[0] ?? "");
   }, [have]);
 
-  const busy = agents.some((a) => a.state === "running");
+  const live = agents.find((a) => a.state === "running" || a.state === "waiting");
+
+  // It reacts to what is happening, which is the whole reason to give it the
+  // room. Thinking while something runs, idle otherwise.
+  const mood = live ? "thinking" : "idle";
+  // And says the same thing in words, because a mood is not a sentence.
+  const line = live
+    ? live.status
+    : reach
+      ? `I can see your screen, and reach ${reach}.`
+      : "I can see your screen. Tell me what to do with it.";
 
   return (
-    <div className="flex flex-1 flex-col px-4 pt-3">
+    // `min-h-0`, or this will not shrink below its content -- a flex child
+    // defaults to `min-height: auto`, so a tall middle pushed the talk control
+    // out of the bottom of a panel that clips.
+    <div className="flex min-h-0 flex-1 flex-col px-4 pt-3">
       <h2 className="text-[17px] leading-tight font-semibold tracking-[-0.01em] text-ink">
         {partOfDay()}.
       </h2>
-      <p className="mt-0.5 text-[11.5px] leading-snug text-ink-3">
-        {busy
-          ? "Working on it."
-          : reach
-            ? `I can see your screen, and reach ${reach}.`
-            : "I can see your screen. Tell me what to do with it."}
-      </p>
+      <p className="mt-0.5 text-[11.5px] leading-snug text-ink-3">{line}</p>
 
-      <div className="mt-3 min-h-0 flex-1 space-y-1.5 overflow-y-auto">
-        {recent.map(({ agent, times }) => (
-          <Ran key={agent.id} agent={agent} times={times} onOpen={onOpenAgents} />
-        ))}
-        {recent.length === 0 && have.length === 0 && (
-          <button
-            onClick={onOpenIntegrations}
-            className="mt-1 w-full rounded-xl bg-raise px-3 py-2.5 text-left transition-colors duration-150 hover:bg-raise-hi hairline"
-          >
-            <p className="text-[11.5px] text-ink">Nothing is connected yet</p>
-            <p className="mt-0.5 text-[10.5px] leading-snug text-ink-3">
-              Connect your mail, calendar or code and I can reach those too.
-            </p>
-          </button>
-        )}
+      {/* The companion, at the size it deserves.
+          
+          What was here was a list of what had already run -- three cards saying
+          the same thing, on the screen you open to start something new. That
+          belongs in Agents, which exists for it, and putting it here meant the
+          first thing anybody saw was a log.
+          
+          This is a companion that lives in your notch, and on its own home
+          screen it had been a 24px thumbnail in a socket. Full size, idling on
+          its own, reacting when there is something to react to: that is the
+          product's one piece of character and it was the only thing here not
+          being used. */}
+      <div className="grid min-h-0 flex-1 place-items-center">
+        <div className="scale-[1.35]">
+          <Companion mode={mood} anchored />
+        </div>
       </div>
 
       <Dock
@@ -152,90 +131,6 @@ export function Ask({
       />
     </div>
   );
-}
-
-/**
- * One thing that ran, as a card.
- *
- * They were rows in a list: a dot, a bold line, two clamped lines of grey. Three
- * attempts at the same goal made three identical rows, each repeating the same
- * sentence and each cut off exactly where it started being useful -- so the
- * section read as one paragraph stuttering.
- *
- * A card with a surface reads as a thing that happened. The count replaces the
- * copies, the time says when, and the second line is the short form rather than
- * the whole sentence: what somebody needs from a failed run is which switch, not
- * the paragraph explaining what a switch is.
- */
-function Ran({ agent, times, onOpen }: { agent: Agent; times: number; onOpen: () => void }) {
-  const live = agent.state === "running" || agent.state === "waiting";
-  return (
-    <button
-      onClick={onOpen}
-      className="w-full rounded-xl bg-white/[0.045] px-3 py-2.5 text-left transition-colors duration-150 hover:bg-white/[0.075] hairline"
-    >
-      <div className="flex items-center gap-2">
-        <span
-          className={[
-            "size-[7px] shrink-0 rounded-full",
-            live
-              ? "animate-pulse bg-blue"
-              : agent.state === "failed"
-                ? "bg-[#ff5f57]"
-                : "bg-[#30d158]",
-          ].join(" ")}
-        />
-        <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-ink">
-          {agent.title || agent.goal}
-        </span>
-        {times > 1 && (
-          // Said once with a number, rather than three times in a row.
-          <span className="shrink-0 rounded-full bg-white/[0.08] px-1.5 py-px text-[10px] text-ink-3 tabular-nums">
-            ×{times}
-          </span>
-        )}
-        <span className="shrink-0 text-[10.5px] text-ink-3 tabular-nums">{when(agent.started)}</span>
-      </div>
-      <p className="mt-1 truncate pl-[15px] text-[11px] text-ink-3">{gist(agent)}</p>
-    </button>
-  );
-}
-
-/**
- * The short form of what happened.
- *
- * A blocked run already carries the switch that would free it, so say that and
- * nothing else -- the full sentence exists to teach somebody what the switch is,
- * and it does not need teaching twice on a card they have seen three times.
- * Everything else gets its first sentence, which is where models put the answer.
- */
-function gist(a: Agent): string {
-  if (a.state === "failed" && a.needs) {
-    return `Blocked — needs ${grantName(a.needs)}`;
-  }
-  const text = a.state === "failed" ? a.why : a.status;
-  const stop = text.search(/[.!?]\s/);
-  return stop > 20 ? text.slice(0, stop + 1) : text;
-}
-
-/** The switch's own name, as the settings page spells it. */
-function grantName(key: string): string {
-  const said: Record<string, string> = {
-    shell: "\u{201c}Run any command\u{201d}",
-    net: "\u{201c}Reach the internet\u{201d}",
-    files: "\u{201c}Read and write files\u{201d}",
-  };
-  return said[key] ?? key;
-}
-
-/** How long ago, in the shortest form that is still true. */
-function when(started: number): string {
-  if (!started) return "";
-  const secs = Math.max(0, (Date.now() - started) / 1000);
-  if (secs < 60) return "now";
-  if (secs < 3600) return `${Math.floor(secs / 60)}m`;
-  if (secs < 86400) return `${Math.floor(secs / 3600)}h`;
-  return `${Math.floor(secs / 86400)}d`;
 }
 
 /**
