@@ -81,6 +81,12 @@ pub fn overview() -> bool {
 pub fn watch_overview(app: &AppHandle) {
     use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
     /// Consecutive polls that have said the overview is gone.
+    ///
+    /// Two, and they are cheap now: the caller steps up to every tick while the
+    /// overview is up, so a second opinion costs a sixtieth of a second rather
+    /// than a fifth. The debounce is kept rather than dropped because a single
+    /// wrong "over" would show both windows for a frame and hide them again,
+    /// which is the flicker this whole thing exists to avoid.
     static CLEAR: AtomicU8 = AtomicU8::new(0);
     const ENOUGH: u8 = 2;
 
@@ -119,9 +125,7 @@ pub fn watch_overview(app: &AppHandle) {
 /// the cat on the cursor is the more distracting of the two.
 ///
 /// Nothing is destroyed and no state is touched, so coming back is a `show`
-/// rather than a rebuild. Two polls of quiet is a fifth of a second, which is
-/// inside the overview's own closing animation -- by the time the desktop is
-/// back, so is the strip.
+/// rather than a rebuild.
 #[cfg(target_os = "macos")]
 fn step_aside(app: &AppHandle, away: bool) {
     let windows = [window(app), Some(crate::app::ui::overlay::window(app))];

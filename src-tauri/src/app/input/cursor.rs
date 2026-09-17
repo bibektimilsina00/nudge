@@ -71,6 +71,25 @@ pub fn follow(app: &AppHandle) {
                     // for the loop below, which is not on the main thread.
                     crate::app::ui::panel::watch_overview(&handle);
                 });
+            } else if crate::app::ui::panel::overview() {
+                // While the overview is up, watch for it ending on every tick
+                // rather than every sixth.
+                //
+                // Coming back was visibly late, and all of the lateness was
+                // here: at 10Hz it can take a tenth of a second to *sample* the
+                // end, plus another for the second opinion, so the windows were
+                // still away a third of a second after the desktop returned.
+                // The poll rate was chosen for a check that runs forever; this
+                // one only runs while Mission Control is open, which is a second
+                // or two at a time, so it can afford sixty looks a second.
+                //
+                // Only the ending is hurried. Noticing the overview *start* a
+                // few frames late costs nothing -- it is hidden behind the
+                // opening animation either way.
+                let handle = app.clone();
+                let _ = app.run_on_main_thread(move || {
+                    crate::app::ui::panel::watch_overview(&handle);
+                });
             }
 
             // Microphone level, at half the poll rate. 30Hz is plenty for a
