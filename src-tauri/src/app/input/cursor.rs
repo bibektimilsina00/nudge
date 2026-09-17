@@ -69,7 +69,7 @@ pub fn follow(app: &AppHandle) {
                     // answers `None` anywhere else and the check would quietly
                     // report "not up" forever -- so the answer is cached here
                     // for the loop below, which is not on the main thread.
-                    crate::app::ui::panel::watch_overview();
+                    crate::app::ui::panel::watch_overview(&handle);
                 });
             }
 

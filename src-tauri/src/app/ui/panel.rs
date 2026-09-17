@@ -78,16 +78,17 @@ pub fn overview() -> bool {
 /// The counter is plain load-then-store rather than a real atomic dance
 /// because this only ever runs on the main thread, from one poll.
 #[cfg(target_os = "macos")]
-pub fn watch_overview() {
+pub fn watch_overview(app: &AppHandle) {
     use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
     /// Consecutive polls that have said the overview is gone.
     static CLEAR: AtomicU8 = AtomicU8::new(0);
-    const ENOUGH: u8 = 4;
+    const ENOUGH: u8 = 2;
 
     if crate::app::ui::native::mission_control() {
         CLEAR.store(0, Relaxed);
         if !OVERVIEW.swap(true, Relaxed) {
             eprintln!("overview: up");
+            step_aside(app, true);
         }
         return;
     }
@@ -96,8 +97,50 @@ pub fn watch_overview() {
     CLEAR.store(seen.min(ENOUGH), Relaxed);
     if seen >= ENOUGH && OVERVIEW.swap(false, Relaxed) {
         eprintln!("overview: over");
+        step_aside(app, false);
+    }
+}
+
+/// Take both windows off screen for the overview, and put them back after.
+///
+/// This is the flicker, and it took a log to see that it was not ours. During
+/// the overview Nudge does nothing at all: the repair loop never runs, the
+/// pointer tests are gated, and the overview is recognised correctly and
+/// steadily. What is left is the window server compositing two windows that
+/// have parked themselves above everything, while it animates a view of
+/// everything -- which is why the strip and the cat blink in step. They share a
+/// level and neither is being touched.
+///
+/// So the only way to stop being flickered is to stop being there. Wanting the
+/// strip to stay is reasonable, and it is exactly what cannot be had: visible
+/// during the overview *is* the flicker.
+///
+/// Both windows, not just the panel. Hiding one leaves the other doing it, and
+/// the cat on the cursor is the more distracting of the two.
+///
+/// Nothing is destroyed and no state is touched, so coming back is a `show`
+/// rather than a rebuild. Two polls of quiet is a fifth of a second, which is
+/// inside the overview's own closing animation -- by the time the desktop is
+/// back, so is the strip.
+#[cfg(target_os = "macos")]
+fn step_aside(app: &AppHandle, away: bool) {
+    let windows = [window(app), Some(crate::app::ui::overlay::window(app))];
+    for win in windows.into_iter().flatten() {
+        if away {
+            let _ = win.hide();
+        } else {
+            let _ = win.show();
+        }
+    }
+    if !away {
+        // Back on screen is not the same as back on every Space and above the
+        // menu bar. A window that has been out has to be told again.
+        if let Some(panel) = window(app) {
+            crate::app::ui::native::float_everywhere(&panel);
+        }
+        crate::app::ui::native::keep_front();
     }
 }
 
 #[cfg(not(target_os = "macos"))]
-pub fn watch_overview() {}
+pub fn watch_overview(_app: &AppHandle) {}
