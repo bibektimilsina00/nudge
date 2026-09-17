@@ -170,7 +170,11 @@ fn follow_everywhere(win: &WebviewWindow) {
 #[cfg(target_os = "macos")]
 fn behavior() -> objc2_app_kit::NSWindowCollectionBehavior {
     use objc2_app_kit::NSWindowCollectionBehavior as B;
-    let default = B::CanJoinAllSpaces | B::Stationary | B::FullScreenAuxiliary | B::IgnoresCycle;
+    // No `Stationary`. It says "hold this window still through Exposé", and
+    // these windows are children of an anchor that already says exactly that --
+    // two authorities for one question, resolved on every frame Mission Control
+    // animates. The parent is the one that should answer it.
+    let default = B::CanJoinAllSpaces | B::FullScreenAuxiliary | B::IgnoresCycle;
     // Escape hatch for trying combinations without a rebuild.
     match std::env::var("NUDGE_WINDOW_BEHAVIOR")
         .ok()

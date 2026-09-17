@@ -98,6 +98,10 @@ pub fn anchor_overlay(app: &AppHandle) -> bool {
     // near-invisible black stays, it is just in the colour where it belongs
     // instead of in a whole-window alpha that fights the opacity flag.
     anchor.setOpaque(false);
+    // Not `clearColor`. Measured: with nothing to draw the window server stops
+    // tracking the anchor entirely -- it drops out of the on-screen list, and an
+    // untracked anchor is no anchor, so the children go back to being evicted by
+    // full-screen Spaces. The faint black is what keeps it real.
     let faint = NSColor::colorWithCalibratedWhite_alpha(0.0, 0.004);
     anchor.setBackgroundColor(Some(&faint));
     anchor.setLevel(NSScreenSaverWindowLevel);
@@ -272,7 +276,6 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
     ns.setLevel(NSScreenSaverWindowLevel);
     ns.setCollectionBehavior(
         NSWindowCollectionBehavior::CanJoinAllSpaces
-            | NSWindowCollectionBehavior::Stationary
             | NSWindowCollectionBehavior::FullScreenAuxiliary
             // Matching the overlay. Without it this is a cmd-tab target, which
             // means the system believes it is a window someone might switch to --
