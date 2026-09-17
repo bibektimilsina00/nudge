@@ -46,7 +46,11 @@ const HEIGHT = {
   // Taller than Home. The companion is the same size, but underneath it there
   // are two buttons and a line of small print that has to be readable rather
   // than merely present.
-  signin: "h-[440px]",
+  //
+  // Not as tall as it was. The block inside centres itself, so extra height
+  // does not make the page more generous -- it just widens the gap between the
+  // buttons and the small print until the two stop looking related.
+  signin: "h-[400px]",
 } as const;
 
 export default function Panel() {
