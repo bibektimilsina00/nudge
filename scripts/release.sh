@@ -102,7 +102,27 @@ xcrun notarytool submit "${ZIP}" \
 
 say "Stapling"
 xcrun stapler staple "${APP}"
-[ -n "${DMG}" ] && xcrun stapler staple "${DMG}"
+
+# The disk image needs notarising in its own right.
+#
+# The submission above covers the .app, because that is what was zipped. A
+# ticket is issued against the hash of the thing submitted, so the .dmg -- built
+# separately, with its own hash -- has no ticket of its own, and stapling it
+# fails with "Record not found" after everything else has already worked.
+#
+# Submitted directly rather than zipped: notarytool takes a disk image as it is.
+# The .app inside is already notarised and stapled by this point, so this is
+# quick, and it is what makes the file somebody downloads open without a warning
+# even before it is unpacked.
+if [ -n "${DMG}" ]; then
+  say "Notarising the disk image"
+  xcrun notarytool submit "${DMG}" \
+    --apple-id "${APPLE_ID}" \
+    --password "${APPLE_PASSWORD}" \
+    --team-id "${APPLE_TEAM_ID}" \
+    --wait
+  xcrun stapler staple "${DMG}"
+fi
 
 # --- prove it ---------------------------------------------------------------
 #

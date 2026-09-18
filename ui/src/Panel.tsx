@@ -10,6 +10,7 @@ import { Skills } from "./panel/Skills";
 import { Report, type Kind } from "./panel/Report";
 import { Settings } from "./panel/Settings";
 import { SignIn, type Account } from "./panel/SignIn";
+import { Allow, skippedPermissions } from "./panel/Allow";
 
 /**
  * The notch dock.
@@ -51,6 +52,9 @@ const HEIGHT = {
   // does not make the page more generous -- it just widens the gap between the
   // buttons and the small print until the two stop looking related.
   signin: "h-[366px]",
+  // The same shape as signing in, because it is the other half of the same
+  // arrival: one thing asked for, one button, nothing else on screen.
+  allow: "h-[366px]",
 } as const;
 
 export default function Panel() {
@@ -70,6 +74,9 @@ export default function Panel() {
   // Collapsing it into `null` would flash the sign-in page at somebody who is
   // signed in, every single time the app starts.
   const [account, setAccount] = useState<Account | null | undefined>(undefined);
+  // Asked once, after signing in, and only while there is something to ask for.
+  // Skipping is remembered, so "not now" does not mean "every time".
+  const [allowing, setAllowing] = useState(!skippedPermissions());
 
   useEffect(() => {
     // The local answer first, because it is instant and is what the first paint
@@ -161,7 +168,8 @@ export default function Panel() {
   // Busy takes over the closed pill; the open panel keeps its own header.
   // Which height to be. Signed out is a shape of its own rather than a view,
   // because it is not somewhere you can navigate to or away from.
-  const shape: keyof typeof HEIGHT = account === null ? "signin" : view;
+  const shape: keyof typeof HEIGHT =
+    account === null ? "signin" : account && allowing ? "allow" : view;
 
   const busy = status !== "idle";
   // Only at rest. Busy already says what is happening and open has the whole
@@ -228,7 +236,13 @@ export default function Panel() {
             // drawing the furniture of an app somebody cannot use is an
             // invitation to press things that will not work.
             <SignIn />
-          ) : account === undefined ? null : (
+          ) : account === undefined ? null : allowing ? (
+            // After the account, before anything else. Permissions are what the
+            // app needs to work; an account is what it needs to know who you
+            // are, and asking for the screen before somebody has decided to be
+            // here at all is how a permission gets dismissed forever.
+            <Allow onDone={() => setAllowing(false)} />
+          ) : (
           <div className="flex min-h-0 flex-1">
           <Rail
             view={view}
