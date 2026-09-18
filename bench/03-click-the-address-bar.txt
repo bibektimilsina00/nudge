@@ -1,5 +1,0 @@
-goal = click the address bar
-x = 855
-y = 98
-x2 = 129
-y2 = 99

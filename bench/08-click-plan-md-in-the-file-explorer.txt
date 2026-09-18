@@ -1,5 +1,0 @@
-goal = click PLAN.md in the file explorer
-x = 190
-y = 380
-x2 = 144
-y2 = 381

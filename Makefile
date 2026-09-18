@@ -39,7 +39,7 @@ export TAURI_SIGNING_PRIVATE_KEY = $(shell cat $(UPDATER_KEY) 2>/dev/null)
 export TAURI_SIGNING_PRIVATE_KEY_PASSWORD =
 
 .DEFAULT_GOAL := help
-.PHONY: truth help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks release ship-check share site publish
+.PHONY: truth help dev build run test lint fmt probe bench record cases reset-perms clean sign-check tools picks release ship-check share site publish timings
 
 help: ## Show this list
 	@grep -hE '^[a-z-]+:.*?## ' $(MAKEFILE_LIST) \
@@ -59,6 +59,9 @@ run: build ## Build, then restart the app
 	@# so wait for it to actually go rather than guessing at a sleep.
 	@while pgrep -f 'Nudge.app/Contents/MacOS/nudge' >/dev/null; do sleep 0.1; done
 	@open $(APP) && echo "Nudge is in your menu bar."
+
+timings: ## Where turns have been spending their time
+	@python3 scripts/timings.py
 
 test: ## Run the Rust test suite
 	cd src-tauri && cargo test

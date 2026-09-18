@@ -1,3 +1,0 @@
-goal = click the reload button
-x = 97
-y = 108

@@ -1,3 +1,0 @@
-goal = click the wifi icon in the menu bar
-x = 1060
-y = 15

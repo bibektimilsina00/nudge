@@ -1,3 +1,0 @@
-goal = close this window
-x = 428
-y = 157

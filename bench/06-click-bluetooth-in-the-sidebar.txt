@@ -1,3 +1,0 @@
-goal = click Bluetooth in the sidebar
-x = 398
-y = 342

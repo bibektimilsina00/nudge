@@ -1,5 +1,0 @@
-goal = open the third conversation
-x = 604
-y = 361
-x2 = 591
-y2 = 331

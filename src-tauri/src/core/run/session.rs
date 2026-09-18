@@ -729,15 +729,33 @@ impl Nudge {
         struct Report<'a>(&'a Nudge);
         impl Drop for Report<'_> {
             fn drop(&mut self) {
+                // Read before the line is taken: `line` spends the turn, and a
+                // turn can only be spent once.
+                let stages = self.0.laps.lock().unwrap().stages();
                 if let Some(line) = self.0.laps.lock().unwrap().line() {
                     eprintln!("timing: {line}");
                 }
+                if stages.is_empty() {
+                    return;
+                }
+                // And written down, because the printed line answers "why was
+                // that slow" only while it is still on screen.
+                crate::core::laps::keep(&crate::core::laps::Turn::new(
+                    stages,
+                    self.0.provider_name(),
+                    self.0.goal().chars().count(),
+                    crate::core::screen::ink::drawn(),
+                ));
             }
         }
         let _report = Report(self);
 
         // Before the snapshot, because folding changes what the snapshot holds.
         self.fold().await;
+        // Folding can be a model call of its own -- a long history is summarised
+        // by asking -- so it is a stage rather than part of whatever follows it.
+        // Unmeasured, it was being blamed on `brain`.
+        self.mark("fold");
 
         // Snapshot and release: the lock must not be held across the await, and a
         // tokio Mutex would be a heavier fix than simply not needing one.

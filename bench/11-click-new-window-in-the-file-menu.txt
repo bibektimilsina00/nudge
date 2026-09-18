@@ -1,3 +1,0 @@
-goal = click New Window in the File menu
-x = 213
-y = 40
