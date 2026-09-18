@@ -34,6 +34,18 @@ def sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def looks_like(given: str) -> str:
+    """The signature, whether a path to it or the thing itself was given."""
+    try:
+        path = Path(given)
+        if path.is_file():
+            return path.read_text().strip()
+    except OSError:
+        # Too long to be a filename, which means it is the signature.
+        pass
+    return given.strip()
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("file", type=Path)
