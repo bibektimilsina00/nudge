@@ -12,6 +12,28 @@ export const LABEL: Record<Platform, string> = {
   "linux-x64": "Linux · AppImage",
 };
 
+/** What the download button says, per platform. */
+export const VERB: Record<Platform, string> = {
+  "macos-arm64": "Download for Mac",
+  "macos-x64": "Download for Mac",
+  "windows-x64": "Download for Windows",
+  "linux-x64": "Download for Linux",
+};
+
+/**
+ * What you need to run it, in the line under the button.
+ *
+ * The Linux floor is glibc, and it is 2.39 because `xcap` pulls in the pipewire
+ * bindings and those do not compile against anything older -- see the release
+ * workflow, where the runner was moved for exactly this.
+ */
+export const NEEDS: Record<Platform, string> = {
+  "macos-arm64": "macOS 12 or later",
+  "macos-x64": "macOS 12 or later",
+  "windows-x64": "Windows 10 or later",
+  "linux-x64": "AppImage · glibc 2.39 or newer",
+};
+
 /** Which platforms actually have a build. The rest are honest about it. */
 export const BUILT: Platform[] = ["macos-arm64", "linux-x64"];
 

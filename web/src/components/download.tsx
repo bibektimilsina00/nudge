@@ -7,7 +7,7 @@ import { Apple, Check, Copy, Download, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { downloadUrl, latest, megabytes, type Release } from "@/lib/releases";
-import { BUILT, LABEL, usePlatform, type Platform } from "@/lib/platform";
+import { BUILT, LABEL, NEEDS, VERB, usePlatform, type Platform } from "@/lib/platform";
 
 /**
  * The button the whole page exists for.
@@ -41,7 +41,7 @@ export function DownloadButton({
   return (
     <div className={cn("flex flex-col gap-3", align === "start" ? "items-start" : "items-center")}>
       {available ? (
-        <Primary release={data} loading={isPending} failed={isError} />
+        <Primary platform={target} release={data} loading={isPending} failed={isError} />
       ) : (
         <NotYet platform={target} />
       )}
@@ -52,10 +52,15 @@ export function DownloadButton({
 }
 
 function Primary({
+  platform,
   release,
   loading,
   failed,
 }: {
+  /** What the button offers. It used to say "Download for Mac" whatever was
+   *  picked -- the file underneath was right, only the words were wrong, which
+   *  is the kind of wrong somebody finds out about after downloading. */
+  platform: Platform;
   release?: Release;
   loading: boolean;
   failed: boolean;
@@ -77,8 +82,12 @@ function Primary({
       >
         {release ? (
           <a href={downloadUrl(release)}>
-            <Apple className="size-[18px]" aria-hidden />
-            Download for Mac
+            {platform.startsWith("macos") ? (
+              <Apple className="size-[18px]" aria-hidden />
+            ) : (
+              <Download className="size-[18px]" aria-hidden />
+            )}
+            {VERB[platform]}
           </a>
         ) : (
           <span>
@@ -92,7 +101,7 @@ function Primary({
       <p className="h-5 text-[0.8125rem] tabular-nums text-ink-3">
         {loading || !release
           ? " "
-          : `Version ${release.version} · ${megabytes(release.size_bytes)} · macOS 12 or later`}
+          : `Version ${release.version} · ${megabytes(release.size_bytes)} · ${NEEDS[platform]}`}
       </p>
     </div>
   );
@@ -116,7 +125,7 @@ function NotYet({ platform }: { platform: Platform }) {
         {LABEL[platform]}
       </Button>
       <p className="max-w-[34ch] text-center text-[0.8125rem] text-pretty text-ink-3">
-        Not built yet. macOS on Apple silicon is the only one so far — pick it
+        Not built yet. {BUILT.map((p) => LABEL[p]).join(" and ")} — pick one
         below if that is what you are on.
       </p>
     </div>
@@ -161,8 +170,16 @@ function PlatformPicker({
  * whether to trust an unsigned build from someone they have not heard of, and
  * the cost of publishing it is one line.
  */
-export function Checksum({ platform = "macos-arm64" }: { platform?: string }) {
-  const { data } = useQuery({ queryKey: ["release", platform], queryFn: () => latest(platform) });
+export function Checksum() {
+  // Follows the picker. A checksum for a file somebody did not download is
+  // worse than none: it is a number that will not match, offered as proof.
+  const { platform } = usePlatform();
+  const target = platform ?? "macos-arm64";
+  const { data } = useQuery({
+    queryKey: ["release", target],
+    queryFn: () => latest(target),
+    enabled: BUILT.includes(target),
+  });
   const [copied, setCopied] = useState(false);
 
   if (!data) return null;

@@ -212,7 +212,14 @@ impl Config {
     /// `dirs::config_dir()` -- that returns `~/Library/Application Support` on
     /// macOS, so a file written where the docs say silently does nothing and you
     /// get default settings with no warning.
+    /// `NUDGE_CONFIG` overrides it, for the same reason `NUDGE_API` overrides
+    /// where the server is: proving that a copy with no key of its own can
+    /// borrow the server's meant running one, and the alternative was moving
+    /// somebody's real config out of the way and hoping to put it back.
     pub fn path() -> Result<PathBuf> {
+        if let Ok(given) = std::env::var("NUDGE_CONFIG") {
+            return Ok(PathBuf::from(given));
+        }
         dirs::home_dir()
             .map(|d| d.join(".config/nudge/config.toml"))
             .ok_or_else(|| Error::Config("no home directory".into()))

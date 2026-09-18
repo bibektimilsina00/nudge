@@ -341,12 +341,12 @@ function Questions() {
       a: "No, and that is what it means rather than a shortcoming. Nudge drives your actual cursor, so while it works it has the mouse and the keyboard, exactly as a person sitting at your laptop would. Escape takes them back.",
     },
     {
-      q: "Which Macs does it run on?",
-      a: "Apple silicon, macOS 12 or later. An Intel build needs its own compile and has not been done. Windows is next — that code is written and has never been compiled for it.",
+      q: "What does it run on?",
+      a: "Apple silicon Macs on macOS 12 or later, and Linux as an AppImage — glibc 2.39 or newer, so Ubuntu 24.04, Fedora 40, Debian 13 and anything after them. The Linux build is X11: Wayland deliberately forbids the synthetic input Nudge is built on, and doing it properly there is its own piece of work. An Intel Mac needs its own compile and has not been done. Windows is written and has never been built.",
     },
     {
       q: "Do I need an account?",
-      a: "No. There is no sign-up, no licence key, nothing to activate. Download it and it runs.",
+      a: "Sign in with Google and Nudge uses its own model — nothing to set up, no key to find, no card. If you would rather not, paste your own Gemini API key into Settings and the app talks to Google directly, billed to you and never passing through us. One or the other: a model is what makes it work, and there is no third way to reach one.",
     },
     {
       q: "What does it cost?",
