@@ -291,6 +291,7 @@ pub fn run() {
             commands::shortcuts,
             commands::set_shortcut,
             commands::permits,
+            commands::relaunch,
             commands::ask_permit,
             commands::open_permit,
             commands::look,

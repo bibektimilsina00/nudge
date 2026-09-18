@@ -95,6 +95,13 @@ export function Allow({ onDone }: { onDone: () => void }) {
   );
 }
 
+/** One small action on a row. */
+const PILL = [
+  "rounded-full bg-blue px-2.5 py-[3px] text-[10.5px] font-semibold text-white",
+  "transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+  "active:scale-[0.97] hover:bg-blue-hi",
+].join(" ");
+
 function Row({ permit }: { permit: Permit }) {
   const granted = permit.state === "granted";
   // Refused cannot be asked again -- only the pane can change it now.
@@ -109,7 +116,9 @@ function Row({ permit }: { permit: Permit }) {
       <span className="min-w-0 flex-1">
         <span className="block text-[12px] font-medium text-ink">{permit.name}</span>
         <span className="mt-px block text-[10.5px] leading-snug text-ink-2">
-          {permit.without}
+          {!granted && permit.key === "screen"
+            ? "Allow it in System Settings, then restart — macOS only tells Nudge after it starts again."
+            : permit.without}
         </span>
       </span>
 
@@ -119,21 +128,29 @@ function Row({ permit }: { permit: Permit }) {
           Granted
         </span>
       ) : (
-        <button
-          onClick={() =>
-            void invoke(refused ? "open_permit" : "ask_permit", { key: permit.key }).catch(
-              () => {},
-            )
-          }
-          className={[
-            "shrink-0 rounded-full bg-blue px-2.5 py-[3px]",
-            "text-[10.5px] font-semibold text-white",
-            "transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
-            "active:scale-[0.97] hover:bg-blue-hi",
-          ].join(" ")}
-        >
-          {refused ? "Settings" : "Grant"}
-        </button>
+        <span className="flex shrink-0 items-center gap-1.5">
+          <button
+            onClick={() =>
+              void invoke(refused ? "open_permit" : "ask_permit", { key: permit.key }).catch(
+                () => {},
+              )
+            }
+            className={PILL}
+          >
+            {refused ? "Settings" : "Grant"}
+          </button>
+          {/* Screen Recording cannot see its own grant until the process
+              restarts, so this row carries the restart beside the switch that
+              earns it. Every other permission answers live and needs none. */}
+          {permit.key === "screen" && (
+            <button
+              onClick={() => void invoke("relaunch").catch(() => {})}
+              className={PILL}
+            >
+              Restart
+            </button>
+          )}
+        </span>
       )}
     </div>
   );

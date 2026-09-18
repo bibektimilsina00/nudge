@@ -597,6 +597,16 @@ fn running_what(spec: &crate::core::tools::mcp::Spec) -> String {
 /// shows these is that somebody leaves, ticks a box in System Settings, and comes
 /// back -- a cached answer would still say "not granted" over a grant that is
 /// already working.
+/// Start again, so a new Screen Recording grant is visible.
+///
+/// The only permission that needs this: `CGPreflightScreenCaptureAccess` caches
+/// its answer for the life of the process, so the box gets ticked and nothing
+/// changes until the process is a new one.
+#[tauri::command]
+pub fn relaunch(app: AppHandle) {
+    app.restart();
+}
+
 #[tauri::command]
 pub fn permits() -> Vec<crate::core::permits::Permit> {
     crate::core::permits::all()

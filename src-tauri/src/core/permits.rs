@@ -137,6 +137,16 @@ fn accessibility() -> State {
     }
 }
 
+/// Whether the screen can be read.
+///
+/// **This one does not answer live.** `CGPreflightScreenCaptureAccess` caches
+/// for the life of the process, so once it has said no it goes on saying no
+/// however many times somebody ticks the box in System Settings. The permission
+/// really is granted; this program cannot see it until it starts again.
+///
+/// Which is why the page offering it also offers a restart. Everything else
+/// here updates on its own and this one cannot, and a switch that appears to do
+/// nothing is worse than one that asks for something.
 #[cfg(target_os = "macos")]
 fn screen() -> State {
     if unsafe { CGPreflightScreenCaptureAccess() } {
