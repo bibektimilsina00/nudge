@@ -141,9 +141,9 @@ fn overlay() -> Option<&'static NSWindow> {
 /// So this is the signal to get out of the way rather than push harder.
 ///
 /// Two tests, and the first one is the one to believe. WindowManager draws a
-/// strip of desktop thumbnails called `Spaces Bar` for as long as the overview
-/// is up, which is a name rather than a shape and so does not go vague while
-/// the thing is still animating.
+/// window across the display for as long as the overview is up -- either its
+/// shield or its strip of thumbnails -- and a name does not go vague while the
+/// thing is still animating, the way a size does.
 ///
 /// The second is kept underneath it because window names need Screen Recording
 /// to be readable at all, and an app that has had that permission pulled should
@@ -205,7 +205,23 @@ pub fn mission_control() -> bool {
             any_name = true;
         }
 
-        if owner == "WindowManager" && name.map(|n| n == "Spaces Bar").unwrap_or(false) {
+        // Either name counts.
+        //
+        // `Spaces Bar` alone was wrong: the strip of desktop thumbnails is
+        // collapsed until the pointer goes to the top of the screen, so for most
+        // of the time the overview is open there is no window called that, the
+        // answer came back "no", and the panel opened over Mission Control
+        // exactly as it had before any of this.
+        //
+        // `ExposeShieldWindow` is up for the whole duration, and also for an
+        // ordinary slide between Spaces -- which is why it was dropped. That no
+        // longer costs anything: this answer only closes the panel and quiets
+        // the hint now, and a panel that shuts while you change Space is right
+        // rather than merely harmless. It stopped being about hiding windows.
+        let overview_window = name
+            .map(|n| n == "Spaces Bar" || n == "ExposeShieldWindow")
+            .unwrap_or(false);
+        if owner == "WindowManager" && overview_window {
             spaces_bar = true;
         }
 
@@ -238,7 +254,7 @@ pub fn mission_control() -> bool {
         return true;
     }
     // Only when names were unreadable at all, which means Screen Recording is
-    // gone. A readable list that simply has no Spaces Bar in it is an answer,
+    // gone. A readable list with neither window in it is an answer,
     // not a gap, and falling through to the guess there is what made an
     // ordinary swipe between desktops look like the overview.
     !any_name && dock_covers
