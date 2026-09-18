@@ -36,16 +36,78 @@ use crate::error::{Error, Result};
 /// What a config value says when it names a secret rather than being one.
 const PREFIX: &str = "keychain:";
 
+/// One item, holding all of them.
+///
+/// The Keychain asks permission per *item*, and an answer covers that item
+/// alone. With a token per connection that is one dialog per connection, and
+/// the dialog is not a small one -- it wants the login password. Nineteen
+/// connections is nineteen; the catalogue is only going to grow.
+///
+/// Worse, an answer is tied to the signature that asked. Changing the
+/// certificate this app is signed with voids every entry at once, so a release
+/// build would have asked all over again, once per connection, on first launch.
+///
+/// So there is one item and everything lives inside it as JSON. One dialog,
+/// once, whatever happens afterwards and however many things are connected.
+const VAULT: &str = "nudge";
+const VAULT_ACCOUNT: &str = "vault";
+
+/// Read once per process, then kept.
+///
+/// Without this, ten lookups during startup are ten trips to the Keychain, and
+/// the first of those is the one that can put a dialog on screen.
+#[cfg(target_os = "macos")]
+static OPENED: std::sync::OnceLock<std::sync::Mutex<std::collections::BTreeMap<String, String>>> =
+    std::sync::OnceLock::new();
+
+#[cfg(target_os = "macos")]
+fn vault() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, String>> {
+    OPENED.get_or_init(|| {
+        let found = security_framework::passwords::get_generic_password(VAULT, VAULT_ACCOUNT)
+            .ok()
+            .and_then(|raw| String::from_utf8(raw).ok())
+            .and_then(|text| serde_json::from_str(&text).ok())
+            .unwrap_or_default();
+        std::sync::Mutex::new(found)
+    })
+}
+
+#[cfg(target_os = "macos")]
+fn save(all: &std::collections::BTreeMap<String, String>) -> Result<()> {
+    let body = serde_json::to_string(all)
+        .map_err(|e| Error::Config(format!("could not write the Keychain item: {e}")))?;
+    security_framework::passwords::set_generic_password(VAULT, VAULT_ACCOUNT, body.as_bytes())
+        .map_err(|e| Error::Config(format!("the Keychain refused to save: {e}")))
+}
+
 /// Look one up. `None` covers both "no such item" and "the Keychain said no".
 pub fn from_keychain(name: &str) -> Option<String> {
-    // The same API the write uses, so the two cannot disagree about where an
-    // item lives -- which they would have, silently, if one were changed and
-    // not the other.
     #[cfg(target_os = "macos")]
     {
+        if let Some(found) = vault().lock().ok()?.get(name) {
+            let found = found.trim().to_string();
+            return (!found.is_empty()).then_some(found);
+        }
+
+        // Not in the vault, so look where tokens used to live and move it in.
+        //
+        // One dialog per old item, once, and then never again -- which is the
+        // same cost as leaving them where they were, except that it is paid
+        // for the last time rather than on every change of signature.
         let raw = security_framework::passwords::get_generic_password(name, "nudge").ok()?;
         let found = String::from_utf8(raw).ok()?.trim().to_string();
-        (!found.is_empty()).then_some(found)
+        if found.is_empty() {
+            return None;
+        }
+        if let Ok(mut all) = vault().lock() {
+            all.insert(name.to_string(), found.clone());
+            if save(&all).is_ok() {
+                // Only once it is safely in the new item. Deleting first would
+                // turn a failed write into a lost token.
+                let _ = security_framework::passwords::delete_generic_password(name, "nudge");
+            }
+        }
+        Some(found)
     }
     #[cfg(not(target_os = "macos"))]
     {
@@ -56,49 +118,44 @@ pub fn from_keychain(name: &str) -> Option<String> {
 
 /// Put a token in the Keychain, replacing whatever was there.
 ///
-/// Through `security` rather than the Security framework, for the same reason
-/// the read above does: it is one process, it is already how the documentation
-/// tells people to do it by hand, and it keeps this file free of an FFI surface
-/// for something done twice in the life of a connection.
+/// Through the Keychain's own API rather than the `security` command.
 ///
-/// **The token never reaches the command line.** `-w` with no value makes
-/// `security` read it from stdin, which keeps it out of the process table --
-/// where `ps` would show it to every other user on the machine. That is the
-/// whole reason this is not two lines.
+/// That command has two ways to take a password and both are wrong here. Given
+/// on stdin it **silently truncates at 128 characters** -- measured, 253 in and
+/// 128 back -- and a truncated token authenticates as nothing while reporting
+/// itself invalid rather than cut. Given as an argument it survives, but sits in
+/// the process table for the life of the call.
+///
+/// This has neither problem: no child process, no length limit, nothing to read
+/// from outside. `security-framework` was already in the tree via rustls, so it
+/// costs no new dependency either.
 pub fn to_keychain(name: &str, token: &str) -> Result<()> {
-    // Through the Keychain's own API rather than the `security` command.
-    //
-    // That command has two ways to take a password and both are wrong here.
-    // Given on stdin it **silently truncates at 128 characters** -- measured,
-    // 253 in and 128 back -- and a truncated token authenticates as nothing
-    // while reporting itself invalid rather than cut. Given as an argument it
-    // survives, but sits in the process table for the life of the call.
-    //
-    // This has neither problem: no child process, no length limit, nothing to
-    // read from outside. `security-framework` was already in the tree via
-    // rustls, so it costs no new dependency either.
     #[cfg(target_os = "macos")]
     {
-        security_framework::passwords::set_generic_password(name, "nudge", token.as_bytes())
-            .map_err(|e| Error::Config(format!("the Keychain refused {name:?}: {e}")))?;
+        {
+            let mut all = vault()
+                .lock()
+                .map_err(|_| Error::Config("the Keychain is busy".into()))?;
+            all.insert(name.to_string(), token.to_string());
+            save(&all)?;
+        }
+
+        // Still read back. The write reporting success is not the same as the
+        // value being retrievable under the name everything else will look for,
+        // and that gap is exactly where the truncation hid.
+        match from_keychain(name).as_deref() == Some(token) {
+            true => Ok(()),
+            false => Err(Error::Config(format!(
+                "the Keychain did not keep {name:?}. If a dialog appeared, allow it and try again."
+            ))),
+        }
     }
     #[cfg(not(target_os = "macos"))]
     {
         let _ = (name, token);
-        return Err(Error::Config(
+        Err(Error::Config(
             "there is no Keychain on this platform".into(),
-        ));
-    }
-
-    // Still read back. The write reporting success is not the same as the value
-    // being retrievable under the name everything else will look for, and that
-    // gap is exactly where the truncation hid.
-    #[cfg(target_os = "macos")]
-    match from_keychain(name).as_deref() == Some(token) {
-        true => Ok(()),
-        false => Err(Error::Config(format!(
-            "the Keychain did not keep {name:?}. If a dialog appeared, allow it and try again."
-        ))),
+        ))
     }
 }
 
@@ -108,11 +165,17 @@ pub fn to_keychain(name: &str, token: &str) -> Result<()> {
 /// was already deleted by hand, should not be an error somebody has to think
 /// about -- the state afterwards is the one they asked for either way.
 pub fn forget_keychain(name: &str) {
-    // Same API as the other two, so all three agree on where an item lives.
-    // Failure is ignored on purpose: the only outcome that matters is that the
-    // item is gone afterwards, and "it was not there" satisfies that.
     #[cfg(target_os = "macos")]
-    let _ = security_framework::passwords::delete_generic_password(name, "nudge");
+    {
+        if let Ok(mut all) = vault().lock() {
+            if all.remove(name).is_some() {
+                let _ = save(&all);
+            }
+        }
+        // And the old per-token item, for anything not migrated yet. Forgetting
+        // one of those has to forget it everywhere, or it comes back.
+        let _ = security_framework::passwords::delete_generic_password(name, "nudge");
+    }
     #[cfg(not(target_os = "macos"))]
     let _ = name;
 }
