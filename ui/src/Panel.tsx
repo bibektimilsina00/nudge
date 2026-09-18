@@ -77,6 +77,16 @@ export default function Panel() {
   // Asked once, after signing in, and only while there is something to ask for.
   // Skipping is remembered, so "not now" does not mean "every time".
   const [allowing, setAllowing] = useState(!skippedPermissions());
+  // A new version, found about twenty seconds after launch. Kept here rather
+  // than in Settings alone, because a notice nobody opens is not a notice.
+  const [newer, setNewer] = useState(false);
+
+  useEffect(() => {
+    const sub = listen("update", () => setNewer(true));
+    return () => {
+      void sub.then((off) => off());
+    };
+  }, []);
 
   useEffect(() => {
     // The local answer first, because it is instant and is what the first paint
@@ -247,6 +257,7 @@ export default function Panel() {
           <Rail
             view={view}
             onGo={setView}
+            newer={newer}
             docked={docked}
             onDock={() => dock(!docked)}
           />
@@ -419,11 +430,14 @@ function Rail({
   onGo,
   docked,
   onDock,
+  newer,
 }: {
   view: View;
   onGo: (v: View) => void;
   docked: boolean;
   onDock: () => void;
+  /** A version is waiting, and the way to it is through Settings. */
+  newer?: boolean;
 }) {
   // Settings is missing from this list on purpose -- it is rendered at the foot.
   const items: [View, string, React.ReactNode][] = [
@@ -460,7 +474,15 @@ function Rail({
       {items.map(tab)}
 
       <div className="mt-auto flex flex-col items-center gap-1.5">
-        {tab(["settings", "Settings", <Gear key="g" />])}
+        {/* A dot on the way in. The update itself lives in Settings, and a row
+            in a page nobody has opened is not a notice -- this is the only
+            thing on screen that says there is something to open it for. */}
+        <span className="relative">
+          {tab(["settings", "Settings", <Gear key="g" />])}
+          {newer && (
+            <span className="pointer-events-none absolute -top-px -right-px size-[7px] rounded-full bg-blue ring-2 ring-[#141417]" />
+          )}
+        </span>
         {/* The companion's socket, at the foot. Not a section, so it sits apart
             from them rather than reading as a fifth. */}
         <Hint label={docked ? "Release" : "Call back"}>
