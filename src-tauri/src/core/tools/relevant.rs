@@ -53,7 +53,7 @@ fn words(text: &str) -> Vec<String> {
 fn score(tool: &Tool, asked: &[String], using: &[String]) -> usize {
     let said = format!("{} {} {}", tool.server, tool.name, tool.about).to_ascii_lowercase();
     let hits = asked.iter().filter(|w| said.contains(w.as_str())).count();
-    hits + usize::from(using.iter().any(|u| *u == tool.server))
+    hits + usize::from(using.contains(&tool.server))
 }
 
 /// The most relevant tools, best first, and never more than [`MOST`].
@@ -66,7 +66,7 @@ pub fn best<'a>(goal: &str, tools: &'a [Tool], using: &[String]) -> Vec<&'a Tool
         .collect();
     // Best first, and stable within a score so one server's tools stay together
     // and the order does not wander between turns.
-    ranked.sort_by(|a, b| b.0.cmp(&a.0));
+    ranked.sort_by_key(|(n, _)| std::cmp::Reverse(*n));
     ranked.into_iter().take(MOST).map(|(_, t)| t).collect()
 }
 
