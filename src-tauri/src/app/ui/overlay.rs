@@ -170,11 +170,18 @@ fn follow_everywhere(win: &WebviewWindow) {
 #[cfg(target_os = "macos")]
 fn behavior() -> objc2_app_kit::NSWindowCollectionBehavior {
     use objc2_app_kit::NSWindowCollectionBehavior as B;
-    // No `Stationary`. It says "hold this window still through Exposé", and
-    // these windows are children of an anchor that already says exactly that --
-    // two authorities for one question, resolved on every frame Mission Control
-    // animates. The parent is the one that should answer it.
-    let default = B::CanJoinAllSpaces | B::FullScreenAuxiliary | B::IgnoresCycle;
+    // `Stationary` on every one of them, the anchor included.
+    //
+    // It was taken off these two on the reasoning that the parent already says
+    // it and two authorities for one question is one too many. That reads well
+    // and is backwards: the flag means "unaffected by Exposé, stays visible and
+    // stationary", so a window without it is one the system tries to gather up
+    // and animate into the overview like any other -- while being pinned to a
+    // parent that refuses to move. That is the fight, not the cure for it.
+    //
+    // Clicky sets it on its cursor overlay, which is the window of its that
+    // stays on screen, and does not flicker.
+    let default = B::CanJoinAllSpaces | B::Stationary | B::FullScreenAuxiliary | B::IgnoresCycle;
     // Escape hatch for trying combinations without a rebuild.
     match std::env::var("NUDGE_WINDOW_BEHAVIOR")
         .ok()

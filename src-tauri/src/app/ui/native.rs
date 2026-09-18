@@ -292,6 +292,7 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
     ns.setLevel(NSScreenSaverWindowLevel);
     ns.setCollectionBehavior(
         NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::Stationary
             | NSWindowCollectionBehavior::FullScreenAuxiliary
             // Matching the overlay. Without it this is a cmd-tab target, which
             // means the system believes it is a window someone might switch to --
