@@ -180,8 +180,14 @@ impl Default for Config {
             reach: Vec::new(),
             review: true,
             api_key: None,
-            // A bare modifier: hold Control to talk, tap it for the next step.
-            hotkey: "ctrl".into(),
+            // Bare modifiers: hold Control and Option to talk, tap them for the
+            // next step.
+            //
+            // Control alone was the first gesture and it is in the way of too
+            // much -- ctrl-click is a right click, ctrl-arrow switches Spaces,
+            // and every terminal binding anybody has. Two modifiers is still one
+            // gesture, still nothing to learn, and belongs to nobody else.
+            hotkey: "ctrl+alt".into(),
             max_edge: 1280,
             voice_model: "gemini-3.8-flash".into(),
             speak: true,

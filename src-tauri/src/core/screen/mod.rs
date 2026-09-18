@@ -23,6 +23,47 @@
 //! The two sides are held together by a test rather than by discipline: add a
 //! function to `click` and forget `elsewhere/click.rs`, and the build breaks
 //! here rather than on someone else's machine months later.
+/// The modifier keys, as a set.
+///
+/// Its own type rather than a `bool` per key, because the question is always
+/// "exactly these and no others" -- the hotkey names a set, the keyboard holds a
+/// set, and the gesture is the two being equal.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct Mods(u8);
+
+impl Mods {
+    pub const CONTROL: Mods = Mods(1 << 0);
+    pub const OPTION: Mods = Mods(1 << 1);
+    pub const SHIFT: Mods = Mods(1 << 2);
+    pub const COMMAND: Mods = Mods(1 << 3);
+
+    pub const fn empty() -> Self {
+        Mods(0)
+    }
+
+    pub const fn is_empty(self) -> bool {
+        self.0 == 0
+    }
+
+    /// Does this set contain that one?
+    pub const fn has(self, other: Mods) -> bool {
+        self.0 & other.0 == other.0
+    }
+}
+
+impl std::ops::BitOr for Mods {
+    type Output = Mods;
+    fn bitor(self, other: Mods) -> Mods {
+        Mods(self.0 | other.0)
+    }
+}
+
+impl std::ops::BitOrAssign for Mods {
+    fn bitor_assign(&mut self, other: Mods) {
+        self.0 |= other.0;
+    }
+}
+
 pub mod ax;
 pub mod capture;
 #[cfg(all(target_os = "macos", not(feature = "portable")))]

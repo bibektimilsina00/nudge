@@ -145,7 +145,16 @@ export default function Panel() {
     // The glyph only, not "⌃ control" -- the settings page has room to spell it
     // out and a strip in the notch does not.
     void invoke<{ id: string; keys: string[] }[]>("shortcuts")
-      .then((all) => setHold(all.find((s) => s.id === "talk")?.keys[0]?.split(" ")[0] ?? ""))
+      // Every cap's symbol, not the first one's. The gesture is two modifiers
+      // now, and a hint that named half of it would be a hint for a key that
+      // does nothing on its own.
+      .then((all) =>
+        setHold(
+          (all.find((s) => s.id === "talk")?.keys ?? [])
+            .map((k) => k.split(" ")[0])
+            .join(""),
+        ),
+      )
       .catch(() => {});
   }, []);
 

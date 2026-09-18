@@ -5,6 +5,7 @@ use crate::app::commands;
 use crate::app::state::Mic;
 use crate::config::Config;
 use crate::core::run::session::Nudge;
+use crate::core::screen::Mods;
 use crate::core::voice;
 use crate::core::voice::transcribe;
 use crate::error::Result;
@@ -20,10 +21,49 @@ pub const TAP: std::time::Duration = std::time::Duration::from_millis(350);
 /// Is this shortcut a bare modifier? Those cannot be registered -- see
 /// [`crate::core::screen::click::control_alone`] -- and are polled instead.
 pub fn is_bare_modifier(hotkey: &str) -> bool {
-    matches!(
-        hotkey.trim().to_ascii_lowercase().as_str(),
-        "ctrl" | "control"
-    )
+    bare_modifiers(hotkey).is_some()
+}
+
+/// The modifiers a hotkey is made of, if that is all it is made of.
+///
+/// `None` the moment anything else appears: `ctrl+shift+n` is a shortcut the OS
+/// can register and this is not the path for it. One modifier or several -- the
+/// gesture is the same either way, and Control on its own turned out to be a
+/// poor choice of gesture, being half of ctrl-click, ctrl-arrow, and every
+/// terminal binding anybody has.
+pub fn bare_modifiers(hotkey: &str) -> Option<Mods> {
+    let mut want = Mods::empty();
+    for part in hotkey.split('+') {
+        want |= match part.trim().to_ascii_lowercase().as_str() {
+            "ctrl" | "control" | "⌃" => Mods::CONTROL,
+            "alt" | "option" | "opt" | "⌥" => Mods::OPTION,
+            "shift" | "⇧" => Mods::SHIFT,
+            "cmd" | "command" | "super" | "meta" | "⌘" => Mods::COMMAND,
+            _ => return None,
+        };
+    }
+    (!want.is_empty()).then_some(want)
+}
+
+/// A bare-modifier gesture written the way a keyboard prints it -- `⌃⌥`.
+///
+/// `None` for anything the OS can register, which has a perfectly good spelling
+/// of its own already.
+pub fn symbols(hotkey: &str) -> Option<String> {
+    let want = bare_modifiers(hotkey)?;
+    // In the order they sit on the keyboard, not the order somebody typed them,
+    // so the same gesture always reads the same way.
+    let out: String = [
+        (Mods::CONTROL, '\u{2303}'),
+        (Mods::OPTION, '\u{2325}'),
+        (Mods::SHIFT, '\u{21E7}'),
+        (Mods::COMMAND, '\u{2318}'),
+    ]
+    .into_iter()
+    .filter(|(m, _)| want.has(*m))
+    .map(|(_, c)| c)
+    .collect();
+    Some(out)
 }
 
 /// Install the plugin, binding nothing.
@@ -312,4 +352,45 @@ pub(crate) async fn ask(app: AppHandle, heard: String) -> Result<()> {
     let step = commands::advance(app.clone()).await?;
     app.emit("step", step).ok();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// One modifier or several, but only modifiers. Anything the OS can
+    /// register belongs to the plugin, and a gesture that swallowed `ctrl+n`
+    /// would take it from whatever the person is actually using.
+    #[test]
+    fn a_gesture_is_modifiers_and_nothing_else() {
+        assert_eq!(bare_modifiers("ctrl"), Some(Mods::CONTROL));
+        assert_eq!(
+            bare_modifiers("ctrl+alt"),
+            Some(Mods::CONTROL | Mods::OPTION)
+        );
+        // However somebody spells it, and in either order.
+        assert_eq!(bare_modifiers("Option+Control"), bare_modifiers("ctrl+alt"));
+        assert_eq!(bare_modifiers("ctrl+shift+n"), None);
+        assert_eq!(bare_modifiers("space"), None);
+        assert_eq!(bare_modifiers(""), None);
+    }
+
+    /// The order on the keyboard, not the order it was typed, so one gesture has
+    /// one spelling wherever it is shown.
+    #[test]
+    fn the_symbols_read_the_same_whichever_way_it_was_written() {
+        assert_eq!(symbols("alt+ctrl").as_deref(), Some("\u{2303}\u{2325}"));
+        assert_eq!(symbols("ctrl+alt").as_deref(), Some("\u{2303}\u{2325}"));
+        assert_eq!(symbols("ctrl+shift+n"), None);
+    }
+
+    /// The gesture is the whole set: holding one of the two does nothing, and
+    /// holding both plus a third does nothing either.
+    #[test]
+    fn holding_part_of_it_is_not_holding_it() {
+        let want = bare_modifiers("ctrl+alt").unwrap();
+        assert!(Mods::CONTROL != want);
+        assert!(Mods::CONTROL | Mods::OPTION == want);
+        assert!(Mods::CONTROL | Mods::OPTION | Mods::SHIFT != want);
+    }
 }

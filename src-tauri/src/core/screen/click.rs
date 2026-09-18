@@ -58,24 +58,42 @@ pub fn escape_down() -> bool {
     unsafe { CGEventSourceKeyState(COMBINED, ESCAPE) }
 }
 
-/// Is Control -- and nothing but Control -- held right now?
+/// Which modifiers are held right now, and no others.
 ///
 /// Push-to-talk is a bare modifier, which no global-shortcut API can register:
 /// they all want a key code. Reading the flags needs no permission and the
 /// pointer loop already runs sixty times a second, so it costs one getter.
 ///
-/// "Nothing but" matters. Control is half of a dozen real shortcuts -- ctrl+arrow
-/// switches Spaces, ctrl+click is a right click -- and a hold that fired on those
-/// too would record constantly. Requiring it alone leaves the combinations to the
-/// OS. Device-dependent bits are masked off: macOS sets both the generic Control
-/// bit and a left/right one, and we do not care which key it was.
-pub fn control_alone() -> bool {
+/// Returned as a set rather than answered as a yes/no, because the answer is
+/// compared against whatever the hotkey names -- and "exactly these" is what
+/// keeps a hold from firing on every real shortcut that happens to contain it.
+/// Control alone was the original gesture and it is half of a dozen of those:
+/// ctrl+arrow switches Spaces, ctrl+click is a right click.
+///
+/// Device-dependent bits are masked off: macOS sets both the generic bit for a
+/// modifier and a left/right one, and which key it was does not matter here.
+pub fn modifiers_held() -> super::Mods {
     const COMBINED: i32 = 0;
-    // CGEventFlags: the modifiers, minus the device-side left/right bits.
+    // CGEventFlags, minus the device-side left/right bits.
+    const SHIFT: u64 = 0x0002_0000;
     const CONTROL: u64 = 0x0004_0000;
+    const OPTION: u64 = 0x0008_0000;
+    const COMMAND: u64 = 0x0010_0000;
     const MODIFIERS: u64 = 0x00FF_0000;
+
     let flags = unsafe { CGEventSourceFlagsState(COMBINED) } & MODIFIERS;
-    flags == CONTROL
+    let mut held = super::Mods::empty();
+    for (bit, m) in [
+        (SHIFT, super::Mods::SHIFT),
+        (CONTROL, super::Mods::CONTROL),
+        (OPTION, super::Mods::OPTION),
+        (COMMAND, super::Mods::COMMAND),
+    ] {
+        if flags & bit != 0 {
+            held |= m;
+        }
+    }
+    held
 }
 
 /// Has macOS hidden the pointer because the user is typing?

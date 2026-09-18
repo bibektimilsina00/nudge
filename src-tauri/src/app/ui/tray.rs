@@ -28,11 +28,12 @@ use tauri::{AppHandle, Manager, Wry};
 const TRAY: &str = "nudge";
 
 fn build(app: &AppHandle, hotkey: &str) -> tauri::Result<Menu<Wry>> {
-    // A bare modifier is held, not pressed, and the menu should say so.
-    let label = if crate::app::input::hotkey::is_bare_modifier(hotkey) {
-        "Ask Nudge  (hold \u{2303})".to_string()
-    } else {
-        format!("Ask Nudge  ({hotkey})")
+    // A bare modifier is held, not pressed, and the menu should say so -- with
+    // the symbols for whichever modifiers those are. It said ⌃ whatever the
+    // gesture was, which was true for exactly as long as the gesture was Control.
+    let label = match crate::app::input::hotkey::symbols(hotkey) {
+        Some(keys) => format!("Ask Nudge  (hold {keys})"),
+        None => format!("Ask Nudge  ({hotkey})"),
     };
     // Disabled on purpose: it states the shortcut rather than offering a click.
     // There is nothing to click any more -- speaking is the only way in.

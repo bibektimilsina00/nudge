@@ -679,9 +679,9 @@ pub struct Shortcut {
 /// and spelled out, because a row of one-character symbols is a puzzle on a
 /// keyboard where half of them are not printed.
 fn as_caps(hotkey: &str) -> Vec<String> {
-    if crate::app::input::hotkey::is_bare_modifier(hotkey) {
-        return vec!["⌃ control".into()];
-    }
+    // Including a bare-modifier gesture, which used to be special-cased to
+    // "⌃ control" and so could only ever say that -- the day the default became
+    // two modifiers, the settings page and the hint both still said one.
     hotkey
         .split('+')
         .map(|part| match part.trim().to_ascii_lowercase().as_str() {

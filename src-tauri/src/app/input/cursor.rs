@@ -27,15 +27,10 @@ pub fn follow(app: &AppHandle) {
         // Ticks the pointer has been off the panel while it is open. Leaving is
         // not an event, it is a sustained absence -- see `LINGER`.
         let mut away: u32 = 0;
-        // Re-read rather than captured. Asked once at thread start, the answer
-        // outlived every change to it: switching away from bare Control left this
-        // loop still watching for Control, and switching to it left nothing
-        // watching at all.
-        let is_bare = |app: &AppHandle| {
-            crate::app::input::hotkey::is_bare_modifier(
-                &app.state::<crate::app::state::Hotkey>().get(),
-            )
-        };
+        // The hotkey is re-read every tick rather than captured here. Asked once
+        // at thread start, the answer outlived every change to it: switching away
+        // from a bare modifier left this loop still watching for the old one, and
+        // switching to one left nothing watching at all.
         let mut ctrl_was = false;
         let mut click_was = false;
         let mut escape_was = false;
@@ -149,11 +144,18 @@ pub fn follow(app: &AppHandle) {
                 }
             }
 
-            // Push-to-talk on a bare modifier. Edge-triggered, so the handler
-            // sees one press and one release exactly as the plugin would deliver
-            // them -- hold-to-talk and tap-to-advance both fall out unchanged.
-            if is_bare(&app) {
-                let ctrl = click::control_alone();
+            // Push-to-talk on a bare modifier, or several. Edge-triggered, so
+            // the handler sees one press and one release exactly as the plugin
+            // would deliver them -- hold-to-talk and tap-to-advance both fall
+            // out unchanged.
+            //
+            // Exactly the named set, which is what keeps the gesture out of the
+            // way of real shortcuts: holding Control and Option fires, and
+            // holding either of them with anything else does not.
+            if let Some(want) = crate::app::input::hotkey::bare_modifiers(
+                &app.state::<crate::app::state::Hotkey>().get(),
+            ) {
+                let ctrl = click::modifiers_held() == want;
                 if ctrl != ctrl_was {
                     ctrl_was = ctrl;
                     let state = if ctrl {

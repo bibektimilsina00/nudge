@@ -38,23 +38,31 @@ pub fn escape_down() -> bool {
     keys().contains(&Keycode::Escape)
 }
 
-/// Control held, and nothing else.
+/// Which modifiers are held, and nothing else held with them.
 ///
-/// "Alone" matters: Control is half of a hundred shortcuts, and treating
-/// Control-C as a request to start listening would make the app unusable rather
-/// than merely annoying.
-pub fn control_alone() -> bool {
-    let held = keys();
-    let control = held
-        .iter()
-        .any(|k| matches!(k, Keycode::LControl | Keycode::RControl));
-    let others = held.iter().any(|k| {
-        !matches!(
-            k,
-            Keycode::LControl | Keycode::RControl | Keycode::LShift | Keycode::RShift
-        )
-    });
-    control && !others
+/// Nothing, if an ordinary key is down: Control is half of a hundred shortcuts,
+/// and treating Control-C as a request to start listening would make the app
+/// unusable rather than merely annoying. `device_query` names every key that is
+/// down, so this can be stricter than the macOS version, which only ever sees
+/// modifier flags.
+pub fn modifiers_held() -> crate::core::screen::Mods {
+    use crate::core::screen::Mods;
+
+    let mut held = Mods::empty();
+    let mut other = false;
+    for key in keys() {
+        match key {
+            Keycode::LControl | Keycode::RControl => held |= Mods::CONTROL,
+            Keycode::LShift | Keycode::RShift => held |= Mods::SHIFT,
+            Keycode::LAlt | Keycode::RAlt => held |= Mods::OPTION,
+            Keycode::LMeta | Keycode::RMeta => held |= Mods::COMMAND,
+            _ => other = true,
+        }
+    }
+    match other {
+        true => Mods::empty(),
+        false => held,
+    }
 }
 
 /// Whether the pointer is hidden -- during a full-screen video, say.

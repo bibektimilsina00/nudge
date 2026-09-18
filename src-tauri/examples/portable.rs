@@ -50,8 +50,8 @@ fn main() {
     }
     println!("  may_click   {}", click::may_click());
     println!(
-        "  ctrl alone  {} (hold Control while running to see this flip)",
-        click::control_alone()
+        "  modifiers   {:?} (hold some while running to see this change)",
+        click::modifiers_held()
     );
     println!("  button down {}", click::left_button_down());
 
