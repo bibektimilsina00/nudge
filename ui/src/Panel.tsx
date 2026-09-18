@@ -36,14 +36,14 @@ import { Allow, skippedPermissions } from "./panel/Allow";
  * the notch's left edge and disappeared into it.
  */
 const HEIGHT = {
-  home: "h-[286px]",
-  agents: "h-[320px]",
-  settings: "h-[640px]",
-  integrations: "h-[640px]",
+  home: 286,
+  agents: 320,
+  settings: 640,
+  integrations: 640,
   // The same as the other browsers. A list that grows as folders are added needs
   // the room whether or not it is using it today.
-  skills: "h-[640px]",
-  report: "h-[400px]",
+  skills: 640,
+  report: 400,
   // Taller than Home. The companion is the same size, but underneath it there
   // are two buttons and a line of small print that has to be readable rather
   // than merely present.
@@ -51,10 +51,10 @@ const HEIGHT = {
   // Not as tall as it was. The block inside centres itself, so extra height
   // does not make the page more generous -- it just widens the gap between the
   // buttons and the small print until the two stop looking related.
-  signin: "h-[366px]",
+  signin: 366,
   // Taller than signing in: four rows, each with a sentence saying what is
   // lost without it, and the list must not be the part that scrolls.
-  allow: "h-[430px]",
+  allow: 430,
 } as const;
 
 export default function Panel() {
@@ -155,17 +155,28 @@ export default function Panel() {
   // look something up), and starting over on every return is the opposite of
   // helpful. The tabs are one click away if Home is where you wanted.
 
+  // Busy takes over the closed pill; the open panel keeps its own header.
+  // Which height to be. Signed out is a shape of its own rather than a view,
+  // because it is not somewhere you can navigate to or away from.
+  const shape: keyof typeof HEIGHT =
+    account === null ? "signin" : account && allowing ? "allow" : view;
+
   // Keep the hover region the same shape as what is on screen. Held at the
   // tallest view's size, the panel stayed open far below anything visible.
+  //
+  // From `HEIGHT[shape]` -- the number the panel is actually drawn at -- and not
+  // a second list beside it. There was one, keyed on `view` alone, and it did not
+  // know about the two shapes that are not views: signing in renders 366 and was
+  // reported as 300, permissions renders 430 and was reported as 300. Both put
+  // their buttons in the 60 to 130 points below where the pointer still counted
+  // as being on the panel, so reaching for one closed the thing it was on.
   //
   // The true size, with no padding added here -- how much room to leave around it
   // is one decision and it lives in notch.rs, next to the reasoning for it.
   useEffect(() => {
-    const [w, h] = open
-      ? [540, view === "home" ? 300 : view === "agents" ? 320 : 640]
-      : [248, 33];
+    const [w, h] = open ? [540, HEIGHT[shape]] : [248, 33];
     void invoke("set_open_size", { w, h });
-  }, [open, view]);
+  }, [open, shape]);
 
   // The docked pill is the notch, so it is sized by the hardware rather than by a
   // number we picked. Measured once -- the notch does not change while we run.
@@ -174,12 +185,6 @@ export default function Panel() {
       document.documentElement.style.setProperty("--notch-h", `${h}px`),
     );
   }, []);
-
-  // Busy takes over the closed pill; the open panel keeps its own header.
-  // Which height to be. Signed out is a shape of its own rather than a view,
-  // because it is not somewhere you can navigate to or away from.
-  const shape: keyof typeof HEIGHT =
-    account === null ? "signin" : account && allowing ? "allow" : view;
 
   const busy = status !== "idle";
   // Only at rest. Busy already says what is happening and open has the whole
@@ -217,7 +222,7 @@ export default function Panel() {
           // two directions at slightly different rates.
           "transition-[width,height] duration-[420ms] ease-[cubic-bezier(0.32,0.72,0,1)]",
           open
-            ? `${HEIGHT[shape]} w-[540px]`
+            ? "w-[540px]"
             : busy
               // Both pills are the notch's own height, so the strip reads as the
               // hardware getting wider rather than as a bar hanging below it.
@@ -231,15 +236,18 @@ export default function Panel() {
               // where the width had gone.
               : "h-(--notch-h) w-[220px]",
         ].join(" ")}
+        // Open, the height is the number; closed, the classes above own it, and
+        // an inline height would win over them.
+        style={open ? { height: HEIGHT[shape] } : undefined}
       >
         {busy && !open ? <StatusPill status={status} /> : <Pill open={open} hint={hint ? hold : ""} />}
 
         <div
           className={[
             "flex flex-col transition-opacity duration-200",
-            HEIGHT[shape],
             open ? "opacity-100 delay-150" : "pointer-events-none opacity-0",
           ].join(" ")}
+          style={{ height: HEIGHT[shape] }}
         >
           {account === null ? (
             // No rail, no sections. There is nowhere else to be yet, and
