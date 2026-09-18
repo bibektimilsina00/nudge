@@ -955,7 +955,10 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          pick up where the last one stopped and do not tour the same window \
          again.\n\n\
          The last part is always something to DO, never one more thing to look \
-         at: a `point` with an `act`, and a sentence telling them to press it. \
+         at. Mechanically: it carries `point`, never `region`, plus an `act` and \
+         a sentence telling them to press it. A tour that ends on a `region` has \
+         ended on a description, and the person is left knowing the names of \
+         four panels with nothing to do in any of them. \
          \"So start here -- double click the media pool and pick a video.\" \
          Then `next` is the invitation attached to that: \"do that and I will \
          show you how to make your first cut\". An offer with nothing to press \
