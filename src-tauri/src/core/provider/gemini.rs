@@ -166,6 +166,7 @@ impl Provider for Gemini {
              {{\"kind\":\"search\",\"query\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"mcp\",\"tool\":\"server/name\",\"args\":{{}},\"say\":\"...\"}}\n\
              {{\"kind\":\"tools\",\"server\":\"gmail\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"recall\",\"about\":\"the website thing\",\"say\":\"...\"}}\n\
              {{\"kind\":\"request\",\"method\":\"POST\",\"url\":\"https://...\",\"headers\":{{}},\"body\":{{}},\"say\":\"...\"}}\n\
              {{\"kind\":\"delegate\",\"task\":\"the whole job, written out\",\"say\":\"...\"}}\n\
              {{\"kind\":\"remember\",\"scope\":\"app|project|me\",\"about\":\"AppName\",\"note\":\"what would have saved you\",\"say\":\"...\"}}\n\

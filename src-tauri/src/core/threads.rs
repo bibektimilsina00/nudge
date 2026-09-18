@@ -188,6 +188,49 @@ impl Threads {
     }
 }
 
+/// The one that best answers a question about earlier work.
+///
+/// Matched on the words, the same way a tool server is: what somebody says about
+/// a piece of work tends to use the words that were in it. Nothing clever --
+/// there are a handful of threads and a person can read them, which is exactly
+/// the situation where a retrieval engine is a dependency bought for nothing.
+pub fn best<'a>(about: &str, threads: &'a [Thread]) -> Option<&'a Thread> {
+    let asked: Vec<String> = about
+        .to_ascii_lowercase()
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .filter(|w| w.len() >= 4)
+        .map(str::to_string)
+        .collect();
+    threads
+        .iter()
+        .filter(|t| !t.wall)
+        .map(|t| {
+            let said = format!("{} {} {}", t.goal, t.said.join(" "), t.tail.join(" "))
+                .to_ascii_lowercase();
+            (
+                asked.iter().filter(|w| said.contains(w.as_str())).count(),
+                t,
+            )
+        })
+        .filter(|(n, _)| *n > 0)
+        .max_by_key(|(n, _)| *n)
+        .map(|(_, t)| t)
+}
+
+impl Thread {
+    /// The whole thing, for when it has actually been asked for.
+    pub fn in_full(&self) -> String {
+        let mut out = format!("They had asked: {}\n", self.goal);
+        for line in &self.said {
+            out.push_str(&format!("They said: {line}\n"));
+        }
+        for line in &self.tail {
+            out.push_str(&format!("{line}\n"));
+        }
+        out
+    }
+}
+
 /// What to put in front of the model about work that is already finished.
 ///
 /// Newest first, and two shapes: the freshest thread in full, and the ones
@@ -229,6 +272,20 @@ mod tests {
             tail: vec!["did a thing".into(), "did another".into()],
             wall: false,
         }
+    }
+
+    /// The case the step exists for: something from this morning, asked about
+    /// this afternoon, when only its one-line version is being carried.
+    #[test]
+    fn an_old_thread_can_be_found_by_what_it_was_about() {
+        let now = 200_000_000;
+        let threads = [
+            thread(now - 1000, "book a table at the thai place"),
+            thread(now - 100_000, "fix the login redirect on the website"),
+        ];
+        let found = best("what was that website thing", &threads).expect("a thread");
+        assert!(found.goal.contains("login redirect"));
+        assert!(best("something nobody ever mentioned", &threads).is_none());
     }
 
     #[test]

@@ -520,6 +520,21 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
             .record_run(format!("{method} {url}"), said);
         crate::app::agent::publish(app);
     }
+    if let Step::Recall { about, .. } = step {
+        // An earlier conversation, fetched rather than carried.
+        //
+        // What the prompt carries about finished work is a line each -- enough
+        // to know a thing happened, not enough to act on it. Anything more would
+        // be paid for on every turn to be useful on one.
+        let nudge = app.state::<Nudge>();
+        let threads = nudge.threads.recent();
+        let said = match crate::core::threads::best(about, &threads) {
+            Some(thread) => thread.in_full(),
+            None => format!("Nothing earlier about {about:?}."),
+        };
+        eprintln!("recall {about:?} -> {} chars", said.len());
+        nudge.note(said);
+    }
     if let Step::Tools { server, .. } = step {
         // The rest of a server's catalogue, on request.
         //

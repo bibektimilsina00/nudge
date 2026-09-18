@@ -82,6 +82,13 @@ pub enum Step {
         parts: Vec<Step>,
         next: Option<String>,
     },
+    /// Something from an earlier conversation, in full.
+    ///
+    /// The prompt carries finished work as a line each -- what was asked, and
+    /// nothing else -- which is enough to know a thing happened and not enough
+    /// to act on it. This is how the rest is fetched, and it is the same trade
+    /// the tool catalogue makes: an index always, the contents when wanted.
+    Recall { about: String, say: String },
     /// What one server offers, in full.
     ///
     /// The catalogue in the prompt names every connected server and lists the
@@ -370,6 +377,7 @@ impl Step {
             | Step::Mcp { .. }
             | Step::Request { .. }
             | Step::Tools { .. }
+            | Step::Recall { .. }
             | Step::Delegate { .. } => true,
             // Learns nothing from outside; it writes down what was already
             // learned from something that did.
@@ -400,7 +408,8 @@ impl Step {
 
     pub fn say(&self) -> &str {
         match self {
-            Step::Tools { say, .. }
+            Step::Recall { say, .. }
+            | Step::Tools { say, .. }
             | Step::Tour { say, .. }
             | Step::Point { say, .. }
             | Step::Done { say, .. }
@@ -447,7 +456,8 @@ impl Step {
 
     fn say_mut(&mut self) -> &mut String {
         match self {
-            Step::Tools { say, .. }
+            Step::Recall { say, .. }
+            | Step::Tools { say, .. }
             | Step::Tour { say, .. }
             | Step::Point { say, .. }
             | Step::Done { say, .. }
@@ -822,6 +832,15 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 
 /// Shared instruction. Kept in one place so a provider comparison measures the
 /// *model*, not three people's prompt-writing.
+/// Everything but the instructions, at most.
+///
+/// The instructions are about 18,500 characters and are not a list -- there is
+/// no trimming them by a line. This bounds the rest: the catalogues, the tree,
+/// the history and the notes. Measured, a turn with tools connected sits around
+/// four thousand, so this is a ceiling nothing normal touches and not a target
+/// anything is pushed towards.
+const MOST: usize = 20_000;
+
 /// How big the last prompt was, in characters.
 ///
 /// The prompt is the largest thing sent on every turn and the only one nothing
@@ -1097,6 +1116,38 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
         (GUIDE_ROUTING, "")
     };
 
+    // One ceiling, and what gives way when it bites.
+    //
+    // Nothing bounded any of this before: each part was whatever size it happened
+    // to be, and the day one of them was 24,651 characters nothing noticed. The
+    // parts that are the turn itself -- the goal, the screen, what they said, what
+    // has been learned -- are kept whatever else goes; a catalogue is a
+    // convenience and is cut first. See `core::context`.
+    use crate::core::context::{fit, text, Keep, Part};
+    let parts = fit(
+        vec![
+            Part::new("facts", Keep::Last, ask.facts.brief()),
+            Part::new("here", Keep::Last, here),
+            Part::new("memory", Keep::Last, memory.clone()),
+            Part::ending("earlier", Keep::Last, earlier),
+            Part::ending("history", Keep::Last, history),
+            Part::new("stalled", Keep::Last, stalled),
+            Part::new("drawn", Keep::Last, drawn),
+            Part::new("teaching", Keep::Last, teaching),
+            Part::new("controls", Keep::IfItFits, controls_here(ask.controls)),
+            Part::new("styling", Keep::IfItFits, styling),
+            Part::new("reach", Keep::IfItFits, reach),
+            Part::new("skills", Keep::Spare, skills.to_string()),
+            Part::new("tools", Keep::Spare, tools),
+            Part::new(
+                "apps",
+                Keep::Spare,
+                crate::core::screen::launch::installed_apps().join(", "),
+            ),
+        ],
+        MOST,
+    );
+
     let built = format!(
         "You are Nudge: a small companion living on someone's screen, who can see \
          what they are looking at, act on it, run commands and read the web.\n\n\
@@ -1156,6 +1207,14 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Anything other than GET or HEAD needs to have been allowed, and if it \
          has not been you will be told so plainly -- say what you would have done \
          and that it needs allowing, rather than trying it another way.\n\n\
+         ## Asking about something from before\n\n\
+         What you are shown of finished work is one line each: what they asked \
+         for, and nothing else. When a request is about one of those -- \
+         \u{201c}what was that website thing\u{201d}, \u{201c}carry on with what we were \
+         doing\u{201d}, \u{201c}show me the next bit\u{201d} -- answer `recall` with a few \
+         words of it, and the whole conversation comes back. Better than guessing \
+         from a heading, and better than being handed every conversation there \
+         has ever been on the chance one of them matters.\n\n\
          ## Keeping what you find out\n\n\
          Things are strange in their own particular ways, and you find that out \
          by getting it wrong once. When a step fails and you work out why, answer \
@@ -1377,9 +1436,20 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          from here.\n\n{apps}",
         goal = ask.goal,
         workspace = ask.workspace,
-        facts = ask.facts.brief(),
-        controls = controls_here(ask.controls),
-        apps = crate::core::screen::launch::installed_apps().join(", "),
+        facts = text(&parts, "facts"),
+        here = text(&parts, "here"),
+        memory = text(&parts, "memory"),
+        earlier = text(&parts, "earlier"),
+        history = text(&parts, "history"),
+        stalled = text(&parts, "stalled"),
+        drawn = text(&parts, "drawn"),
+        teaching = text(&parts, "teaching"),
+        controls = text(&parts, "controls"),
+        styling = text(&parts, "styling"),
+        reach = text(&parts, "reach"),
+        skills = text(&parts, "skills"),
+        tools = text(&parts, "tools"),
+        apps = text(&parts, "apps"),
         agents = agents_here(),
     );
     SENT.store(built.len(), std::sync::atomic::Ordering::Relaxed);
@@ -1388,28 +1458,15 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
         // once the pieces that vary are taken out, and the difference between
         // "the prompt is big" and "the tool catalogue is big" is the difference
         // between two completely different pieces of work.
-        let parts: [(&str, usize); 10] = [
-            ("tools", tools.len()),
-            ("skills", ask.skills.len()),
-            ("controls", controls_here(ask.controls).len()),
-            (
-                "apps",
-                crate::core::screen::launch::installed_apps()
-                    .join(", ")
-                    .len(),
-            ),
-            ("history", history.len()),
-            ("memory", memory.len()),
-            ("earlier", earlier.len()),
-            ("teaching", teaching.len()),
-            ("styling", styling.len()),
-            ("facts", ask.facts.brief().len()),
-        ];
-        let varies: usize = parts.iter().map(|(_, n)| n).sum();
+        // Straight off the budgeted parts, which is the one place that knows
+        // both what each section is and what survived of it.
+        let varies: usize = parts.iter().map(|p| p.text.len()).sum();
         eprintln!("prompt: {} chars total", built.len());
-        for (name, n) in parts {
+        for part in &parts {
+            let n = part.text.len();
             eprintln!(
-                "  {name:<9} {n:>7} chars  {:>4.0}%",
+                "  {:<9} {n:>7} chars  {:>4.0}%",
+                part.name,
                 n as f64 / built.len() as f64 * 100.0
             );
         }
@@ -1727,6 +1784,10 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
                 })
                 .filter(|said| !said.is_empty())
                 .unwrap_or(say),
+        }),
+        "recall" => Some(Step::Recall {
+            about: v["about"].as_str()?.trim().to_string(),
+            say,
         }),
         "tools" => Some(Step::Tools {
             server: v["server"].as_str()?.trim().to_string(),
@@ -2263,6 +2324,56 @@ mod tests {
         let mut a = ask("teach me this", &[], false);
         a.agent = true;
         assert!(!prompt(&a).contains("Showing somebody around"));
+    }
+
+    /// The ceiling holds whatever is thrown at it.
+    ///
+    /// Nothing bounded the prompt before: every section was whatever size it
+    /// happened to be, and one of them turned out to be 24,651 characters. This
+    /// is the check that a busy screen, a folder of skills and a wall of history
+    /// cannot do it again.
+    #[test]
+    fn no_amount_of_anything_makes_the_prompt_unbounded() {
+        use crate::core::screen::ax::Control;
+
+        let controls: Vec<Control> = (0..3000)
+            .map(|n| Control {
+                role: "AXButton".into(),
+                label: format!("a button with a fairly long name number {n}"),
+                at: (10.0, 10.0),
+                size: (40.0, 20.0),
+            })
+            .collect();
+        let history: Vec<String> = (0..2000)
+            .map(|n| format!("step {n}: something happened and it was written down"))
+            .collect();
+        let tools: Vec<crate::core::tools::mcp::Tool> = (0..500)
+            .map(|n| crate::core::tools::mcp::Tool {
+                server: "everything".into(),
+                name: format!("tool_{n}"),
+                about: "Does a thing with a document and a file and a message".into(),
+                schema: serde_json::json!({}),
+            })
+            .collect();
+
+        let mut a = ask("write a document", &history, false);
+        a.controls = &controls;
+        a.tools = &tools;
+        a.skills = "a skill
+"
+        .repeat(400);
+        let p = prompt(&a);
+
+        // The instructions are not a list and cannot be trimmed by a line, so
+        // the bound is on everything else plus whatever they weigh.
+        assert!(
+            p.len() < MOST + 40_000,
+            "the prompt ran to {} characters",
+            p.len()
+        );
+        // And what the turn is about is still in there.
+        assert!(p.contains("write a document"));
+        assert!(p.contains("step 1999"), "the newest history went missing");
     }
 
     /// The bug this guards: the agent was handed guide mode's prompt, which
