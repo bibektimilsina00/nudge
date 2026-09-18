@@ -297,7 +297,7 @@ export default function Panel() {
               }}
             />
           ) : (
-          <Ask hold={hold} />
+          <Ask hold={hold} open={open} />
           )}
           </div>
           </div>

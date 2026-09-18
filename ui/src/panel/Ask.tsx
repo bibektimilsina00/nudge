@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
+import { greeting } from "./lines";
 import { listen } from "@tauri-apps/api/event";
 
 import { type Agent } from "../Agent";
@@ -32,7 +33,7 @@ import { Companion } from "../components/Companion";
  * establishes that something is addressing you, and everything under it can
  * then be quiet without the whole thing going flat.
  */
-export function Ask({ hold }: { hold: string }) {
+export function Ask({ hold, open }: { hold: string; open: boolean }) {
   const [text, setText] = useState("");
   const [typing, setTyping] = useState(false);
   const [sending, setSending] = useState(false);
@@ -80,12 +81,17 @@ export function Ask({ hold }: { hold: string }) {
   // It reacts to what is happening, which is the whole reason to give it the
   // room. Thinking while something runs, idle otherwise.
   const mood = live ? "thinking" : "idle";
-  // And says the same thing in words, because a mood is not a sentence.
-  const line = live
-    ? live.status
-    : reach
-      ? `I can see your screen, and reach ${reach}.`
-      : "I can see your screen. Tell me what to do with it.";
+  // And says something in words, because a mood is not a sentence.
+  //
+  // A new line each time the panel opens, and not on a timer: text that changes
+  // while somebody is reading it is text they have to read twice. The panel
+  // stays mounted between opens -- it fades rather than unmounting -- so the
+  // moment to pick is the open itself.
+  const [idle, setIdle] = useState(() => greeting(reach));
+  useEffect(() => {
+    if (open) setIdle(greeting(reach));
+  }, [open, reach]);
+  const line = live ? live.status : idle;
 
   return (
     // `min-h-0`, or this will not shrink below its content -- a flex child
