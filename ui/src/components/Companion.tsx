@@ -8,6 +8,8 @@ export type CompanionMode = "idle" | "listening" | "thinking";
 
 /** How far behind the cursor the companion trails, per frame. Lower = looser. */
 const FOLLOW = 0.2;
+/** Below this, in points, the cat has arrived and there is nothing to rewrite. */
+const SETTLED = 0.05;
 
 /**
  * Where it sits relative to the pointer.
@@ -60,6 +62,10 @@ export function Companion({
   anchored?: boolean;
 }) {
   const listening = mode === "listening";
+  // Kept in refs, not state: the loop reads them every frame and a render per
+  // change of either would defeat the point of writing to the nodes directly.
+  const frozen = useRef(false);
+  const stretched = useRef(false);
   const shell = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
 
@@ -90,16 +96,34 @@ export function Companion({
       listen<boolean>("cursor-visible", (e) => {
         if (body.current) body.current.style.opacity = e.payload ? "1" : "0";
       }),
+      // The same signal that stills the canvas stills the chase.
+      listen<boolean>("overview", (e) => {
+        frozen.current = e.payload;
+      }),
     ];
 
     const tick = () => {
       frame = requestAnimationFrame(tick);
 
+      // Nothing while the overview is up.
+      //
+      // The pointer is busy with Mission Control and the cat has nowhere to be,
+      // so every write below would set a transform to the value it already has
+      // -- and a write is what dirties the layer, whether or not it changes
+      // anything. That is a window re-composited sixty times a second on top of
+      // an animation of every window on the machine, which is what was left of
+      // the flicker after the canvas was paused.
+      if (frozen.current) return;
+
       const dx = target.x - shown.x;
       const dy = target.y - shown.y;
       shown.x += dx * FOLLOW;
       shown.y += dy * FOLLOW;
-      if (shell.current) {
+      // Only when it actually moved. Settled, the loop was rewriting an
+      // identical transform every frame for as long as the cursor stayed put,
+      // which is a repaint for no change at all.
+      const moved = Math.abs(dx) > SETTLED || Math.abs(dy) > SETTLED;
+      if (shell.current && moved) {
         shell.current.style.transform = `translate3d(${shown.x + BESIDE.x}px, ${shown.y + BESIDE.y}px, 0)`;
       }
 
@@ -108,7 +132,8 @@ export function Companion({
       // for a vector bead: this is a canvas, and heavy scaling shows as softness.
       const speed = Math.hypot(dx, dy);
       const s = Math.min(MAX_STRETCH, speed * STRETCH);
-      if (body.current) {
+      if (body.current && (moved || stretched.current)) {
+        stretched.current = s >= 0.004;
         const angle = (Math.atan2(dy, dx) * 180) / Math.PI;
         body.current.style.transform =
           s < 0.004
