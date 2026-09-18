@@ -217,11 +217,15 @@ jobs:
   # of the job above does not exist here. What is left is the same build, the
   # same minisign signature over the updater's archive, and the same publish.
   #
-  # 22.04 rather than latest: the glibc a binary is linked against is the oldest
-  # it will run on, and building on the newest Ubuntu is how you ship something
-  # that will not start on the LTS everybody is actually running.
+  # 24.04, and not by preference. The oldest glibc a binary is linked against is
+  # the oldest system it will run on, so the older runner is the better one --
+  # but `xcap` pulls in the pipewire bindings whether or not Wayland capture is
+  # ever used, and those do not compile against jammy's pipewire headers:
+  # `spa_meta_region_is_valid` does not exist there and `spa_video_info_raw` has
+  # no `flags`. So the floor is glibc 2.39: Ubuntu 24.04, Fedora 40, Debian 13.
+  # Dropping it means dropping pipewire, which means an older `xcap`.
   linux:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
 
     permissions:
       contents: write
