@@ -11,6 +11,9 @@ config.toml
 .env.*
 dist/
 .signing-identity
+# The certificate itself. Public, but it belongs beside the key it pairs
+# with rather than in the history of the app it signs.
+developerID_application.cer
 
 # Other people's source, kept locally for reference and never shipped.
 clicky/

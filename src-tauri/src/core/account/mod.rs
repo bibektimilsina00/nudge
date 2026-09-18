@@ -244,7 +244,8 @@ mod tests {
             name: "Sam".into(),
             avatar_url: "https://example.com/sam.png".into(),
         };
-        let back: Account = serde_json::from_str(&serde_json::to_string(&account).unwrap()).unwrap();
+        let back: Account =
+            serde_json::from_str(&serde_json::to_string(&account).unwrap()).unwrap();
         assert_eq!(back, account);
     }
 
