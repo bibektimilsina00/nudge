@@ -19,6 +19,18 @@ jobs:
     # ships an app that will not start on half the Macs it reaches.
     runs-on: macos-14
 
+    # The last step writes a GitHub release, and the default token cannot.
+    #
+    # Without this the whole pipeline runs -- build, sign, notarise, staple,
+    # upload, publish -- and then falls over on the final step with "Resource
+    # not accessible by integration", which reads like a missing secret and is
+    # not one: it is a read-only token being asked to create a release.
+    #
+    # `contents: write` and nothing else. Naming any permission drops the rest
+    # to none, so this narrows the token rather than widening it.
+    permissions:
+      contents: write
+
     steps:
       - uses: actions/checkout@v4
 
