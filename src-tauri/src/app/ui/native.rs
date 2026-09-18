@@ -190,12 +190,17 @@ pub fn watch_spaces(app: &AppHandle) {
 /// could reach it.
 ///
 /// `object_setClass` on a live window is the same trick `tauri-nspanel` exists to
-/// perform. The cost is tao's subclass going with it, and with it the override
-/// that answers `canBecomeKeyWindow` from tao's own `focusable` flag -- so
-/// `becomesKeyOnlyIfNeeded` takes over that job. It is the better answer anyway:
-/// the strip never wants focus, and a text field inside the open panel always
-/// does, and that is exactly what the flag means.
-pub fn become_panel(ns: &NSWindow) {
+/// perform, and it has one sharp edge: tao's subclass goes with it, **and so
+/// does the `focusable` ivar declared on that class**. `WebviewWindow::set_focusable`
+/// writes straight into that ivar, so calling it afterwards is not a no-op, it
+/// is `ivar "focusable" not found on class NSPanel` and the process is gone.
+/// Moving the pointer to the notch did it every time, because that is what
+/// toggles the panel between click-through and clickable.
+///
+/// So focus is decided here instead, once, by class rather than per hover.
+/// `keyable` is false for a window that must never take the keyboard -- the
+/// companion covers the whole desk -- and true for one somebody types into.
+pub fn become_panel(ns: &NSWindow, keyable: bool) {
     use objc2::runtime::{AnyClass, NSObjectProtocol};
 
     let Some(class) = AnyClass::get(c"NSPanel") else {
@@ -216,10 +221,16 @@ pub fn become_panel(ns: &NSWindow) {
     ns.setStyleMask(NSWindowStyleMask::Borderless | NSWindowStyleMask::NonactivatingPanel);
 
     let panel: &objc2_app_kit::NSPanel = unsafe { &*(ns as *const NSWindow as *const _) };
-    // Key only when something in it actually needs typing -- a text field in the
-    // settings sheet, the sign-in form. The collapsed strip is decoration over the
-    // menu bar and must never take the keyboard.
-    panel.setBecomesKeyOnlyIfNeeded(true);
+    // A window nobody types into never becomes key at all. The ones somebody
+    // does are left alone: `becomesKeyOnlyIfNeeded` asks the clicked view
+    // whether it needs the panel to be key, and a WKWebView is one view as far
+    // as AppKit is concerned -- it would answer for the whole page, and a sign-in
+    // form that cannot be typed into is a worse failure than a panel that takes
+    // the keyboard a moment early.
+    //
+    // It costs nothing either way while the panel is a strip: it is
+    // click-through then, so there is no click to make it key.
+    panel.setBecomesKeyOnlyIfNeeded(!keyable);
 }
 
 /// Our window, if we made one.
@@ -423,7 +434,7 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
     ns.setHidesOnDeactivate(false);
     ns.setHasShadow(false);
 
-    become_panel(ns);
+    become_panel(ns, true);
 
     if let Some(anchor) = overlay() {
         // Same trick as the companion: a child window follows its parent between

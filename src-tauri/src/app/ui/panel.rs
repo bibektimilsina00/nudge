@@ -35,15 +35,6 @@ pub fn dock_to_notch(app: &AppHandle) {
     let _ = win.set_size(LogicalSize::new(w, h));
     let _ = win.set_position(tauri::LogicalPosition::new(notch.center_x - w / 2.0, 0.0));
     let _ = win.set_ignore_cursor_events(true);
-    // Not focusable while it is just a strip: a pill over the menu bar has
-    // nothing to type into.
-    //
-    // It no longer decides anything about Spaces, and it used to say it did.
-    // `native::become_panel` replaces tao's class, and with it the override that
-    // answered `canBecomeKeyWindow` from this flag -- `becomesKeyOnlyIfNeeded`
-    // does that job now. This is left because `set_interactive` still turns it
-    // back on, and the two should agree.
-    let _ = win.set_focusable(false);
     let _ = win.show();
 
     crate::app::ui::native::float_everywhere(&win);
@@ -54,13 +45,15 @@ pub fn dock_to_notch(app: &AppHandle) {
 pub fn set_interactive(app: &AppHandle, on: bool) {
     if let Some(win) = window(app) {
         let _ = win.set_ignore_cursor_events(!on);
-        // Focusable only while it is open, because open is the only time there
-        // is anything to type into. Closed, it has to stay unfocusable or it
-        // stops being present in full-screen Spaces -- see `dock_to_notch`.
+        // And nothing about focus. There used to be a `set_focusable(on)` here,
+        // on the reasoning that open is the only time there is anything to type
+        // into -- true, and it cannot be said this way any more: the window is
+        // an `NSPanel` by now, and that call writes into an ivar declared on
+        // tao's class, which the conversion replaced. It panicked, every time
+        // the pointer reached the notch.
         //
-        // The pointer already drives this exact boundary, so there is no second
-        // piece of state to keep in step with the first.
-        let _ = win.set_focusable(on);
+        // Click-through is the whole boundary now. A window nothing can click
+        // is a window nothing can focus, so the two were always the same fact.
     }
 }
 

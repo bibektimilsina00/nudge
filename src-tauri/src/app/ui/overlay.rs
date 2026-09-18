@@ -48,11 +48,9 @@ pub fn fit(app: &AppHandle) -> tauri::Result<Screen> {
         }
     };
     win.set_ignore_cursor_events(true)?;
-    // Never focusable, ever. This window covers the whole desk, so a click it
-    // could take is a click somebody meant for what is underneath.
-    //
-    // It used to claim to be what keeps the companion visible in a full-screen
-    // Space. It is not -- `native::become_panel` is.
+    // Before the window becomes an `NSPanel` -- after that this call panics,
+    // because the ivar it writes to belongs to tao's class. Which is also why it
+    // is the last word on focus here: `become_panel` takes it from now on.
     let _ = win.set_focusable(false);
     follow_everywhere(&win);
 
@@ -118,7 +116,9 @@ fn follow_everywhere(win: &WebviewWindow) {
     // And then a panel, which is what actually keeps it in a full-screen Space --
     // see `native::become_panel`, where the four explanations that are not it are
     // written down.
-    crate::app::ui::native::become_panel(window);
+    // Never keyable: it covers the whole desk, so a click it could take is a
+    // click somebody meant for what is underneath.
+    crate::app::ui::native::become_panel(window, false);
 
     // The missing piece. Nudge is an accessory app, so it is *never* the active
     // application -- and a window that hides on deactivation is therefore a window
