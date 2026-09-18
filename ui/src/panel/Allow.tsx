@@ -2,20 +2,17 @@ import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
 /**
- * Asking for the two permissions Nudge cannot work without.
+ * What macOS has to be told to let Nudge do, all of it on one page.
  *
- * macOS owns the dialog and it cannot be restyled, so the job here is the
- * sentence *before* it: what this lets Nudge do, said plainly, so the system's
- * own alarming wording arrives already explained rather than as an ambush.
+ * The system dialog cannot be restyled, so what this adds is the sentence
+ * before it and somewhere to see the answer afterwards. Each row says what the
+ * permission is for in terms of what Nudge cannot do without it -- the name of
+ * a settings pane is not a reason -- and carries its own button, because the
+ * state of each one is genuinely independent.
  *
- * One at a time, never a checklist. Four rows with four switches reads as a
- * form, and people fill in the easy ones and stop -- which is how somebody ends
- * up with a microphone granted and no way to see the screen.
- *
- * Only the essential two. The microphone is asked for by the key that needs it,
- * at the moment holding that key is the thing somebody just did, and speech
- * recognition is a privacy improvement rather than a capability -- neither
- * belongs in front of somebody who has not used the app yet.
+ * A refused permission gets a button to the Settings pane instead of another
+ * ask. macOS records a dismissal as a refusal and will not prompt twice, so
+ * "Allow" there would be a button that does nothing.
  */
 
 type State = "granted" | "denied" | "unasked";
@@ -28,7 +25,7 @@ type Permit = {
 };
 
 /** Remembered here rather than in Rust: it is a fact about this person having
- *  seen a screen, not about the machine, and it must survive a restart. */
+ *  seen the page, not about the machine, and it must survive a restart. */
 const SKIPPED = "nudge.permissions.skipped";
 
 export function skippedPermissions(): boolean {
@@ -37,11 +34,10 @@ export function skippedPermissions(): boolean {
 
 export function Allow({ onDone }: { onDone: () => void }) {
   const [permits, setPermits] = useState<Permit[] | null>(null);
-  const [asking, setAsking] = useState(false);
 
   // Polled, because the answer usually arrives from another application. Both
-  // of these flip without a restart, so the page can notice and move on by
-  // itself instead of telling somebody to relaunch.
+  // of the essential two flip without a restart, so the page notices by itself
+  // rather than telling somebody to relaunch.
   useEffect(() => {
     const read = () => void invoke<Permit[]>("permits").then(setPermits).catch(() => {});
     read();
@@ -49,97 +45,140 @@ export function Allow({ onDone }: { onDone: () => void }) {
     return () => clearInterval(every);
   }, []);
 
-  const needed = (permits ?? []).filter((p) => p.essential);
-  const next = needed.find((p) => p.state !== "granted");
+  if (!permits) return null;
 
-  // Nothing left to ask for. Said once, not rendered as a state to sit in.
-  useEffect(() => {
-    if (permits && !next) onDone();
-  }, [permits, next, onDone]);
+  const missing = permits.filter((p) => p.essential && p.state !== "granted").length;
 
-  if (!permits || !next) return null;
-
-  const refused = next.state === "denied";
-
-  const go = () => {
-    setAsking(true);
-    // A refused permission cannot be asked for again -- macOS records a
-    // dismissal as a refusal and only the Settings pane can change it. Offering
-    // "Allow" there is a button that does nothing.
-    void invoke(refused ? "open_permit" : "ask_permit", { key: next.key })
-      .catch(() => {})
-      .finally(() => setAsking(false));
-  };
-
-  const skip = () => {
+  const done = () => {
+    // Remembered either way. Having reached the end of this page once is the
+    // fact worth keeping, whether or not everything was granted.
     localStorage.setItem(SKIPPED, "yes");
     onDone();
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col items-center px-8 pt-[calc(var(--notch-h)+14px)] pb-5">
-      <div className="my-auto flex w-full flex-col items-center text-center">
-        <Shield />
-        <h1 className="mt-4 text-[19px] leading-tight font-semibold tracking-[-0.01em] text-ink">
-          {next.name}
-        </h1>
-        {/* Its own words for what is lost, turned around into what is gained.
-            "Accessibility" is the name of a settings pane, not a reason. */}
-        <p className="mt-1.5 max-w-[19rem] text-[12.5px] leading-[1.55] text-ink-2">
-          {refused
-            ? `${next.without} macOS will not ask twice, so this one has to be switched on by hand.`
-            : next.without}
-        </p>
+    <div className="flex min-h-0 flex-1 flex-col px-5 pt-[calc(var(--notch-h)+12px)] pb-4">
+      <h1 className="text-center text-[16px] font-semibold tracking-[-0.01em] text-ink">
+        {missing ? "Nudge needs permission" : "All set"}
+      </h1>
+      <p className="mx-auto mt-1 max-w-[20rem] text-center text-[11.5px] leading-[1.5] text-ink-2">
+        Nothing runs in the background. Nudge looks at your screen when you hold
+        the key, and not otherwise.
+      </p>
 
-        <div className="mt-5 flex w-full max-w-[16rem] flex-col gap-2">
-          <button
-            onClick={go}
-            disabled={asking}
-            className={[
-              "grid h-9 place-items-center rounded-control bg-blue",
-              "text-[12.5px] font-medium text-white",
-              "transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
-              "active:scale-[0.985] disabled:opacity-45 hover:bg-blue-hi",
-            ].join(" ")}
-          >
-            {refused ? "Open Settings" : `Allow ${next.name}`}
-          </button>
-          {/* Skippable on purpose. A dismissal here is permanent, so a hard
-              wall costs the retry as well as the grant -- and the first time
-              somebody asks for something that needs this, the reason will be
-              obvious in a way it is not now. */}
-          <button
-            onClick={skip}
-            className="h-8 text-[11.5px] text-ink-3 transition-colors duration-150 hover:text-ink-2"
-          >
-            Not now
-          </button>
+      <div className="mt-3.5 min-h-0 flex-1 overflow-y-auto">
+        <div className="divide-y divide-line overflow-hidden rounded-card border border-line bg-raise">
+          {permits.map((p) => (
+            <Row key={p.key} permit={p} />
+          ))}
         </div>
       </div>
 
-      <p className="mt-auto pt-4 text-center text-[10.5px] leading-relaxed text-ink-3">
-        {needed.filter((p) => p.state === "granted").length} of {needed.length} granted
-      </p>
+      <button
+        onClick={done}
+        className={[
+          "mt-3 h-9 w-full shrink-0 rounded-control text-[12.5px] font-medium",
+          "transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+          "active:scale-[0.99]",
+          missing
+            ? "text-ink-2 hover:bg-raise hover:text-ink"
+            : "bg-blue text-white hover:bg-blue-hi",
+        ].join(" ")}
+      >
+        {/* Skippable on purpose. A dismissal cannot be undone, so a hard wall
+            costs the retry as well as the grant -- and the first time somebody
+            asks for something that needs the screen, the reason will be obvious
+            in a way it is not on first launch. */}
+        {missing ? "Not now" : "Start using Nudge"}
+      </button>
     </div>
   );
 }
 
-function Shield() {
+function Row({ permit }: { permit: Permit }) {
+  const granted = permit.state === "granted";
+  // Refused cannot be asked again -- only the pane can change it now.
+  const refused = permit.state === "denied";
+
   return (
-    <svg viewBox="0 0 48 48" className="size-11 text-blue" fill="none" aria-hidden>
-      <path
-        d="M24 5 39 10.5v12c0 9-6.4 15.6-15 18.3C15.4 38.1 9 31.5 9 22.5v-12Z"
-        stroke="currentColor"
-        strokeWidth={2.4}
-        strokeLinejoin="round"
-      />
-      <path
-        d="m17.5 23.5 4.6 4.6 8.4-9"
-        stroke="currentColor"
-        strokeWidth={2.4}
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
+    <div className="flex items-center gap-2.5 px-3 py-2.5">
+      <span className={granted ? "text-ink-3" : "text-[#ffd60a]"}>
+        <Mark permit={permit.key} />
+      </span>
+
+      <span className="min-w-0 flex-1">
+        <span className="block text-[12px] font-medium text-ink">{permit.name}</span>
+        <span className="mt-px block text-[10.5px] leading-snug text-ink-2">
+          {permit.without}
+        </span>
+      </span>
+
+      {granted ? (
+        <span className="flex shrink-0 items-center gap-1.5 text-[10.5px] font-medium text-[#30d158]">
+          <span className="size-1.5 rounded-full bg-[#30d158]" />
+          Granted
+        </span>
+      ) : (
+        <button
+          onClick={() =>
+            void invoke(refused ? "open_permit" : "ask_permit", { key: permit.key }).catch(
+              () => {},
+            )
+          }
+          className={[
+            "shrink-0 rounded-full bg-blue px-2.5 py-[3px]",
+            "text-[10.5px] font-semibold text-white",
+            "transition-[background-color,transform] duration-150 ease-[cubic-bezier(0.23,1,0.32,1)]",
+            "active:scale-[0.97] hover:bg-blue-hi",
+          ].join(" ")}
+        >
+          {refused ? "Settings" : "Grant"}
+        </button>
+      )}
+    </div>
   );
+}
+
+/** One glyph per permission, so a row is recognisable before it is read. */
+function Mark({ permit }: { permit: string }) {
+  const common = {
+    viewBox: "0 0 16 16",
+    className: "size-4",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 1.7,
+    strokeLinecap: "round" as const,
+    strokeLinejoin: "round" as const,
+    "aria-hidden": true,
+  };
+  switch (permit) {
+    case "screen":
+      return (
+        <svg {...common}>
+          <rect x="1.8" y="3" width="12.4" height="8.4" rx="1.6" />
+          <path d="M5.5 14h5" />
+        </svg>
+      );
+    case "microphone":
+      return (
+        <svg {...common}>
+          <rect x="6" y="1.8" width="4" height="7.4" rx="2" />
+          <path d="M3.6 7.6a4.4 4.4 0 0 0 8.8 0M8 12v2.2" />
+        </svg>
+      );
+    case "speech":
+      return (
+        <svg {...common}>
+          <path d="M2.4 8a5.6 5.6 0 0 1 11.2 0v3.2a2.4 2.4 0 0 1-2.4 2.4H8" />
+          <path d="M2.4 8.8v1.6M4.8 7.2v4.8M11.2 7.2v4.8" />
+        </svg>
+      );
+    default:
+      return (
+        <svg {...common}>
+          <path d="M8 1.6 13.4 3.8v4.4c0 3.3-2.3 5.8-5.4 6.8-3.1-1-5.4-3.5-5.4-6.8V3.8Z" />
+          <path d="m5.9 8.2 1.5 1.5 2.7-3" />
+        </svg>
+      );
+  }
 }

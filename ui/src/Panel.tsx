@@ -52,9 +52,9 @@ const HEIGHT = {
   // does not make the page more generous -- it just widens the gap between the
   // buttons and the small print until the two stop looking related.
   signin: "h-[366px]",
-  // The same shape as signing in, because it is the other half of the same
-  // arrival: one thing asked for, one button, nothing else on screen.
-  allow: "h-[366px]",
+  // Taller than signing in: four rows, each with a sentence saying what is
+  // lost without it, and the list must not be the part that scrolls.
+  allow: "h-[430px]",
 } as const;
 
 export default function Panel() {
