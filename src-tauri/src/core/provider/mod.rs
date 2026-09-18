@@ -82,6 +82,14 @@ pub enum Step {
         parts: Vec<Step>,
         next: Option<String>,
     },
+    /// What one server offers, in full.
+    ///
+    /// The catalogue in the prompt names every connected server and lists the
+    /// tools of the ones this turn looks like it is about -- two hundred tool
+    /// lines was forty-seven per cent of every prompt. This is the way to the
+    /// rest: ask for a server by name and its tools come back as a step, the
+    /// same as any other thing that has to be looked up rather than carried.
+    Tools { server: String, say: String },
     /// The goal is achieved.
     ///
     /// `next` is an optional follow-up offer -- one short question about the
@@ -357,6 +365,7 @@ impl Step {
             // question is actually asking.
             | Step::Mcp { .. }
             | Step::Request { .. }
+            | Step::Tools { .. }
             | Step::Delegate { .. } => true,
             // Learns nothing from outside; it writes down what was already
             // learned from something that did.
@@ -387,7 +396,8 @@ impl Step {
 
     pub fn say(&self) -> &str {
         match self {
-            Step::Tour { say, .. }
+            Step::Tools { say, .. }
+            | Step::Tour { say, .. }
             | Step::Point { say, .. }
             | Step::Done { say, .. }
             | Step::Unsure { say, .. }
@@ -433,7 +443,8 @@ impl Step {
 
     fn say_mut(&mut self) -> &mut String {
         match self {
-            Step::Tour { say, .. }
+            Step::Tools { say, .. }
+            | Step::Tour { say, .. }
             | Step::Point { say, .. }
             | Step::Done { say, .. }
             | Step::Unsure { say, .. }
@@ -700,6 +711,12 @@ pub struct Ask<'a> {
     /// spent eleven turns rephrasing greps against a folder it had never looked
     /// at, because nothing said which folder that was or what was in it.
     pub workspace: String,
+    /// Which tool servers this session has already called.
+    ///
+    /// They stay listed whatever the words say: a task that has started using a
+    /// server is not finished with it, and the request that comes next is often
+    /// "and the one after that", which names nothing at all.
+    pub using: &'a [String],
     /// Somebody drew on the screenshot while they spoke. See
     /// [`crate::core::screen::ink`].
     pub drawn: bool,
@@ -796,6 +813,18 @@ pub fn build(cfg: &Config) -> Result<Box<dyn Provider>> {
 
 /// Shared instruction. Kept in one place so a provider comparison measures the
 /// *model*, not three people's prompt-writing.
+/// How big the last prompt was, in characters.
+///
+/// The prompt is the largest thing sent on every turn and the only one nothing
+/// measured. Recorded here, at the one place it is assembled, and written into
+/// the timings file beside the stages -- so "the model is slow" and "we are
+/// sending the model an essay" stop being the same observation.
+static SENT: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+
+pub fn last_prompt_chars() -> usize {
+    SENT.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let history = recent(ask.done);
     let reach = &ask.reach;
@@ -859,21 +888,14 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     // Named by what they do rather than by the protocol behind them. "You can
     // speak MCP" is a fact about us; "you can read this person's calendar" is a
     // fact about what is possible, and only one of those helps.
-    let tools = match ask.tools.is_empty() {
-        true => String::new(),
-        false => format!(
-            "Tools on connected servers. Use `mcp` with the full name and an \
-             `args` object:\n{}\n\nStarred arguments are required. If a call is \
-             refused for the shape of its arguments, read what it said and try \
-             again -- the server is describing itself more precisely than the \
-             list above can.\n\n",
-            ask.tools
-                .iter()
-                .map(|t| format!("  {}", t.line()))
-                .collect::<Vec<_>>()
-                .join("\n")
-        ),
-    };
+    // The servers always; their tools when this turn looks like it is about them.
+    //
+    // Measured before this existed: 197 tools, 24,651 characters, forty-seven per
+    // cent of every prompt -- read out in full to answer "what is on this
+    // screen". See `tools::relevant` for how a server is matched, and for why
+    // nothing is hidden by it.
+    let tools =
+        crate::core::tools::relevant::catalogue(ask.goal, ask.tools, ask.using).unwrap_or_default();
     // What the destination reads, when that is not what a chat reads.
     //
     // Asked for a report in Google Docs, a run wrote Markdown -- `## Findings`
@@ -901,7 +923,13 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     // application it could not see -- "on the left is your sidebar" -- and then
     // returned a bare list of parts with no coordinates in it, because there
     // were none to give.
-    let teaching = if ask.agent {
+    // Only when somebody is asking to be shown around, and never to an agent.
+    //
+    // This block is eight per cent of every prompt and it was going out on all of
+    // them: four and a half thousand characters on how to give a tour, sent to
+    // answer "what is on this screen". See `teaching::wanted` for why the match is
+    // on phrases and why it leans towards matching.
+    let teaching = if ask.agent || !crate::core::teaching::wanted(ask.goal) {
         String::new()
     } else {
         "\n\n## Showing somebody around\n\n\
@@ -1059,7 +1087,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
         (GUIDE_ROUTING, "")
     };
 
-    format!(
+    let built = format!(
         "You are Nudge: a small companion living on someone's screen, who can see \
          what they are looking at, act on it, run commands and read the web.\n\n\
          ## How you sound\n\n\
@@ -1333,7 +1361,46 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
         controls = controls_here(ask.controls),
         apps = crate::core::screen::launch::installed_apps().join(", "),
         agents = agents_here(),
-    )
+    );
+    SENT.store(built.len(), std::sync::atomic::Ordering::Relaxed);
+    if std::env::var_os("NUDGE_DEBUG_PROMPT").is_some() {
+        // Which part of it is which. The fixed instructions are whatever is left
+        // once the pieces that vary are taken out, and the difference between
+        // "the prompt is big" and "the tool catalogue is big" is the difference
+        // between two completely different pieces of work.
+        let parts: [(&str, usize); 10] = [
+            ("tools", tools.len()),
+            ("skills", ask.skills.len()),
+            ("controls", controls_here(ask.controls).len()),
+            (
+                "apps",
+                crate::core::screen::launch::installed_apps()
+                    .join(", ")
+                    .len(),
+            ),
+            ("history", history.len()),
+            ("memory", memory.len()),
+            ("earlier", earlier.len()),
+            ("teaching", teaching.len()),
+            ("styling", styling.len()),
+            ("facts", ask.facts.brief().len()),
+        ];
+        let varies: usize = parts.iter().map(|(_, n)| n).sum();
+        eprintln!("prompt: {} chars total", built.len());
+        for (name, n) in parts {
+            eprintln!(
+                "  {name:<9} {n:>7} chars  {:>4.0}%",
+                n as f64 / built.len() as f64 * 100.0
+            );
+        }
+        eprintln!(
+            "  {:<9} {:>7} chars  {:>4.0}%  (the instructions themselves)",
+            "fixed",
+            built.len() - varies,
+            (built.len() - varies) as f64 / built.len() as f64 * 100.0
+        );
+    }
+    built
 }
 
 /// The controls macOS says are on screen, numbered so one can be named exactly.
@@ -1640,6 +1707,10 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
                 })
                 .filter(|said| !said.is_empty())
                 .unwrap_or(say),
+        }),
+        "tools" => Some(Step::Tools {
+            server: v["server"].as_str()?.trim().to_string(),
+            say,
         }),
         "done" => Some(Step::Done {
             say,
@@ -2134,6 +2205,7 @@ mod tests {
             done,
             stalled,
             drawn: false,
+            using: &[],
             agent: false,
             facts: Default::default(),
             controls: &[],
@@ -2479,10 +2551,13 @@ mod tests {
         assert!(!none.contains("a tool on a connected server"));
     }
 
+    /// Connected servers are always named; their tools arrive when the request
+    /// looks like it is about them. Two hundred tools in every prompt was
+    /// forty-seven per cent of it -- see `tools::relevant`.
     #[test]
     fn tools_are_listed_only_when_there_are_some() {
         let quiet = prompt(&ask("do a thing", &[], false));
-        assert!(!quiet.contains("Tools on connected servers"));
+        assert!(!quiet.contains("Tool servers connected"));
 
         let tool = crate::core::tools::mcp::Tool {
             server: "files".into(),
@@ -2496,9 +2571,19 @@ mod tests {
         let mut a = ask("read my notes", &[], false);
         let tools = [tool];
         a.tools = &tools;
+        // "read my notes" and a server that reads files: named, and listed.
         let loud = prompt(&a);
-        assert!(loud.contains("files/read_text_file(path*)"));
-        assert!(loud.contains("Tools on connected servers"));
+        assert!(loud.contains("files/read_text_file(path*)"), "{loud}");
+        assert!(loud.contains("Tool servers connected: files (1)"), "{loud}");
+
+        // A request about nothing it offers: still named, not listed, and the
+        // way to ask for it is in the sentence that says so.
+        let mut elsewhere = ask("click the red button", &[], false);
+        elsewhere.tools = &tools;
+        let short = prompt(&elsewhere);
+        assert!(short.contains("files (1)"), "{short}");
+        assert!(!short.contains("read_text_file"), "{short}");
+        assert!(short.contains("`tools`"), "{short}");
     }
 
     /// 4.5, and the distinction the whole thing turns on: what happened a moment

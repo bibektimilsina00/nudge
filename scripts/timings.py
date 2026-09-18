@@ -63,7 +63,16 @@ def main() -> int:
 
     totals = [t["total"] for t in turns]
     drew = sum(1 for t in turns if t.get("drew"))
-    print(f"{len(turns)} turns, {drew} of them drawn on\n")
+    # Four characters to a token: wrong for code, about right for English, and
+    # the decision it feeds is "is this enormous", which it answers.
+    sent = [t["sent"] / 4 for t in turns if t.get("sent")]
+    print(f"{len(turns)} turns, {drew} of them drawn on")
+    if sent:
+        print(
+            f"prompt: {statistics.median(sent):,.0f} tokens typical, "
+            f"{max(sent):,.0f} at worst"
+        )
+    print()
     print(f"{'stage':<8} {'median':>8} {'worst':>8} {'share':>7}  what it is")
     middle = statistics.median(totals)
     for name in order:

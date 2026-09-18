@@ -508,6 +508,39 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
             .record_run(format!("{method} {url}"), said);
         crate::app::agent::publish(app);
     }
+    if let Step::Tools { server, .. } = step {
+        // The rest of a server's catalogue, on request.
+        //
+        // The prompt names every connected server and lists the tools of the
+        // ones the request looks like it is about. This is how the model reaches
+        // the others -- and it is a step rather than a bigger prompt because two
+        // hundred tool lines in every turn was forty-seven per cent of what was
+        // sent, to answer questions that touched none of them.
+        let nudge = app.state::<Nudge>();
+        let offered: Vec<String> = nudge
+            .tools()
+            .iter()
+            .filter(|t| t.server.eq_ignore_ascii_case(server))
+            .map(|t| format!("  {}", t.line()))
+            .collect();
+        let said = match offered.is_empty() {
+            true => format!(
+                "No server called {server:?}. Connected: {}.",
+                nudge
+                    .tool_servers()
+                    .iter()
+                    .map(|(name, _)| name.clone())
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            false => format!("{server} offers:\n{}", offered.join("\n")),
+        };
+        eprintln!("tools {server} -> {} lines", offered.len());
+        // Listed once and then kept: the server stays in the catalogue for the
+        // rest of the session, so asking twice is not a thing that happens.
+        nudge.using(server);
+        nudge.note(said);
+    }
     if let Step::Mcp { tool, args, .. } = step {
         // Which files it named, before it runs, because afterwards a replaced
         // file cannot tell you what it used to be.
@@ -516,6 +549,10 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
 
         let said = app.state::<Nudge>().run_tool(tool, args).await?;
         eprintln!("mcp {tool} -> {} chars", said.len());
+        // Whatever the words of the next request are, this server stays listed.
+        if let Some((server, _)) = tool.split_once('/') {
+            app.state::<Nudge>().using(server);
+        }
 
         // Again, afterwards. `named` only reports files that exist, and it ran
         // before the tool did -- so a file the tool *created* was invisible to

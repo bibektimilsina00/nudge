@@ -9,6 +9,7 @@ pub mod files;
 pub mod mcp;
 pub mod paper;
 pub mod present;
+pub mod relevant;
 pub mod rest;
 pub mod running;
 pub mod secret;

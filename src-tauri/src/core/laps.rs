@@ -177,6 +177,9 @@ pub struct Turn {
     /// Whether something was drawn on the screenshot, which costs a decode and
     /// an encode and should show up in `shot`.
     pub drew: bool,
+    /// How big the prompt was, in characters. The largest thing sent on every
+    /// turn, and until now the only one nothing measured.
+    pub sent: usize,
 }
 
 fn now_ms() -> u64 {
@@ -192,6 +195,7 @@ impl Turn {
         provider: &str,
         said: usize,
         drew: bool,
+        sent: usize,
     ) -> Self {
         Self {
             at: now_ms(),
@@ -203,6 +207,7 @@ impl Turn {
             provider: provider.to_string(),
             said,
             drew,
+            sent,
         }
     }
 }

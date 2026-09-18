@@ -75,6 +75,13 @@ pub struct Session {
     pub said: Vec<String>,
     /// The screen as it looked after the previous step.
     pub seen: Vec<u8>,
+    /// Which tool servers this session has called.
+    ///
+    /// Kept so their tools stay in front of the model for the rest of the task:
+    /// the catalogue is otherwise chosen by matching the request's words, and
+    /// the request after the first is often "and the one after that", which
+    /// names nothing -- see `tools::relevant`.
+    pub using: Vec<String>,
     /// Nudge is carrying this out itself, unwatched. Changes both the budget and
     /// what the model is allowed to answer -- see `provider::prompt`.
     pub agent: bool,
@@ -423,6 +430,7 @@ impl Nudge {
             goal,
             earlier,
             done: Vec::new(),
+            using: Vec::new(),
             folded: None,
             folded_upto: 0,
             said: Vec::new(),
@@ -647,6 +655,15 @@ impl Nudge {
     ///
     /// Untrusted by default, and deliberately the easy one to reach for: most
     /// things that land here were written by somebody else.
+    /// This session has called that server, so keep its tools listed.
+    pub fn using(&self, server: &str) {
+        if let Some(s) = self.session.lock().unwrap().as_mut() {
+            if !s.using.iter().any(|u| u == server) {
+                s.using.push(server.to_string());
+            }
+        }
+    }
+
     pub fn note(&self, line: String) {
         if let Some(s) = self.session.lock().unwrap().as_mut() {
             s.done.push(line);
@@ -750,6 +767,7 @@ impl Nudge {
                     self.0.provider_name(),
                     self.0.goal().chars().count(),
                     crate::core::screen::ink::drawn(),
+                    crate::core::provider::last_prompt_chars(),
                 ));
             }
         }
@@ -764,7 +782,7 @@ impl Nudge {
 
         // Snapshot and release: the lock must not be held across the await, and a
         // tokio Mutex would be a heavier fix than simply not needing one.
-        let Some((goal, done, seen, agent, earlier)) =
+        let Some((goal, done, seen, agent, earlier, using)) =
             self.session.lock().unwrap().as_ref().map(|s| {
                 (
                     s.goal.clone(),
@@ -774,6 +792,7 @@ impl Nudge {
                     s.seen.clone(),
                     s.agent,
                     s.earlier.clone(),
+                    s.using.clone(),
                 )
             })
         else {
@@ -886,6 +905,7 @@ impl Nudge {
         // application is known -- which is the whole scoping rule.
         let memory = self.memory.prompt(facts.app.as_deref());
         let ask = Ask {
+            using: &using,
             // Only a person draws, and only the foreground has one.
             drawn: crate::core::screen::ink::drawn(),
             goal: &goal,

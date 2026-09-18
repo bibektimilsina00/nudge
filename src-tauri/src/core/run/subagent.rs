@@ -168,6 +168,8 @@ where
             // Nobody is drawing for a subagent: there is no screen in front of
             // anybody and no hand on the pointer.
             drawn: false,
+            // A subagent has no session of its own to have used anything.
+            using: &[],
             goal: &task,
             done: &done,
             stalled: false,
@@ -290,6 +292,8 @@ where
             // Nobody is drawing for a subagent: there is no screen in front of
             // anybody and no hand on the pointer.
             drawn: false,
+            // And no session of its own to have used a server in.
+            using: &[],
             goal: task,
             done: &done,
             stalled: false,

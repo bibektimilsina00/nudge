@@ -81,6 +81,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
     );
     let ask = provider::Ask {
         drawn: false,
+        using: &[],
         goal,
         done: &[],
         stalled: false,
@@ -197,6 +198,9 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         provider::Step::Run { command, .. } => println!("  run:    {command}"),
         provider::Step::Await { id, .. } => println!("  await:  {id}"),
         provider::Step::Mcp { tool, args, .. } => println!("  tool:   {tool} {args}"),
+        provider::Step::Tools { server, .. } => {
+            println!("  tools:  asking {server} what it offers")
+        }
         provider::Step::Request { method, url, .. } => println!("  http:   {method} {url}"),
         provider::Step::Delegate { task, .. } => println!("  hand over: {task}"),
         provider::Step::Remember { about, note, .. } => println!("  note:   {about}: {note}"),

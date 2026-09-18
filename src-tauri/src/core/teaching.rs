@@ -13,6 +13,48 @@
 //! label, which turn out to be most of the ways a tour actually goes wrong.
 use crate::core::provider::Step;
 
+/// Does this sound like somebody asking to be shown around?
+///
+/// The guidance for giving a tour is four and a half thousand characters -- eight
+/// per cent of everything sent on a turn -- and it was going out on every turn
+/// including the ones that are nothing to do with teaching. Measured on a plain
+/// "what is on this screen": 4,424 characters explaining how to tour an
+/// application nobody asked about.
+///
+/// Matched on phrases rather than asked of a model, because this decides what to
+/// put in front of a model and a round trip to save a round trip is not a saving.
+///
+/// **A miss is cheap and a false positive is only the old behaviour.** Missing
+/// leaves the model with the shape of a tour and none of the advice for giving
+/// one, which is a worse tour; matching something that is not a tour costs
+/// exactly what every turn used to cost. So the list leans towards matching.
+pub fn wanted(goal: &str) -> bool {
+    let goal = goal.to_ascii_lowercase();
+    const ASKS: [&str; 16] = [
+        "teach me",
+        "show me around",
+        "show me round",
+        "walk me through",
+        "give me a tour",
+        "tour of",
+        "what is this app",
+        "what is this program",
+        "what is this screen",
+        "what am i looking at",
+        "how do i use",
+        "how does this work",
+        "explain this",
+        "explain the screen",
+        "getting started",
+        "i am new to",
+    ];
+    ASKS.iter().any(|ask| goal.contains(ask))
+        // "what is this" on its own, but not "what is this button" -- the first
+        // is somebody asking about the whole thing in front of them, the second
+        // is a question about one control and gets a normal answer.
+        || goal.trim_end_matches(['?', '.', '!', ' ']).ends_with("what is this")
+}
+
 /// Something wrong with a tour, in the words somebody would use about it.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct Complaint {
@@ -191,6 +233,30 @@ mod tests {
             boxed("the editor", (600.0, 300.0), (600.0, 500.0)),
             ring("click here to start"),
         ]
+    }
+
+    #[test]
+    fn the_asks_that_mean_show_me_around() {
+        for asked in [
+            "teach me this",
+            "Teach me this app",
+            "show me around davinci resolve",
+            "what is this app",
+            "how do i use this",
+            "what is this?",
+            "walk me through it",
+        ] {
+            assert!(wanted(asked), "{asked:?} is somebody asking for a tour");
+        }
+        for asked in [
+            "click the export button",
+            "what is this button",
+            "open safari",
+            "how many files are in this folder",
+            "send that to sara",
+        ] {
+            assert!(!wanted(asked), "{asked:?} is not a tour");
+        }
     }
 
     #[test]
