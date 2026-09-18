@@ -59,6 +59,11 @@ pub fn run() {
             }
 
             let cfg = Config::load()?;
+            // Once per version per machine, so "installs" and "upgrades" can be
+            // counted without a launch ever being reported.
+            if crate::core::counted::first_run_of(env!("CARGO_PKG_VERSION")) {
+                crate::core::counted::send(crate::core::counted::Count::of("install"));
+            }
             let hotkey = cfg.hotkey.clone();
             let cfg_engine = cfg.speech_engine.clone();
             let reviewing = cfg.review;
@@ -304,6 +309,8 @@ pub fn run() {
             commands::version,
             commands::reviewing,
             commands::set_reviewing,
+            commands::counted,
+            commands::set_counted,
             update::take_update,
             commands::quit,
             commands::shot_for_report,

@@ -143,3 +143,46 @@ class Login(SQLModel, table=True):
 def expiry(days: int) -> datetime:
     """When a session minted now should stop working."""
     return now() + timedelta(days=days)
+
+
+class Event(SQLModel, table=True):
+    """One thing the app did, counted.
+
+    ## The contents never go in
+
+    The same rule the app's own audit log follows, and for a sharper reason:
+    Nudge reads people's screens, so the first question a careful person asks is
+    what it sends back. "Nothing about what you were doing" is an answer worth
+    being able to give plainly, and it is only true if it is true here.
+
+    So: what kind of thing happened, how long it took, and whether it worked.
+    Never a goal, a transcript, a window title, an application name or a path.
+    A row here cannot say what anybody was working on, and that is the point
+    rather than an oversight.
+
+    ## Who, only loosely
+
+    `install` is a random id the app makes on first run and keeps. It is what
+    separates two copies from one copy used twice, and it is not linked to a
+    person unless they have signed in -- in which case `user_id` says so, which
+    is what makes "how many people, rather than how many machines" answerable.
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    at: datetime = Field(default_factory=now, index=True)
+    # Random, made by the app, kept on that machine. Not derived from anything
+    # about the machine -- a hardware id would be an identifier nobody chose.
+    install: str = Field(index=True)
+    # Set when the copy was signed in at the time.
+    user_id: Optional[int] = Field(default=None, foreign_key="user.id", index=True)
+    version: str = ""
+    platform: str = ""
+    # One of a fixed list -- see routes/events.py. An open string here is a
+    # table anybody can fill with whatever they like.
+    name: str = Field(index=True)
+    # How long it took, when that means anything.
+    seconds: float = 0.0
+    # Two or three words about the shape of it: "here" or "cloud" for which
+    # transcriber answered, "done" or "failed" for how a run ended. Never a
+    # sentence, and never anything from the screen.
+    detail: str = Field(default="", max_length=40)

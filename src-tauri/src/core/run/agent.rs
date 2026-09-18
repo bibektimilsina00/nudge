@@ -208,6 +208,18 @@ impl Agent {
         (self.step as f32 / NOMINAL_STEPS as f32).clamp(0.0, 0.97)
     }
 
+    /// How it ended, in one word, for the counts. `None` while it is still
+    /// going: an agent that has not finished has no outcome to report.
+    pub fn outcome(&self) -> &'static str {
+        match self.state {
+            State::Done => "done",
+            State::Failed { .. } => "failed",
+            State::Stopped => "stopped",
+            State::Interrupted => "interrupted",
+            _ => "running",
+        }
+    }
+
     pub fn finished(&self) -> bool {
         matches!(
             self.state,
@@ -219,6 +231,19 @@ impl Agent {
     pub fn interrupted(&self) -> bool {
         matches!(self.state, State::Interrupted)
     }
+}
+
+/// Seconds from a wall-clock start to now, or zero if the clock disagrees --
+/// `started` survives a reboot, and a machine whose clock moved backwards should
+/// report nothing rather than a negative run.
+fn since(started: u64) -> f32 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_millis() as u64)
+        .ok()
+        .and_then(|now| now.checked_sub(started))
+        .map(|ms| ms as f32 / 1000.0)
+        .unwrap_or_default()
 }
 
 /// Every agent this session has seen, running or not.
@@ -579,14 +604,25 @@ impl Agents {
         // no on-the-way-out to rely on: quitting from the menu bar, a crash and a
         // reboot all end the process without asking, and a history that only
         // survives a polite exit is a history that is missing the interesting runs.
-        if self
+        let ended = self
             .items
             .lock()
             .unwrap()
             .iter()
-            .any(|a| a.id == id && a.finished())
-        {
+            .find(|a| a.id == id && a.finished())
+            .map(|a| (a.outcome(), a.step, a.started));
+        if let Some((outcome, steps, started)) = ended {
             self.write_down();
+            // How it ended, how long it took and how many steps that was --
+            // never the goal, the plan, or anything it saw. `counted` documents
+            // the whole list. Steps go in `detail` rather than in `seconds`,
+            // which is seconds: a column that means two things depending on the
+            // row is a column nobody can read a year from now.
+            crate::core::counted::send(
+                crate::core::counted::Count::of("agent")
+                    .taking(since(started))
+                    .shaped(format!("{outcome} in {steps}")),
+            );
         }
     }
 

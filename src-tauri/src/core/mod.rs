@@ -19,6 +19,7 @@ pub mod claimed;
 pub mod compact;
 pub mod connect;
 pub mod context;
+pub mod counted;
 pub mod judge;
 pub mod laps;
 pub mod memory;

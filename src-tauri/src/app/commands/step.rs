@@ -126,6 +126,18 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
         let Some(Step::Tour { say, parts, next }) = mapped else {
             unreachable!("just matched")
         };
+        // Counted before `play` consumes the parts. How many a tour was cut
+        // into, and whether it ended on something to press -- the two things
+        // `teaching::score` complains about most -- and nothing about the app
+        // being taught or what was said.
+        crate::core::counted::send(crate::core::counted::Count::of("teaching").shaped(format!(
+            "{} parts, {}",
+            parts.len(),
+            match next.is_some() {
+                true => "has next",
+                false => "ends flat",
+            }
+        )));
         let shown = crate::app::tour::play(&app, &say, parts, next).await;
         let nudge = app.state::<Nudge>();
         let goal = nudge.goal();

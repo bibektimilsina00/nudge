@@ -116,6 +116,19 @@ pub fn set_reviewing(app: AppHandle, on: bool) {
     );
 }
 
+/// Is this copy sending counts of what it does?
+#[tauri::command]
+pub fn counted() -> bool {
+    crate::core::counted::on()
+}
+
+/// Turn that off, or back on. Persists -- see `core::counted` for why it is a
+/// file of its own rather than a config key.
+#[tauri::command]
+pub fn set_counted(on: bool) {
+    crate::core::counted::set(on);
+}
+
 /// Which key the next request will use, and where it came from.
 ///
 /// Two separate facts, because the panel says different things about them: an

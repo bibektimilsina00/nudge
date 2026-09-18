@@ -88,6 +88,7 @@ export function Settings({
   const [version, setVersion] = useState("");
   const [update, setUpdate] = useState<{ version: string; notes: string } | null>(null);
   const [reviewing, setReviewing] = useState(true);
+  const [counted, setCounted] = useState(true);
   const [taking, setTaking] = useState(false);
   const [allowed, setAllowed] = useState<Allowed[]>([]);
   const [brain, setBrain] = useState<Brain | null>(null);
@@ -115,6 +116,7 @@ export function Settings({
     );
     void invoke<Allowed[]>("reach").then(setAllowed);
     void invoke<boolean>("reviewing").then(setReviewing);
+    void invoke<boolean>("counted").then(setCounted);
     void invoke<Brain>("brain").then(setBrain);
     void invoke<Access>("model_access").then(setAccess);
     void invoke<string>("look").then(setLook);
@@ -682,6 +684,28 @@ export function Settings({
           }
           chevron
           onClick={() => setWhere("permissions")}
+        />
+        {/* The sub line is the whole disclosure on purpose. "Help improve
+            Nudge by sharing usage data" is the sentence every app uses and
+            nobody believes; an app that reads your screen has to say the
+            actual list, and the actual list is short enough to fit. */}
+        <Row
+          icon={<I.Spark />}
+          label="Send anonymous counts"
+          sub={
+            counted
+              ? "How long turns take and which model answered. Never what you asked, said, or had on screen."
+              : "Off. Nothing is sent, and nothing is kept to send later."
+          }
+          trailing={
+            <Toggle
+              on={counted}
+              onChange={(on) => {
+                setCounted(on);
+                void invoke("set_counted", { on });
+              }}
+            />
+          }
         />
       </Section>
 

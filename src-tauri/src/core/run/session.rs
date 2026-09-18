@@ -747,13 +747,22 @@ impl Nudge {
                 }
                 // And written down, because the printed line answers "why was
                 // that slow" only while it is still on screen.
-                crate::core::laps::keep(&crate::core::laps::Turn::new(
+                let turn = crate::core::laps::Turn::new(
                     stages,
                     self.0.provider_name(),
                     self.0.goal().chars().count(),
                     crate::core::screen::ink::drawn(),
                     crate::core::provider::last_prompt_chars(),
-                ));
+                );
+                // The same numbers, minus everything that identifies the turn:
+                // how long it took and which provider answered, never the goal.
+                // `counted` is off in one click and documents the whole list.
+                crate::core::counted::send(
+                    crate::core::counted::Count::of("turn")
+                        .taking(turn.total)
+                        .shaped(&turn.provider),
+                );
+                crate::core::laps::keep(&turn);
             }
         }
         let _report = Report(self);
