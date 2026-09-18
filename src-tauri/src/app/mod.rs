@@ -19,6 +19,25 @@ use state::{
 use tauri::Manager;
 
 pub fn run() {
+    // Before anything touches the web view.
+    //
+    // WebKitGTK 2.42 renders through DMA-BUF, and on a machine whose driver
+    // cannot hand it one -- a VM, a hybrid NVIDIA laptop, Xwayland in several
+    // configurations -- it does not fall back, it prints
+    // `Could not create default EGL display: EGL_BAD_PARAMETER. Aborting...`
+    // once per window and leaves them blank. The first Linux user to run this
+    // saw it four times, one for each of ours.
+    //
+    // Set rather than forced: anybody who has already worked out that their
+    // machine wants the other renderer has said so in the environment, and this
+    // is not the place to overrule them.
+    #[cfg(target_os = "linux")]
+    if std::env::var_os("WEBKIT_DISABLE_DMABUF_RENDERER").is_none() {
+        // SAFETY: before any thread exists -- this is the first line of the
+        // process's own entry point.
+        unsafe { std::env::set_var("WEBKIT_DISABLE_DMABUF_RENDERER", "1") };
+    }
+
     tauri::Builder::default()
         .plugin(tauri_plugin_updater::Builder::new().build())
         .setup(|app| {

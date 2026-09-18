@@ -164,7 +164,15 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
-            provider: "ollama".into(),
+            // Gemini, not Ollama, and not because it is better.
+            //
+            // A fresh install has no config file, so this is what everybody who
+            // downloads Nudge gets. Ollama was the honest default when a hosted
+            // model meant finding an API key first: at least a local one might
+            // be installed. It is not honest now -- signing in gets a model with
+            // nothing to set up -- and the first thing a Linux user reported was
+            // `provider = ollama` on a machine with no Ollama on it.
+            provider: "gemini".into(),
             model: None,
             think: None,
             verify: false,
