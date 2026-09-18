@@ -39,6 +39,12 @@ jobs:
               - 'src-tauri/**'
               - 'ui/**'
               - 'Makefile'
+              # The build's own configuration. Left out, a change to the list of
+              # libraries a Linux build needs skipped the job that would have
+              # found it wrong -- which is what happened: a green tick on a
+              # commit whose only purpose was fixing that job.
+              - '.github/workflows/ci.yml'
+              - '.github/actions/linux-deps/**'
             server:
               - 'server/**'
             web:
