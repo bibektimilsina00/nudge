@@ -78,6 +78,7 @@ impl Provider for Gemini {
              shapes:\n\
              {{\"kind\":\"point\",\"control\":7,\"act\":\"click|doubleClick|hover\",\"say\":\"...\"}}\n\
              {{\"kind\":\"point\",\"point\":[y,x],\"act\":\"click|doubleClick|hover\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"point\",\"region\":[y0,x0,y1,x1],\"act\":\"hover\",\"say\":\"...\"}}\n\
              {{\"kind\":\"done\",\"say\":\"...\"}}\n\
              {{\"kind\":\"unsure\",\"say\":\"...\"}}\n\
              {{\"kind\":\"launch\",\"app\":\"...\",\"say\":\"...\"}}\n\
@@ -111,7 +112,14 @@ impl Provider for Gemini {
              where y and x are normalised to 0-1000. Use \"control\" with a \
              number from the list above whenever the thing you want is on it -- \
              a number is exact and a guess at a pixel is not. \"point\" is for \
-             everything the list does not contain.",
+             everything the list does not contain.\n\
+             \"region\" is for showing somebody a whole *area* rather than one \
+             control: the media pool, a sidebar, a toolbar. Give the corners as \
+             [top, left, bottom, right], normalised to 0-1000 like \"point\". \
+             Use it while explaining what part of a window is for, where a ring \
+             on a single pixel would point at nothing in particular. Many \
+             applications publish no control list at all, and this is how you \
+             show somebody around one of those.",
             prompt(ask)
         );
         let body = json!({
@@ -178,6 +186,29 @@ impl Provider for Gemini {
             // gave both, and the error below is right when it did not -- either
             // way, better than clicking a control we cannot identify.
             eprintln!("  control {n} is not on the list of {}", ask.controls.len());
+        }
+
+        // An area, given as corners. Its centre is where the pointer goes and
+        // its size is what the outline is drawn from, so a window nobody can
+        // read through the accessibility tree can still be shown around.
+        if let Some(r) = v["region"].as_array() {
+            let c: Vec<f64> = r.iter().filter_map(|n| n.as_f64()).collect();
+            if c.len() == 4 {
+                let (top, left, bottom, right) = (c[0], c[1], c[2], c[3]);
+                let a = denorm(&[top, left], shot.sent.0, shot.sent.1);
+                let b = denorm(&[bottom, right], shot.sent.0, shot.sent.1);
+                let size = shot.to_global_size((b.x - a.x).abs(), (b.y - a.y).abs());
+                return Ok(Step::Point {
+                    at: Point {
+                        x: (a.x + b.x) / 2.0,
+                        y: (a.y + b.y) / 2.0,
+                    },
+                    size: Some(size),
+                    control: None,
+                    say,
+                    act: super::act_from(v["act"].as_str()),
+                });
+            }
         }
 
         let pt: Vec<f64> = v["point"]

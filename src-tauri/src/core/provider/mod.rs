@@ -851,12 +851,13 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     // spent on nothing -- and this is read on every single turn.
     // How to explain a screen somebody is trying to learn.
     //
-    // Only when there are controls, because that is what says a window is in
-    // front and there is something to point at. Asked to explain with no screen
-    // to explain, this would be a paragraph of advice about pointing.
-    let teaching = if ask.controls.is_empty() {
-        String::new()
-    } else {
+    // Not gated on the control list, which is what it was and which made it
+    // useless exactly where it was needed. DaVinci Resolve publishes no usable
+    // accessibility tree -- every step it produced came back `control: None` --
+    // so the guidance disappeared for the one application somebody was asking
+    // to be taught. A screenshot is always there; that is the thing being
+    // explained, and it is enough.
+    let teaching = {
         "\n\n## Explaining what is on the screen\n\n\
          \"Teach me this\", \"what is this app\", \"how do I use this\", \"what \
          does this do\" -- these ask for a guided tour of what is in front of \
@@ -869,9 +870,13 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          - Do NOT choose `ask` to find out which part they meant. They are \
          looking at the whole thing and do not yet know its parts -- that is \
          exactly what they asked you to fix. Begin with what is on the screen.\n\
-         - Do NOT choose `done` or `reply` with a list of what you could \
-         cover. A menu of topics is what somebody offers when they do not want \
-         to begin.\n\n\
+         - Do NOT choose `done` or `reply` at all on the first step. Both end \
+         the turn, and a tour that ends after one sentence is not a tour. Even \
+         a good short answer is the wrong shape here: it tells somebody about \
+         the screen instead of showing them it.\n\n\
+         Your first step is a `point` at the first region, with one sentence \
+         naming it. Then the next region, then the next. `done` comes at the \
+         end, after the tour, not instead of it.\n\n\
          Teach it the way a person sitting beside them would: one thing at a \
          time, pointing at each one as they name it. So answer with a \
          *sequence* of `point` steps, one per region, each with a `say` of one \
@@ -1769,15 +1774,19 @@ mod tests {
         // a menu of topics. Each is named so none of them reads as reasonable.
         assert!(p.contains("Do NOT choose `agent`"));
         assert!(p.contains("Do NOT choose `ask`"));
-        assert!(p.contains("Do NOT choose `done` or `reply`"));
+        assert!(p.contains("Do NOT choose `done` or `reply` at all on the first step"));
+        assert!(p.contains("Your first step is a `point`"));
     }
 
     #[test]
-    fn a_run_with_no_screen_is_not_told_how_to_explain_one() {
-        // No controls means no window in front, and a paragraph about pointing
-        // at regions is a paragraph about nothing.
-        let a = ask("what is the weather", &[], false);
-        assert!(!prompt(&a).contains("Explaining what is on the screen"));
+    fn the_explaining_guidance_does_not_depend_on_the_control_list() {
+        // It used to, and that made it useless precisely where it was needed:
+        // DaVinci Resolve publishes no usable accessibility tree, so the list
+        // was empty and the guidance vanished for the application somebody was
+        // actually asking to be taught.
+        let a = ask("teach me this", &[], false);
+        assert!(a.controls.is_empty());
+        assert!(prompt(&a).contains("Explaining what is on the screen"));
     }
 
     #[test]

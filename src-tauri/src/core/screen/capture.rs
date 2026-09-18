@@ -59,6 +59,17 @@ impl Shot {
         }
     }
 
+    /// A size in the picture's pixels, as a size in screen points.
+    ///
+    /// The scaling half of `to_global` and none of the offset: an origin moves a
+    /// position and does not change how big anything is.
+    pub fn to_global_size(&self, w: f64, h: f64) -> (f64, f64) {
+        (
+            w * self.logical.0 / self.sent.0 as f64,
+            h * self.logical.1 / self.sent.1 as f64,
+        )
+    }
+
     /// A tiny greyscale thumbnail, for "did anything actually happen?".
     ///
     /// Comparing full screenshots is hopeless -- a clock digit, an antialiased
