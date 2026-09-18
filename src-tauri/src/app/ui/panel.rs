@@ -98,7 +98,7 @@ pub fn overview() -> bool {
 /// The counter is plain load-then-store rather than a real atomic dance
 /// because this only ever runs on the main thread, from one poll.
 #[cfg(target_os = "macos")]
-pub fn watch_overview(_app: &AppHandle) {
+pub fn watch_overview(app: &AppHandle) {
     use std::sync::atomic::{AtomicU8, Ordering::Relaxed};
     /// Consecutive polls that have said the overview is gone.
     ///
@@ -112,15 +112,29 @@ pub fn watch_overview(_app: &AppHandle) {
 
     if crate::app::ui::native::mission_control() {
         CLEAR.store(0, Relaxed);
-        OVERVIEW.store(true, Relaxed);
+        if !OVERVIEW.swap(true, Relaxed) {
+            told(app, true);
+        }
         return;
     }
 
     let seen = CLEAR.load(Relaxed).saturating_add(1);
     CLEAR.store(seen.min(ENOUGH), Relaxed);
-    if seen >= ENOUGH {
-        OVERVIEW.store(false, Relaxed);
+    if seen >= ENOUGH && OVERVIEW.swap(false, Relaxed) {
+        told(app, false);
     }
+}
+
+/// Tell the windows the overview came or went.
+///
+/// They draw the companion with a live WebGL canvas that animates on its own,
+/// and Mission Control is already compositing every window on the machine. Two
+/// more surfaces redrawing sixty times a second on top of that is work nobody
+/// asked for at the worst possible moment, so they stop while it is up.
+#[cfg(target_os = "macos")]
+fn told(app: &AppHandle, up: bool) {
+    use tauri::Emitter as _;
+    app.emit("overview", up).ok();
 }
 
 #[cfg(not(target_os = "macos"))]

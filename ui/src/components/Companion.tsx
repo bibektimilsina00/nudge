@@ -175,7 +175,7 @@ export function Companion({
  * React at all.
  */
 function Skin({ look }: { look: Look }) {
-  const { RiveComponent } = useRive({
+  const { rive, RiveComponent } = useRive({
     src: look.src,
     // Run the machine, do not just play a timeline: this is what gives the idle
     // its own life instead of a loop we drive.
@@ -183,5 +183,27 @@ function Skin({ look }: { look: Look }) {
     autoplay: true,
     layout: new Layout({ fit: Fit.Contain, alignment: Alignment.Center }),
   });
+
+  // Still while the overview is up.
+  //
+  // This is a WebGL canvas redrawing sixty times a second so the cat is alive
+  // when nobody is asking it for anything, which is the whole reason for
+  // carrying the runtime. Mission Control is already compositing an animation
+  // of every window on the machine, and two more live surfaces on top of that
+  // is the one thing here that Clicky does not do -- its companion is SwiftUI
+  // drawing native shapes, not a canvas.
+  //
+  // Paused, not hidden. It stays exactly where it is and stops costing frames.
+  useEffect(() => {
+    if (!rive) return;
+    const sub = listen<boolean>("overview", (e) => {
+      if (e.payload) rive.pause();
+      else rive.play();
+    });
+    return () => {
+      void sub.then((off) => off());
+    };
+  }, [rive]);
+
   return <RiveComponent className="size-full" />;
 }
