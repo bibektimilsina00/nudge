@@ -88,8 +88,7 @@ def main() -> int:
         shutil.copy2(args.update, dest_dir / update_file)
         # Either the signature itself or the .sig file holding it. The workflow
         # has a path; a person at a terminal has whichever is nearer.
-        sig = Path(args.signature)
-        signature = sig.read_text().strip() if sig.is_file() else args.signature.strip()
+        signature = looks_like(args.signature)
         if not signature:
             print("the signature is empty", file=sys.stderr)
             return 1
