@@ -857,7 +857,42 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let teaching = if ask.controls.is_empty() {
         String::new()
     } else {
-        "\n\n## Explaining what is on the screen\n\n         When somebody asks what an application is, or how to use it, or what a          part of it does, do NOT answer with one paragraph describing          everything. That is a manual read aloud. Teach it the way a person          sitting beside them would: one thing at a time, pointing at each one          as they name it.\n\n         So answer with a *sequence* of `point` steps, one per region, each with          a `say` of one short sentence naming that region and what it is for.          Prefer `control` numbers -- a numbered control carries its size, which          is what lets a whole panel be outlined rather than a spot marked          inside it.\n\n         Say where the thing is, not just what it is called. \"This top left          area is media storage, where you browse files on your Mac\" teaches;          \"the application has a media storage panel\" does not, because the          person is looking at the screen and does not know which part you mean.\n\n         Four or five regions is a tour. More is a lecture. Take the ones          somebody needs first and leave the rest.\n\n         Finish with one concrete thing to do next, as its own step -- \"first,          click the movies folder so we can find a video to import\" -- rather          than a list of everything that could be done. One next action, not a          menu of them.\n\n         Never stack clauses with semicolons. Each region is its own step and          its own sentence, because each one is spoken while its own outline is          on the screen."
+        "\n\n## Explaining what is on the screen\n\n\
+         \"Teach me this\", \"what is this app\", \"how do I use this\", \"what \
+         does this do\" -- these ask for a guided tour of what is in front of \
+         you, and you give it NOW, yourself, in this conversation.\n\n\
+         Three wrong turns, all of which look reasonable and none of which \
+         teaches anybody anything:\n\
+         - Do NOT choose `agent`. A tour is not a task to be taken away and \
+         worked on. The person is sitting in front of the screen waiting to be \
+         shown around it.\n\
+         - Do NOT choose `ask` to find out which part they meant. They are \
+         looking at the whole thing and do not yet know its parts -- that is \
+         exactly what they asked you to fix. Begin with what is on the screen.\n\
+         - Do NOT choose `done` or `reply` with a list of what you could \
+         cover. A menu of topics is what somebody offers when they do not want \
+         to begin.\n\n\
+         Teach it the way a person sitting beside them would: one thing at a \
+         time, pointing at each one as they name it. So answer with a \
+         *sequence* of `point` steps, one per region, each with a `say` of one \
+         short sentence naming that region and what it is for. Prefer \
+         `control` numbers -- a numbered control carries its size, which is \
+         what lets a whole panel be outlined rather than a spot marked inside \
+         it.\n\n\
+         Say where a thing is, not only what it is called. \"This top left \
+         area is media storage, where you browse files on your Mac\" teaches; \
+         \"the application has a media storage panel\" does not, because the \
+         person is looking at the screen and does not know which part you \
+         mean.\n\n\
+         Four or five regions is a tour. More is a lecture. Take the ones \
+         somebody needs first and leave the rest.\n\n\
+         Finish with one concrete thing to do next, as its own step -- \"first, \
+         click the movies folder so we can find a video to import\" -- rather \
+         than a list of everything that could be done. One next action, not a \
+         menu of them.\n\n\
+         Never stack clauses with semicolons. Each region is its own step and \
+         its own sentence, because each is spoken while its own outline is on \
+         the screen."
             .to_string()
     };
 
@@ -1729,6 +1764,12 @@ mod tests {
         let p = prompt(&a);
         assert!(p.contains("Explaining what is on the screen"));
         assert!(p.contains("one thing at a time"));
+        // The three exits it actually took when asked to teach DaVinci Resolve:
+        // handed the tour to an agent, asked which part was meant, then offered
+        // a menu of topics. Each is named so none of them reads as reasonable.
+        assert!(p.contains("Do NOT choose `agent`"));
+        assert!(p.contains("Do NOT choose `ask`"));
+        assert!(p.contains("Do NOT choose `done` or `reply`"));
     }
 
     #[test]
