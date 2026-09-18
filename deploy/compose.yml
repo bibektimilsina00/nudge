@@ -18,6 +18,12 @@ services:
       # the site, so the browser makes no cross-origin request at all.
       NUDGE_WEB_ORIGIN: https://nudge.runmycrew.com
       NUDGE_RELEASES_DIR: /srv/releases
+      # Where this API is reachable from outside, for the one URL that has to be
+      # absolute: the updater is handed it by a different process and cannot
+      # resolve a relative path. Unset, the API builds it from the request --
+      # which arrives from Caddy as plain HTTP to an internal host, so every
+      # running copy was being told to fetch its update over http://.
+      NUDGE_PUBLIC_URL: https://nudge.runmycrew.com
       # Which application a Google sign-in must have been minted for. Not a
       # secret -- it is a desktop client id and ships inside every copy of the
       # app -- but it is not optional either: with this unset the server refuses
