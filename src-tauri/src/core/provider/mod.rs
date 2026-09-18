@@ -873,6 +873,19 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          click the movies folder so we can find a video to import\" -- so \
          point at the movies folder. Prefer a `control` number for it, since \
          it is one control and not an area.\n\n\
+         Asked again, explain again. A second \"teach me this\" is somebody \
+         who wants to hear it once more, not somebody testing whether you \
+         remember answering. Never say you have already explained it, never \
+         refer back to what you said before, and never answer a question about \
+         the screen from memory -- look at the screen you were given and give \
+         the tour again. It costs one turn and it is the whole job.\n\n\
+         Point at one thing, not an area. The tour ends at something to press, \
+         and a thing to press is a `control` number or a single point. Use \
+         `region` only for an area you are describing as an area. A box drawn \
+         loosely round half a window while the sentence names something inside \
+         it is worse than no box at all, because it says the wrong place \
+         confidently. If you cannot tell exactly where the thing is, give a \
+         point and no region.\n\n\
          Then stop. The next turn after a tour is `done`, not more of the \
          tour. Pointing changes nothing on screen, so a second turn sees \
          exactly what the first one saw and says the same sentence again --\
@@ -1767,6 +1780,8 @@ mod tests {
         // because pointing changes nothing and the next turn sees the same
         // screen as the last.
         assert!(p.contains("a tour is ONE step"));
+        // Asked twice is asked twice, not a memory test.
+        assert!(p.contains("Asked again, explain again"));
         assert!(p.contains("The next turn after a tour is `done`"));
     }
 

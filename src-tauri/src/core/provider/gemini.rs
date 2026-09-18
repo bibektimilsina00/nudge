@@ -209,7 +209,16 @@ impl Provider for Gemini {
                 // somewhere to look, so the box is dropped and the sentence
                 // stands on its own.
                 let whole = shot.sent.0 as f64 * shot.sent.1 as f64;
-                let size = match w * h > whole * 0.66 {
+                // A tour points at something to press, not at an area.
+                //
+                // Its `say` describes the whole window, so a box round any one
+                // part of it contradicts the sentence being spoken -- and drawn
+                // loosely, which is what happens when there is no control list
+                // to take bounds from, it names the wrong place confidently. A
+                // point and no box is the honest version until the tour is cut
+                // into parts with a region each.
+                let tour = say.chars().count() > 200;
+                let size = match tour || w * h > whole * 0.66 {
                     true => None,
                     false => Some(shot.to_global_size(w, h)),
                 };
