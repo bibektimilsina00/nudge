@@ -859,45 +859,33 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     // explained, and it is enough.
     let teaching = {
         "\n\n## Explaining what is on the screen\n\n\
-         \"Teach me this\", \"what is this app\", \"how do I use this\", \"what \
-         does this do\" -- these ask for a guided tour of what is in front of \
-         you, and you give it NOW, yourself, in this conversation.\n\n\
-         Three wrong turns, all of which look reasonable and none of which \
-         teaches anybody anything:\n\
-         - Do NOT choose `agent`. A tour is not a task to be taken away and \
-         worked on. The person is sitting in front of the screen waiting to be \
-         shown around it.\n\
-         - Do NOT choose `ask` to find out which part they meant. They are \
-         looking at the whole thing and do not yet know its parts -- that is \
-         exactly what they asked you to fix. Begin with what is on the screen.\n\
-         - Do NOT choose `done` or `reply` at all on the first step. Both end \
-         the turn, and a tour that ends after one sentence is not a tour. Even \
-         a good short answer is the wrong shape here: it tells somebody about \
-         the screen instead of showing them it.\n\n\
-         Your first step is a `point` at the first region, with one sentence \
-         naming it. Then the next region, then the next. `done` comes at the \
-         end, after the tour, not instead of it.\n\n\
-         Teach it the way a person sitting beside them would: one thing at a \
-         time, pointing at each one as they name it. So answer with a \
-         *sequence* of `point` steps, one per region, each with a `say` of one \
-         short sentence naming that region and what it is for. Prefer \
-         `control` numbers -- a numbered control carries its size, which is \
-         what lets a whole panel be outlined rather than a spot marked inside \
-         it.\n\n\
-         Say where a thing is, not only what it is called. \"This top left \
-         area is media storage, where you browse files on your Mac\" teaches; \
-         \"the application has a media storage panel\" does not, because the \
-         person is looking at the screen and does not know which part you \
-         mean.\n\n\
-         Four or five regions is a tour. More is a lecture. Take the ones \
-         somebody needs first and leave the rest.\n\n\
-         Finish with one concrete thing to do next, as its own step -- \"first, \
-         click the movies folder so we can find a video to import\" -- rather \
-         than a list of everything that could be done. One next action, not a \
-         menu of them.\n\n\
-         Never stack clauses with semicolons. Each region is its own step and \
-         its own sentence, because each is spoken while its own outline is on \
-         the screen."
+         \"Teach me this\", \"what is this app\", \"how do I use this\" -- these \
+         ask for a tour, and a tour is ONE step, not a series of them.\n\n\
+         Answer with a single `point`. Its `say` is the whole explanation: \
+         name each part of the window and what it is for, in the order \
+         somebody meets them, in a few short sentences. Say where each one is \
+         -- \"the top left area is media storage, where you browse files on \
+         your Mac\" -- because the person is looking at the screen and does \
+         not know which part you mean. Then finish with the one thing to do \
+         first.\n\n\
+         What you point at is that first thing, not the area you just \
+         described. A tour ends by putting somebody at the start: \"first, \
+         click the movies folder so we can find a video to import\" -- so \
+         point at the movies folder. Prefer a `control` number for it, since \
+         it is one control and not an area.\n\n\
+         Then stop. The next turn after a tour is `done`, not more of the \
+         tour. Pointing changes nothing on screen, so a second turn sees \
+         exactly what the first one saw and says the same sentence again --\
+         which is what it did: three turns running, each naming the same area \
+         with a slightly different box round it.\n\n\
+         Do NOT choose `agent`. A tour is not a task to be taken away and \
+         worked on; the person is in front of the screen waiting to be shown \
+         around it. Do NOT choose `ask` to find out which part they meant -- \
+         not knowing the parts is what they asked you to fix. Do NOT offer a \
+         list of topics you could cover; that is what somebody says when they \
+         do not want to begin.\n\n\
+         Never stack clauses with semicolons. Short sentences: this is spoken \
+         aloud, and a list read out is a list nobody follows."
             .to_string()
     };
 
@@ -1768,14 +1756,18 @@ mod tests {
         a.controls = &controls;
         let p = prompt(&a);
         assert!(p.contains("Explaining what is on the screen"));
-        assert!(p.contains("one thing at a time"));
+        assert!(p.contains("name each part of the window"));
         // The three exits it actually took when asked to teach DaVinci Resolve:
         // handed the tour to an agent, asked which part was meant, then offered
         // a menu of topics. Each is named so none of them reads as reasonable.
         assert!(p.contains("Do NOT choose `agent`"));
         assert!(p.contains("Do NOT choose `ask`"));
-        assert!(p.contains("Do NOT choose `done` or `reply` at all on the first step"));
-        assert!(p.contains("Your first step is a `point`"));
+        // The tour is one step. It produced three in a row otherwise, each
+        // saying "this top left area is the Media Pool" with a different box,
+        // because pointing changes nothing and the next turn sees the same
+        // screen as the last.
+        assert!(p.contains("a tour is ONE step"));
+        assert!(p.contains("The next turn after a tour is `done`"));
     }
 
     #[test]
