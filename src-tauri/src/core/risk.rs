@@ -90,10 +90,9 @@ pub fn of(step: &Step) -> Risk {
     match step {
         // Nothing leaves the machine and nothing on it changes.
         Step::Point { .. }
-        // Reading our own configuration and our own notes back. Nothing leaves
-        // the machine and nothing on it changes.
+        // Reading our own configuration back. Nothing leaves the machine and
+        // nothing on it changes.
         | Step::Tools { .. }
-        | Step::Recall { .. }
         // Talking and drawing on the screen. It is a point several times over.
         | Step::Tour { .. }
         | Step::Done { .. }

@@ -182,6 +182,8 @@ mod imp {
         "unsupported"
     }
     pub fn request_access() {}
+    /// Nothing to warm: there is no on-device recogniser here to load.
+    pub fn warm() {}
     pub fn transcribe(_wav: &[u8]) -> Option<String> {
         None
     }

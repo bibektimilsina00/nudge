@@ -11,16 +11,17 @@
 //! turn knows what the last one covered. Six minutes later, or after a restart,
 //! it did not, and the offer became a lie.
 //!
-//! ## Two different questions, two different windows
+//! ## The conversation you are in, and nothing older
 //!
-//! *What was I just doing* wants the detail and goes stale fast: a list of steps
-//! from half an hour ago is not context, it is noise that reads as progress. It
-//! keeps the five-minute window it always had.
+//! Only the current thread is carried: what was being done a few minutes ago,
+//! which is what makes "that", "it" and "the next bit" resolve. When the subject
+//! changes, the new conversation starts clean.
 //!
-//! *What have we been doing today* wants one line and stays useful far longer.
-//! The goal, and the words the person actually used. That is what makes "teach me
-//! the next bit" work an hour later, and it costs a line of prompt rather than a
-//! page.
+//! An earlier version carried a line about every thread from the last eight
+//! hours, on the reasoning that "carry on with what we were doing" might mean
+//! this morning. In use it meant a question about the screen arrived with three
+//! unrelated errands attached, and the model reached for them -- so the window
+//! is one conversation again. The file keeps the rest; nothing reads it.
 //!
 //! ## One line at a time, like everything else here
 //!
@@ -67,10 +68,6 @@ const TAIL_CHARS: usize = 2000;
 
 /// How long the detail stays relevant.
 const FRESH: u64 = 5 * 60 * 1000;
-/// How long the one-line version does. A working day: long enough for "carry on
-/// with what we were doing" after lunch, short enough that yesterday's work does
-/// not quietly steer today's.
-const SAME_DAY: u64 = 8 * 60 * 60 * 1000;
 
 /// How many threads are read back. The file grows forever; the question never
 /// reaches further back than the last few.
@@ -188,75 +185,22 @@ impl Threads {
     }
 }
 
-/// The one that best answers a question about earlier work.
-///
-/// Matched on the words, the same way a tool server is: what somebody says about
-/// a piece of work tends to use the words that were in it. Nothing clever --
-/// there are a handful of threads and a person can read them, which is exactly
-/// the situation where a retrieval engine is a dependency bought for nothing.
-pub fn best<'a>(about: &str, threads: &'a [Thread]) -> Option<&'a Thread> {
-    let asked: Vec<String> = about
-        .to_ascii_lowercase()
-        .split(|c: char| !c.is_ascii_alphanumeric())
-        .filter(|w| w.len() >= 4)
-        .map(str::to_string)
-        .collect();
-    threads
-        .iter()
-        .filter(|t| !t.wall)
-        .map(|t| {
-            let said = format!("{} {} {}", t.goal, t.said.join(" "), t.tail.join(" "))
-                .to_ascii_lowercase();
-            (
-                asked.iter().filter(|w| said.contains(w.as_str())).count(),
-                t,
-            )
-        })
-        .filter(|(n, _)| *n > 0)
-        .max_by_key(|(n, _)| *n)
-        .map(|(_, t)| t)
-}
-
-impl Thread {
-    /// The whole thing, for when it has actually been asked for.
-    pub fn in_full(&self) -> String {
-        let mut out = format!("They had asked: {}\n", self.goal);
-        for line in &self.said {
-            out.push_str(&format!("They said: {line}\n"));
-        }
-        for line in &self.tail {
-            out.push_str(&format!("{line}\n"));
-        }
-        out
-    }
-}
-
 /// What to put in front of the model about work that is already finished.
 ///
 /// Newest first, and two shapes: the freshest thread in full, and the ones
 /// before it as a line each. Pure so the windows can be tested without waiting
 /// five minutes.
 pub fn carry(threads: &[Thread], now: u64) -> Vec<String> {
-    let mut out = Vec::new();
-    for (n, thread) in threads.iter().enumerate() {
-        if thread.wall {
-            break;
-        }
-        let age = now.saturating_sub(thread.at);
-        if age > SAME_DAY {
-            break;
-        }
-        // The goal itself first, because it is what makes "that" and "it"
-        // resolve, and what makes an offer of a next chapter answerable.
-        out.push(match n {
-            0 => format!("They had asked: {}", thread.goal),
-            _ => format!("Earlier today they asked: {}", thread.goal),
-        });
-        // The detail, only while it is still the same piece of work.
-        if n == 0 && age <= FRESH {
-            out.extend(thread.tail.iter().cloned());
-        }
+    let Some(thread) = threads.first() else {
+        return Vec::new();
+    };
+    if thread.wall || now.saturating_sub(thread.at) > FRESH {
+        return Vec::new();
     }
+    // The goal first, because it is what makes "that" and "it" resolve, and what
+    // makes an offer of a next chapter answerable.
+    let mut out = vec![format!("They had asked: {}", thread.goal)];
+    out.extend(thread.tail.iter().cloned());
     out
 }
 
@@ -272,20 +216,6 @@ mod tests {
             tail: vec!["did a thing".into(), "did another".into()],
             wall: false,
         }
-    }
-
-    /// The case the step exists for: something from this morning, asked about
-    /// this afternoon, when only its one-line version is being carried.
-    #[test]
-    fn an_old_thread_can_be_found_by_what_it_was_about() {
-        let now = 200_000_000;
-        let threads = [
-            thread(now - 1000, "book a table at the thai place"),
-            thread(now - 100_000, "fix the login redirect on the website"),
-        ];
-        let found = best("what was that website thing", &threads).expect("a thread");
-        assert!(found.goal.contains("login redirect"));
-        assert!(best("something nobody ever mentioned", &threads).is_none());
     }
 
     #[test]
@@ -312,39 +242,28 @@ mod tests {
         assert!(carried.contains(&"did a thing".to_string()));
     }
 
-    /// The case this module exists for: the tour offered a next chapter, and the
-    /// answer came an hour later.
+    /// An hour later is a new conversation, not a continuation of the old one.
     #[test]
-    fn an_hour_later_the_goal_survives_and_the_steps_do_not() {
+    fn a_cold_thread_is_not_carried_at_all() {
         let hour = 60 * 60 * 1000;
-        let carried = carry(&[thread(1_000_000, "teach me davinci")], 1_000_000 + hour);
-        assert_eq!(carried, vec!["They had asked: teach me davinci"]);
+        assert!(carry(&[thread(1_000_000, "teach me davinci")], 1_000_000 + hour).is_empty());
     }
 
+    /// Only the one being had. An earlier version carried a line about every
+    /// thread from the last eight hours, and a question about the screen arrived
+    /// with three unrelated errands attached to it.
     #[test]
-    fn yesterday_is_not_carried_at_all() {
-        let day = 24 * 60 * 60 * 1000;
-        assert!(carry(&[thread(1_000_000, "something else")], 1_000_000 + day).is_empty());
-    }
-
-    /// Older threads are a line each, and stop at the first one out of range --
-    /// the file is in order, so there is nothing further back worth reading.
-    #[test]
-    fn the_ones_before_it_are_one_line_each() {
+    fn only_the_conversation_you_are_in_comes_with_you() {
         let now = 200_000_000;
         let threads = [
-            thread(now - 60_000, "the newest"),
-            thread(now - 120_000, "the one before"),
-            thread(now - 40 * 60 * 60 * 1000, "last week"),
+            thread(now - 60_000, "the one we are having"),
+            thread(now - 120_000, "the one before it"),
         ];
         let carried = carry(&threads, now);
-        assert!(carried.contains(&"They had asked: the newest".to_string()));
-        assert!(carried.contains(&"Earlier today they asked: the one before".to_string()));
+        assert!(carried[0].contains("the one we are having"));
         assert!(
-            !carried.iter().any(|l| l.contains("last week")),
+            !carried.iter().any(|l| l.contains("the one before it")),
             "{carried:?}"
         );
-        // One line for the older one, not its steps.
-        assert_eq!(carried.iter().filter(|l| *l == "did a thing").count(), 1);
     }
 }

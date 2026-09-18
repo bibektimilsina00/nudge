@@ -201,7 +201,6 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
         provider::Step::Tools { server, .. } => {
             println!("  tools:  asking {server} what it offers")
         }
-        provider::Step::Recall { about, .. } => println!("  recall: looking up {about:?}"),
         provider::Step::Request { method, url, .. } => println!("  http:   {method} {url}"),
         provider::Step::Delegate { task, .. } => println!("  hand over: {task}"),
         provider::Step::Remember { about, note, .. } => println!("  note:   {about}: {note}"),

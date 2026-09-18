@@ -520,31 +520,6 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
             .record_run(format!("{method} {url}"), said);
         crate::app::agent::publish(app);
     }
-    if let Step::Recall { about, .. } = step {
-        // An earlier conversation, fetched rather than carried.
-        //
-        // What the prompt carries about finished work is a line each -- enough
-        // to know a thing happened, not enough to act on it. Anything more would
-        // be paid for on every turn to be useful on one.
-        let nudge = app.state::<Nudge>();
-        let said = match nudge.looked_up(&format!("recall:{about}")) {
-            // The same lookup, twice. Answered from what is already there, and
-            // told plainly -- an agent did this ten times in a row, each time
-            // with the answer in its own history.
-            true => format!(
-                "Already recalled {about:?} this turn -- it is in the history above.                  Use it, or do something else."
-            ),
-            false => {
-                let threads = nudge.threads.recent();
-                match crate::core::threads::best(about, &threads) {
-                    Some(thread) => thread.in_full(),
-                    None => format!("Nothing earlier about {about:?}."),
-                }
-            }
-        };
-        eprintln!("recall {about:?} -> {} chars", said.len());
-        nudge.note(said);
-    }
     if let Step::Tools { server, .. } = step {
         // The rest of a server's catalogue, on request.
         //
@@ -554,12 +529,6 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
         // hundred tool lines in every turn was forty-seven per cent of what was
         // sent, to answer questions that touched none of them.
         let nudge = app.state::<Nudge>();
-        if nudge.looked_up(&format!("tools:{server}")) {
-            nudge.note(format!(
-                "Already listed {server}'s tools above. They have not changed."
-            ));
-            return Ok(());
-        }
         let offered: Vec<String> = nudge
             .tools()
             .iter()

@@ -82,13 +82,6 @@ pub enum Step {
         parts: Vec<Step>,
         next: Option<String>,
     },
-    /// Something from an earlier conversation, in full.
-    ///
-    /// The prompt carries finished work as a line each -- what was asked, and
-    /// nothing else -- which is enough to know a thing happened and not enough
-    /// to act on it. This is how the rest is fetched, and it is the same trade
-    /// the tool catalogue makes: an index always, the contents when wanted.
-    Recall { about: String, say: String },
     /// What one server offers, in full.
     ///
     /// The catalogue in the prompt names every connected server and lists the
@@ -377,7 +370,6 @@ impl Step {
             | Step::Mcp { .. }
             | Step::Request { .. }
             | Step::Tools { .. }
-            | Step::Recall { .. }
             | Step::Delegate { .. } => true,
             // Learns nothing from outside; it writes down what was already
             // learned from something that did.
@@ -408,8 +400,7 @@ impl Step {
 
     pub fn say(&self) -> &str {
         match self {
-            Step::Recall { say, .. }
-            | Step::Tools { say, .. }
+            Step::Tools { say, .. }
             | Step::Tour { say, .. }
             | Step::Point { say, .. }
             | Step::Done { say, .. }
@@ -456,8 +447,7 @@ impl Step {
 
     fn say_mut(&mut self) -> &mut String {
         match self {
-            Step::Recall { say, .. }
-            | Step::Tools { say, .. }
+            Step::Tools { say, .. }
             | Step::Tour { say, .. }
             | Step::Point { say, .. }
             | Step::Done { say, .. }
@@ -1207,14 +1197,6 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          Anything other than GET or HEAD needs to have been allowed, and if it \
          has not been you will be told so plainly -- say what you would have done \
          and that it needs allowing, rather than trying it another way.\n\n\
-         ## Asking about something from before\n\n\
-         What you are shown of finished work is one line each: what they asked \
-         for, and nothing else. When a request is about one of those -- \
-         \u{201c}what was that website thing\u{201d}, \u{201c}carry on with what we were \
-         doing\u{201d}, \u{201c}show me the next bit\u{201d} -- answer `recall` with a few \
-         words of it, and the whole conversation comes back. Better than guessing \
-         from a heading, and better than being handed every conversation there \
-         has ever been on the chance one of them matters.\n\n\
          ## Keeping what you find out\n\n\
          Things are strange in their own particular ways, and you find that out \
          by getting it wrong once. When a step fails and you work out why, answer \
@@ -1784,10 +1766,6 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
                 })
                 .filter(|said| !said.is_empty())
                 .unwrap_or(say),
-        }),
-        "recall" => Some(Step::Recall {
-            about: v["about"].as_str()?.trim().to_string(),
-            say,
         }),
         "tools" => Some(Step::Tools {
             server: v["server"].as_str()?.trim().to_string(),

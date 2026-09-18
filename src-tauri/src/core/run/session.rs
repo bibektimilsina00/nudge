@@ -75,15 +75,6 @@ pub struct Session {
     pub said: Vec<String>,
     /// The screen as it looked after the previous step.
     pub seen: Vec<u8>,
-    /// Lookups already done, by what they asked for.
-    ///
-    /// A lookup answers the same thing every time and changes nothing on screen,
-    /// so every signal a loop normally trips -- the screen moved, the output
-    /// differed -- says "nothing happened here". An agent recalled the same
-    /// conversation on turns eight, nine and ten, with the answer sitting in its
-    /// own history each time, because the only thing that differed between the
-    /// three was the sentence it said while doing it.
-    pub ran: Vec<String>,
     /// Which tool servers this session has called.
     ///
     /// Kept so their tools stay in front of the model for the rest of the task:
@@ -437,7 +428,6 @@ impl Nudge {
             goal,
             earlier,
             done: Vec::new(),
-            ran: Vec::new(),
             using: Vec::new(),
             folded: None,
             folded_upto: 0,
@@ -650,27 +640,6 @@ impl Nudge {
     ///
     /// Untrusted by default, and deliberately the easy one to reach for: most
     /// things that land here were written by somebody else.
-    /// Has this exact lookup already been done? Records it either way.
-    ///
-    /// The caller answers the second one from what is already in the history
-    /// rather than fetching the same answer again -- and says so, because a
-    /// repeat that silently returns the same text is a repeat nothing learns
-    /// from.
-    pub fn looked_up(&self, what: &str) -> bool {
-        let key = what.trim().to_ascii_lowercase();
-        let mut session = self.session.lock().unwrap();
-        let Some(ran) = session.as_mut().map(|s| &mut s.ran) else {
-            return false;
-        };
-        match ran.contains(&key) {
-            true => true,
-            false => {
-                ran.push(key);
-                false
-            }
-        }
-    }
-
     /// This session has called that server, so keep its tools listed.
     pub fn using(&self, server: &str) {
         if let Some(s) = self.session.lock().unwrap().as_mut() {
@@ -1093,26 +1062,6 @@ mod tests {
         assert!(carried.iter().any(|l| l.contains("Opened Safari")));
         // The goal comes first, because it is what makes "that" resolve.
         assert!(carried[0].contains("open safari"));
-    }
-
-    /// The bug this exists for: an agent recalled the same conversation on
-    /// turns eight, nine and ten, with the answer in its own history each time.
-    /// A lookup changes nothing on screen and answers the same thing every time,
-    /// so every signal that normally catches a loop says "nothing happened".
-    #[test]
-    fn the_same_lookup_is_only_done_once() {
-        let n = nudge();
-        n.begin("what did we do earlier".into());
-        assert!(!n.looked_up("recall:the website thing"));
-        assert!(n.looked_up("recall:the website thing"));
-        // Spelling is not a new question.
-        assert!(n.looked_up("recall:The Website Thing "));
-        // A different one still gets its answer.
-        assert!(!n.looked_up("recall:something else"));
-        // And a new piece of work starts with a clean slate.
-        n.end();
-        n.begin("a different task".into());
-        assert!(!n.looked_up("recall:the website thing"));
     }
 
     /// A turn that did nothing must not push a real conversation out of the slot.
