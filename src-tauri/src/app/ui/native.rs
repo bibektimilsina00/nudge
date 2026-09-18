@@ -191,7 +191,6 @@ pub fn mission_control() -> bool {
     let mut any_name = false;
     let mut dock_covers = false;
     let mut wm_seen = 0usize;
-    let mut named_wm: Vec<String> = Vec::new();
 
     for i in 0..list.len() {
         let win = unsafe {
@@ -226,9 +225,6 @@ pub fn mission_control() -> bool {
             .unwrap_or(false);
         if owner == "WindowManager" {
             wm_seen += 1;
-            if let Some(n) = name.as_ref() {
-                named_wm.push(n.to_string());
-            }
         }
         if owner == "WindowManager" && overview_window {
             spaces_bar = true;
@@ -256,20 +252,6 @@ pub fn mission_control() -> bool {
             if num(&w_key) > screen.width / 2.0 && num(&h_key) > screen.height / 2.0 {
                 dock_covers = true;
             }
-        }
-    }
-
-    // Temporary, and one line every few seconds. Two rounds have now been spent
-    // reasoning about why this answers "no" when the overview is plainly up.
-    {
-        use std::sync::atomic::{AtomicU32, Ordering::Relaxed};
-        static TICK: AtomicU32 = AtomicU32::new(0);
-        if TICK.fetch_add(1, Relaxed) % 30 == 0 {
-            eprintln!(
-                "overview?: spaces_bar={spaces_bar} any_name={any_name} dock_covers={dock_covers} \
-                 windows={} wm={wm_seen} named_wm={named_wm:?}",
-                list.len()
-            );
         }
     }
 
