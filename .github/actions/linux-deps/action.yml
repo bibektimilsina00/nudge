@@ -1,0 +1,27 @@
+# Every system library a Linux build of the app needs, in one place.
+#
+# Written twice -- once in CI, once in the release job -- it was wrong the first
+# time it ran: pipewire came in through `xcap` and only the image on the laptop
+# had it, so the workflow compiled locally and not on a runner. A list copied
+# into two files is a list that disagrees with itself.
+name: Linux build dependencies
+description: apt packages for building the Tauri app on Ubuntu.
+
+# webkit2gtk is the web view, appindicator is the tray, xdo and the X libraries
+# are the pointer and the keyboard. libasound is the microphone -- without it the
+# build fails on cpal rather than at the first recording, which is the better
+# place to find out. pipewire comes in under `xcap`, and clang because one of
+# these generates its bindings with bindgen.
+runs:
+  using: composite
+  steps:
+    - shell: bash
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+          librsvg2-dev libssl-dev file \
+          libxdo-dev libx11-dev libxi-dev libxtst-dev libxcb1-dev libxrandr-dev \
+          libasound2-dev libdbus-1-dev \
+          libpipewire-0.3-dev libgbm-dev \
+          libclang-dev clang
