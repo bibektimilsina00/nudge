@@ -40,11 +40,45 @@ struct Keys {
 }
 
 fn keys() -> Result<Keys, String> {
+    // Built into the binary, because a copy of this app on somebody else's Mac
+    // has none of this machine's files.
+    //
+    // Signing in with Google failed for the first person who downloaded a
+    // release with "no Google client at /Users/<them>/.config/gcp-oauth.keys.json"
+    // -- a path that exists here and nowhere else. GitHub's client id has
+    // always shipped inside the app; Google's was being read off the developer's
+    // disk, so it worked in every test and for nobody else.
+    //
+    // Compiled in rather than written down, because this repository is public.
+    // Google says a desktop client's secret "is obviously not treated as a
+    // secret" and expects it embedded, which is true of the shipped binary and
+    // not a reason to put it in a public git history.
+    //
+    // The file still answers when nothing was compiled in, which is what a
+    // checkout without the build secrets has.
+    match (
+        option_env!("NUDGE_GOOGLE_CLIENT_ID"),
+        option_env!("NUDGE_GOOGLE_CLIENT_SECRET"),
+    ) {
+        (Some(id), Some(secret)) if !id.is_empty() && !secret.is_empty() => {
+            return Ok(Keys {
+                id: id.to_string(),
+                secret: secret.to_string(),
+            });
+        }
+        _ => {}
+    }
+
     let path = dirs::home_dir()
         .ok_or("no home directory")?
         .join(".config/gcp-oauth.keys.json");
-    let raw = std::fs::read_to_string(&path)
-        .map_err(|_| format!("no Google client at {}", path.display()))?;
+    let raw = std::fs::read_to_string(&path).map_err(|_| {
+        format!(
+            "this build has no Google sign-in configured, and there is no \
+                 client at {}",
+            path.display()
+        )
+    })?;
     let parsed: serde_json::Value =
         serde_json::from_str(&raw).map_err(|_| "the Google client file is not JSON".to_string())?;
     // Google writes either key depending on which button made the file.

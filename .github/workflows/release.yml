@@ -129,6 +129,11 @@ jobs:
           # it -- the one signature Apple's notarisation does not cover.
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          # Compiled into the binary by `option_env!`, because a copy of the app
+          # on somebody else's Mac has none of the developer's files. Without
+          # these a release builds perfectly and cannot sign anybody in.
+          NUDGE_GOOGLE_CLIENT_ID: ${{ secrets.NUDGE_GOOGLE_CLIENT_ID }}
+          NUDGE_GOOGLE_CLIENT_SECRET: ${{ secrets.NUDGE_GOOGLE_CLIENT_SECRET }}
         run: ./scripts/release.sh
 
       - uses: actions/upload-artifact@v4
