@@ -176,3 +176,9 @@ def test_the_updater_archive_keeps_the_suffix_it_arrived_with():
         publish.update_name("0.1.2", "linux-x64", Path("/t/Nudge_0.1.2_amd64.AppImage.tar.gz"))
         == "Nudge-0.1.2-linux-x64.AppImage.tar.gz"
     )
+    # What Tauri actually produces on Linux: the AppImage is the update, signed
+    # where it lies, and its name carries the version and the architecture.
+    assert (
+        publish.update_name("0.1.4", "linux-x64", Path("/t/Nudge_0.1.4_amd64.AppImage"))
+        == "Nudge-0.1.4-linux-x64.AppImage"
+    )

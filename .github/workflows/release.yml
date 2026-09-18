@@ -299,13 +299,17 @@ jobs:
           # The AppImage is the download: one file, no install, runs on anything
           # with a glibc new enough. The .deb is uploaded to the GitHub release
           # for people who would rather their package manager knew about it.
+          #
+          # And the AppImage is *also* the update. macOS ships a .app.tar.gz
+          # because the updater replaces a bundle directory and has to unpack
+          # one; Linux replaces a single file, so Tauri signs the AppImage where
+          # it lies and there is no tarball. Looking for one is what failed the
+          # first Linux release after everything else in it had worked.
           img=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -1)
-          tgz=$(ls src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz | head -1)
-          sig=$(ls src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig | head -1)
+          sig=$(ls src-tauri/target/release/bundle/appimage/*.AppImage.sig | head -1)
           notes=$(printf '%s' "$NOTES" | head -1)
 
           scp "$img" "$HOST:/tmp/Nudge.AppImage"
-          scp "$tgz" "$HOST:/tmp/Nudge.AppImage.tar.gz"
 
           ssh "$HOST" "env \
             NUDGE_VERSION=$(printf %q "$version") \
@@ -315,11 +319,12 @@ jobs:
           set -euo pipefail
           cd /opt/nudge
           docker cp /tmp/Nudge.AppImage nudge-api-1:/tmp/Nudge.AppImage
-          docker cp /tmp/Nudge.AppImage.tar.gz nudge-api-1:/tmp/Nudge.AppImage.tar.gz
+          # Download and update are the same file here, and `publish.py` stores
+          # it once rather than keeping two hundred-megabyte copies of it.
           docker compose exec -T api uv run publish.py /tmp/Nudge.AppImage \
             --version "$NUDGE_VERSION" --platform linux-x64 --notes "$NUDGE_NOTES" \
-            --update /tmp/Nudge.AppImage.tar.gz --signature "$NUDGE_SIG"
-          rm -f /tmp/Nudge.AppImage /tmp/Nudge.AppImage.tar.gz
+            --update /tmp/Nudge.AppImage --signature "$NUDGE_SIG"
+          rm -f /tmp/Nudge.AppImage
           REMOTE
 
           curl -fsS https://nudge.runmycrew.com/api/releases/linux-x64 \

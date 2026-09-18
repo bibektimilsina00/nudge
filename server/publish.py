@@ -54,7 +54,16 @@ def update_name(version: str, platform: str, update: Path) -> str:
     ".AppImage.tar.gz", and a name that lied about it would hand the updater a
     macOS bundle under a Linux row.
     """
-    suffix = "".join(update.suffixes[-3:]) or update.suffix
+    # Suffixes from the end while each is a word. `Path.suffixes` splits on every
+    # dot, so a versioned filename hands back ".1", ".3_amd64", ".AppImage" and
+    # taking the last three would name the file after the version it already has
+    # in front of it.
+    keep = []
+    for part in reversed(update.suffixes):
+        if not part[1:].isalpha():
+            break
+        keep.append(part)
+    suffix = "".join(reversed(keep)) or update.suffix
     return f"Nudge-{version}-{platform}{suffix}"
 
 
@@ -101,7 +110,13 @@ def main() -> int:
             print(f"no such file: {args.update}", file=sys.stderr)
             return 1
         update_file = update_name(args.version, args.platform, args.update)
-        shutil.copy2(args.update, dest_dir / update_file)
+        # On Linux the download and the update are one file -- the AppImage is
+        # what gets replaced, so Tauri signs it where it lies. Copying it twice
+        # would be two hundred megabytes of the same bytes per release.
+        if args.update.resolve() == args.file.resolve():
+            update_file = filename
+        else:
+            shutil.copy2(args.update, dest_dir / update_file)
         # Either the signature itself or the .sig file holding it. The workflow
         # has a path; a person at a terminal has whichever is nearer.
         signature = looks_like(args.signature)
