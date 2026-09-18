@@ -125,6 +125,9 @@ fn build(app: &AppHandle, hotkey: &str) -> tauri::Result<Menu<Wry>> {
         })
         .collect::<tauri::Result<_>>()?;
 
+    // The tour script, played straight. It is how the segmented format gets
+    // looked at without waiting on a model to produce one.
+    let tour = MenuItem::with_id(app, "tour", "Play tour", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Nudge", true, None::<&str>)?;
     let sep = PredefinedMenuItem::separator(app)?;
 
@@ -153,6 +156,7 @@ fn build(app: &AppHandle, hotkey: &str) -> tauri::Result<Menu<Wry>> {
         items.push(remembered);
     }
     items.push(&sep);
+    items.push(&tour);
     items.push(&quit);
     Menu::with_items(app, &items)
 }
@@ -202,6 +206,10 @@ pub fn install(app: &AppHandle, hotkey: &str) -> tauri::Result<()> {
         .on_menu_event(move |app, event| {
             let id = event.id.as_ref();
             match id {
+                "tour" => {
+                    crate::app::tour::demo(app);
+                    return;
+                }
                 "quit" => {
                     app.exit(0);
                     return;

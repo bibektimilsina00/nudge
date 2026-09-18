@@ -105,6 +105,35 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
 
     match step {
         provider::Step::Done { .. } => println!("  done:   goal already met"),
+        provider::Step::Tour { parts, next, .. } => {
+            println!("  tour:   {} parts", parts.len());
+            for p in &parts {
+                match p {
+                    provider::Step::Point {
+                        at,
+                        size,
+                        control,
+                        say,
+                        ..
+                    } => println!(
+                        "    {} ({:.0},{:.0}){} {say}",
+                        match size {
+                            Some(_) => "box ",
+                            None => "ring",
+                        },
+                        at.x,
+                        at.y,
+                        control.as_deref().unwrap_or(""),
+                    ),
+                    other => println!("    --   {}", other.say()),
+                }
+            }
+            match next {
+                Some(offer) => println!("  next:   {offer}"),
+                // A chapter that offers nothing is where the teaching stops.
+                None => println!("  next:   (nothing offered)"),
+            }
+        }
         provider::Step::Unsure { .. } => println!("  unsure: control not on this screen"),
         // The probe reports the intent; it never actually opens anything.
         provider::Step::Launch { app, .. } => println!("  launch: {app}"),

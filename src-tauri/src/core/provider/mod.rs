@@ -60,6 +60,28 @@ pub enum Step {
         /// overlay has to draw somewhere either way.
         control: Option<String>,
     },
+    /// Being shown around: one narration cut into parts, each part carrying the
+    /// one thing on screen it is about.
+    ///
+    /// Parts are `Step`s rather than a shape of their own -- a `Point` where
+    /// there is something to look at, a `Reply` where the sentence is about
+    /// nothing in particular. That is not a trick: it means the coordinate
+    /// conversions, the overlay and the speaking all work on a part unchanged,
+    /// and a tour is the existing step shape several times in a row.
+    ///
+    /// There are no timestamps. Each part is spoken and the next begins when the
+    /// voice stops, so a mark and its sentence cannot drift apart -- which is
+    /// the whole reason the narration is cut up rather than sent as one block
+    /// with a box beside it.
+    ///
+    /// `say` is the chapter, in a few words: it is what goes into the history so
+    /// the tour after this one knows where this one stopped. `next` offers that
+    /// chapter out loud.
+    Tour {
+        say: String,
+        parts: Vec<Step>,
+        next: Option<String>,
+    },
     /// The goal is achieved.
     ///
     /// `next` is an optional follow-up offer -- one short question about the
@@ -358,13 +380,15 @@ impl Step {
             | Step::Kill { .. }
             | Step::Agent { .. }
             | Step::Question { .. }
+            | Step::Tour { .. }
             | Step::Reply { .. } => false,
         }
     }
 
     pub fn say(&self) -> &str {
         match self {
-            Step::Point { say, .. }
+            Step::Tour { say, .. }
+            | Step::Point { say, .. }
             | Step::Done { say, .. }
             | Step::Unsure { say, .. }
             | Step::Launch { say, .. }
@@ -409,7 +433,8 @@ impl Step {
 
     fn say_mut(&mut self) -> &mut String {
         match self {
-            Step::Point { say, .. }
+            Step::Tour { say, .. }
+            | Step::Point { say, .. }
             | Step::Done { say, .. }
             | Step::Unsure { say, .. }
             | Step::Launch { say, .. }
@@ -594,8 +619,16 @@ impl Step {
     }
 
     /// Rewrites the coordinate through `f`; other outcomes pass through untouched.
-    pub fn map_point(self, f: impl FnOnce(Point) -> Point) -> Self {
+    ///
+    /// `Fn` rather than `FnOnce` because a tour is many points, and every one of
+    /// them has the same journey to make.
+    pub fn map_point(self, f: impl Fn(Point) -> Point + Copy) -> Self {
         match self {
+            Step::Tour { say, parts, next } => Step::Tour {
+                say,
+                parts: parts.into_iter().map(|p| p.map_point(f)).collect(),
+                next,
+            },
             Step::Point {
                 at,
                 say,
@@ -857,48 +890,86 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     // so the guidance disappeared for the one application somebody was asking
     // to be taught. A screenshot is always there; that is the thing being
     // explained, and it is enough.
-    let teaching = {
-        "\n\n## Explaining what is on the screen\n\n\
-         \"Teach me this\", \"what is this app\", \"how do I use this\" -- these \
-         ask for a tour, and a tour is ONE step, not a series of them.\n\n\
-         Answer with a single `point`. Its `say` is the whole explanation: \
-         name each part of the window and what it is for, in the order \
-         somebody meets them, in a few short sentences. Say where each one is \
-         -- \"the top left area is media storage, where you browse files on \
-         your Mac\" -- because the person is looking at the screen and does \
-         not know which part you mean. Then finish with the one thing to do \
-         first.\n\n\
-         What you point at is that first thing, not the area you just \
-         described. A tour ends by putting somebody at the start: \"first, \
-         click the movies folder so we can find a video to import\" -- so \
-         point at the movies folder. Prefer a `control` number for it, since \
-         it is one control and not an area.\n\n\
-         Asked again, explain again. A second \"teach me this\" is somebody \
-         who wants to hear it once more, not somebody testing whether you \
-         remember answering. Never say you have already explained it, never \
-         refer back to what you said before, and never answer a question about \
-         the screen from memory -- look at the screen you were given and give \
-         the tour again. It costs one turn and it is the whole job.\n\n\
-         Point at one thing, not an area. The tour ends at something to press, \
-         and a thing to press is a `control` number or a single point. Use \
-         `region` only for an area you are describing as an area. A box drawn \
-         loosely round half a window while the sentence names something inside \
-         it is worse than no box at all, because it says the wrong place \
-         confidently. If you cannot tell exactly where the thing is, give a \
-         point and no region.\n\n\
-         Then stop. The next turn after a tour is `done`, not more of the \
-         tour. Pointing changes nothing on screen, so a second turn sees \
-         exactly what the first one saw and says the same sentence again --\
-         which is what it did: three turns running, each naming the same area \
-         with a slightly different box round it.\n\n\
-         Do NOT choose `agent`. A tour is not a task to be taken away and \
-         worked on; the person is in front of the screen waiting to be shown \
-         around it. Do NOT choose `ask` to find out which part they meant -- \
-         not knowing the parts is what they asked you to fix. Do NOT offer a \
-         list of topics you could cover; that is what somebody says when they \
-         do not want to begin.\n\n\
-         Never stack clauses with semicolons. Short sentences: this is spoken \
-         aloud, and a list read out is a list nobody follows."
+    // Only where there is somebody to show around.
+    //
+    // An agent works with nobody watching and a subagent works with no picture
+    // at all, and both were being handed the tour guidance anyway. Asked to
+    // explain the screen, the blind loop spent ten turns writing tours of an
+    // application it could not see -- "on the left is your sidebar" -- and then
+    // returned a bare list of parts with no coordinates in it, because there
+    // were none to give.
+    let teaching = if ask.agent {
+        String::new()
+    } else {
+        "\n\n## Showing somebody around\n\n\
+         \"Teach me this\", \"what is this app\", \"how do I use this\", \"show \
+         me around\" -- that asks for a tour, and a tour is ONE answer, not a \
+         step at a time. Answer with `tour`. Never give a tour a sentence per \
+         turn: pointing changes nothing on screen, so the next turn sees exactly \
+         what this one saw and says the same sentence again.\n\n\
+         A part is one or two spoken sentences and, when there is one, the \
+         single thing on screen those sentences are about:\n\
+         {\"say\":\"Let me show you round the edit page.\"}\n\
+         {\"say\":\"Top left is the media pool. Every clip you import lands \
+         here.\",\"region\":[y0,x0,y1,x1],\"name\":\"Media Pool\"}\n\
+         {\"say\":\"Press this to play.\",\"point\":[y,x],\"name\":\"Play\",\
+         \"act\":\"click\"}\n\n\
+         `region` outlines an area -- a panel, a sidebar, a toolbar, a row of \
+         tabs. `point` rings one control. A part with neither is a sentence \
+         with nothing to look at, and that is a third of any real tour: the \
+         opening line, the sentence that joins two panels, the one before the \
+         thing to do. Use it rather than pinning a mark to a sentence that is \
+         not about anything. Corners are [top, left, bottom, right] and points \
+         are [y, x], normalised to 0-1000, the same as everywhere else.\n\n\
+         The mark is whatever the sentence is naming at the moment it is \
+         spoken. Nothing is timed: each part is said out loud and the next one \
+         begins when the voice stops. So where the mark should change, that is \
+         where the sentence ends. Two short parts beat one long sentence with a \
+         box that is right for half of it.\n\n\
+         Eight to twelve parts. Go in the order somebody meets the window. \
+         Short sentences, because this is read aloud, and never stack clauses \
+         with semicolons. Name each thing the way the screen names it -- \
+         \"Media Pool\", \"Timeline\", \"Play\".\n\n\
+         Never outline the whole window or the whole screen: an outline round \
+         everything points at nothing. Never mark something you are not talking \
+         about, and never draw a box loosely round half a window while the \
+         sentence names one thing inside it. If you cannot tell exactly where a \
+         thing is, leave the mark off that part. A sentence with no box says the \
+         right thing; a box in the wrong place says the wrong thing \
+         confidently.\n\n\
+         A tour is one chapter, not the manual. Nobody holds a whole \
+         application in their head from one minute of talking, so the first \
+         tour is the introduction and nothing more: what the parts of this \
+         window are called and what each is for. How to actually do something \
+         is the next chapter, and the one after that. `say` names the chapter \
+         you just gave, in a few words -- it is what goes into the history. \
+         `next` invites the chapter that follows, phrased as an offer and \
+         answerable with yes: \"want me to show you how to bring in a clip?\". \
+         Leave `next` out only when there is genuinely nowhere left to go.\n\n\
+         What you have already covered is in the history, and it is there to be \
+         built on. When it says you toured the edit page and they say \"yes\", \
+         \"go on\", \"next\" or \"teach me more\", that is the next chapter: \
+         pick up where the last one stopped and do not tour the same window \
+         again.\n\n\
+         The last part is always something to DO, never one more thing to look \
+         at: a `point` with an `act`, and a sentence telling them to press it. \
+         \"So start here -- double click the media pool and pick a video.\" \
+         Then `next` is the invitation attached to that: \"do that and I will \
+         show you how to make your first cut\". An offer with nothing to press \
+         is a question left hanging in the air. They asked to be taught, and \
+         being taught ends with your hand on something -- so the ring is the \
+         offer, and the words are what pressing it leads to.\n\n\
+         But asked plainly to explain the same thing again -- \"teach me \
+         this\", \"what was that again\" -- explain it again, in full. Somebody \
+         who asks twice wants to hear it once more, not to find out whether you \
+         remember answering. Never say you have already explained it, and never \
+         answer from memory: look at the screen you were given.\n\n\
+         Do NOT choose `agent`: nobody asked for the work to be taken away, \
+         they are sitting in front of the screen waiting to be shown around it. \
+         Do NOT choose `ask` to find out which part they meant -- not knowing \
+         the parts is what they asked you to fix. Do NOT offer a list of topics \
+         you could cover; that is what somebody says when they do not want to \
+         begin."
             .to_string()
     };
 
@@ -1529,6 +1600,24 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
         false => say,
     };
     match kind {
+        // A tour carries coordinates, and coordinates are the one thing the
+        // providers do not share -- so the provider that knows its own
+        // coordinate space parses this before it ever gets here. This is the
+        // fallback for the ones that do not: the narration with no marks, which
+        // is still an answer to the question.
+        "tour" => Some(Step::Reply {
+            say: v["parts"]
+                .as_array()
+                .map(|parts| {
+                    parts
+                        .iter()
+                        .filter_map(|p| p["say"].as_str())
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .filter(|said| !said.is_empty())
+                .unwrap_or(say),
+        }),
         "done" => Some(Step::Done {
             say,
             // Blank or missing means no offer, which is the common case.
@@ -1768,21 +1857,30 @@ mod tests {
         let mut a = ask("what is this app", &[], false);
         a.controls = &controls;
         let p = prompt(&a);
-        assert!(p.contains("Explaining what is on the screen"));
-        assert!(p.contains("name each part of the window"));
+        assert!(p.contains("Showing somebody around"));
         // The three exits it actually took when asked to teach DaVinci Resolve:
         // handed the tour to an agent, asked which part was meant, then offered
         // a menu of topics. Each is named so none of them reads as reasonable.
         assert!(p.contains("Do NOT choose `agent`"));
         assert!(p.contains("Do NOT choose `ask`"));
-        // The tour is one step. It produced three in a row otherwise, each
+        // The tour is one answer. It produced three in a row otherwise, each
         // saying "this top left area is the Media Pool" with a different box,
         // because pointing changes nothing and the next turn sees the same
         // screen as the last.
-        assert!(p.contains("a tour is ONE step"));
+        assert!(p.contains("a tour is ONE answer"));
+        // Every part of the format the parser depends on.
+        assert!(p.contains("`region` outlines an area"));
+        assert!(p.contains("A part with neither"));
+        assert!(p.contains("normalised to 0-1000"));
+        // One chapter at a time, and somewhere to go after it.
+        assert!(p.contains("A tour is one chapter"));
+        assert!(p.contains("`next` invites the chapter that follows"));
+        // The ending it kept skipping: it toured seven panels and stopped on the
+        // seventh, so the offer -- "want me to show you how to import?" -- was a
+        // question with nothing on screen to answer it with.
+        assert!(p.contains("The last part is always something to DO"));
         // Asked twice is asked twice, not a memory test.
-        assert!(p.contains("Asked again, explain again"));
-        assert!(p.contains("The next turn after a tour is `done`"));
+        assert!(p.contains("explain it again, in full"));
     }
 
     #[test]
@@ -1793,7 +1891,7 @@ mod tests {
         // actually asking to be taught.
         let a = ask("teach me this", &[], false);
         assert!(a.controls.is_empty());
-        assert!(prompt(&a).contains("Explaining what is on the screen"));
+        assert!(prompt(&a).contains("Showing somebody around"));
     }
 
     #[test]
@@ -2023,6 +2121,18 @@ mod tests {
             skills: String::new(),
             workspace: "/tmp/workspace".into(),
         }
+    }
+
+    /// Nobody is watching an agent, and a subagent has no picture at all -- so
+    /// a tour is a thing it cannot do for an audience that is not there. Handed
+    /// the guidance anyway, the blind loop spent ten turns writing tours of an
+    /// application it could not see and then returned a list of parts with no
+    /// coordinates in them.
+    #[test]
+    fn an_agent_is_not_told_how_to_show_somebody_around() {
+        let mut a = ask("teach me this", &[], false);
+        a.agent = true;
+        assert!(!prompt(&a).contains("Showing somebody around"));
     }
 
     /// The bug this guards: the agent was handed guide mode's prompt, which

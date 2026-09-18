@@ -90,6 +90,8 @@ pub fn of(step: &Step) -> Risk {
     match step {
         // Nothing leaves the machine and nothing on it changes.
         Step::Point { .. }
+        // Talking and drawing on the screen. It is a point several times over.
+        | Step::Tour { .. }
         | Step::Done { .. }
         | Step::Unsure { .. }
         | Step::Reply { .. }

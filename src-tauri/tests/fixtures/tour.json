@@ -1,0 +1,90 @@
+{
+  "kind": "tour",
+  "say": "The Edit page",
+  "parts": [
+    {
+      "say": "This is DaVinci Resolve. Let me show you round the Edit page."
+    },
+    {
+      "name": "Pages",
+      "say": "Resolve is seven rooms in one window. This bar along the bottom is how you move between them.",
+      "region": [
+        964,
+        250,
+        1000,
+        750
+      ]
+    },
+    {
+      "name": "Edit page",
+      "say": "You are on the Edit page. This is where clips get cut together, and it is where you will spend most of your time.",
+      "region": [
+        966,
+        370,
+        1000,
+        428
+      ]
+    },
+    {
+      "name": "Media Pool",
+      "say": "Top left is the Media Pool. Every clip you bring into the project lives here. Yours is empty.",
+      "region": [
+        102,
+        0,
+        454,
+        398
+      ]
+    },
+    {
+      "name": "Viewer",
+      "say": "Top right is the Viewer. It shows whatever sits under the playhead, or whatever clip you have selected.",
+      "region": [
+        102,
+        398,
+        454,
+        957
+      ]
+    },
+    {
+      "name": "Play",
+      "say": "Underneath it are the transport controls. This is play. The space bar does the same thing.",
+      "point": [
+        479,
+        685
+      ]
+    },
+    {
+      "name": "Timeline",
+      "say": "The whole bottom half is the Timeline. Clips sit left to right in the order they play, and the white line is the playhead.",
+      "region": [
+        504,
+        150,
+        962,
+        1000
+      ]
+    },
+    {
+      "name": "Edit tools",
+      "say": "These small tools are how you change clips. The scissors is the blade. It cuts a clip in two wherever the playhead is.",
+      "region": [
+        600,
+        10,
+        627,
+        145
+      ]
+    },
+    {
+      "say": "That is the whole window. Nothing to edit until there is footage, though."
+    },
+    {
+      "name": "Import Media",
+      "say": "So start here. Double click the empty Media Pool and pick a video from your Mac.",
+      "point": [
+        278,
+        199
+      ],
+      "act": "doubleClick"
+    }
+  ],
+  "next": "Do that, and I will show you how to make your first cut."
+}

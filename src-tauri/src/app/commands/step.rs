@@ -22,12 +22,6 @@ use crate::core::voice::speech;
 use crate::error::Result;
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Characters of `say` past which a `point` is a tour rather than an instruction.
-///
-/// "Click the Edit tab" is about twenty. The tours measured here ran from three
-/// hundred to five hundred, so anything in between separates them cleanly.
-const TOUR: usize = 200;
-
 #[tauri::command]
 pub async fn start(goal: String, app: AppHandle) -> Result<Option<Step>> {
     app.state::<Nudge>().begin(goal);
@@ -95,6 +89,41 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
         eprintln!("foreground ({:.1}s): {s:?}", began.elapsed().as_secs_f32());
     }
 
+    // A tour plays here and goes no further.
+    //
+    // Everything below this line is machinery for a step that *does* something:
+    // the claim check, the reviewer, performing, the auto-click. A tour does
+    // none of it -- it talks and it draws -- and the one thing it needs, its
+    // parts spoken in order at the pace of the voice, has nowhere else to live.
+    //
+    // The session ends, as it did when a tour was one long `point`. It has to:
+    // a spoken follow-up opens a fresh session, and `still_warm` only carries
+    // the tail of a session that was closed. That carry is what lets "yes" mean
+    // the next chapter rather than the same one again.
+    if let Some(Step::Tour { .. }) = &step {
+        let mapped = step.map(|s| {
+            let screen = app.state::<Screen>();
+            s.map_point(|p| screen.to_overlay(p))
+        });
+        let Some(Step::Tour { say, parts, next }) = mapped else {
+            unreachable!("just matched")
+        };
+        let shown = crate::app::tour::play(&app, &say, parts, next).await;
+        let nudge = app.state::<Nudge>();
+        let goal = nudge.goal();
+        nudge.end();
+        // A tour ends at something to press, and pressing it has to lead
+        // somewhere. Closing the session is what puts the chapter where
+        // `still_warm` can carry it; reopening on the same goal immediately
+        // afterwards is what makes the ring work -- click it and the next turn
+        // arrives knowing what was just covered, instead of the overlay quietly
+        // clearing itself because nothing was in flight.
+        if matches!(&shown, Some(Step::Point { size: None, .. })) {
+            nudge.begin(goal);
+        }
+        return Ok(shown);
+    }
+
     // Handing over is not an action, so it alone is neither spoken nor performed.
     //
     // Everything else IS performed here, including when an agent is about to
@@ -131,6 +160,17 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
                         crate::core::claimed::nothing_there(&gone)
                     )
                 }
+            };
+            // The offer is part of the sentence, not a field somebody might one
+            // day render. `next` has existed since 1.4 and nothing ever said it
+            // out loud, so every "want me to show you the next bit?" was written
+            // by the model and then dropped on the floor -- which is also why a
+            // tour had no way to lead anywhere.
+            let said = match step {
+                Step::Done {
+                    next: Some(offer), ..
+                } => format!("{said} {offer}"),
+                _ => said,
             };
             speak(&app, &said);
         }
@@ -193,18 +233,9 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
     // Finishing ends the session; being unsure does not -- open the right app and
     // tap the hotkey again and the same goal carries on.
     //
-    // A tour ends it too, and has to be recognised rather than asked for. Told
-    // to explain an application it answers with one `point` whose `say` is the
-    // whole layout, ending at the thing to do first -- and then the pointer
-    // moves, the watchers notice, and the loop comes round to a screen that has
-    // not changed and a goal that is never "met", so it explains the whole
-    // thing again. Four times, in the log that produced this.
     //
-    // Length is the signal, and it is not a close call: a step that says where
-    // to click runs to about forty characters, and a tour runs to three
-    // hundred and up. Nothing else in the vocabulary is a paragraph.
-    let toured = matches!(&step, Some(Step::Point { say, .. }) if say.chars().count() > TOUR);
-    if matches!(&step, Some(Step::Done { .. } | Step::Reply { .. })) || toured {
+    // A tour ends it too, and returned long before this line.
+    if matches!(&step, Some(Step::Done { .. } | Step::Reply { .. })) {
         app.state::<Nudge>().end();
     }
 
@@ -297,6 +328,7 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
 pub fn cancel(app: AppHandle, silence: bool) {
     if silence {
         speech::hush();
+        crate::app::tour::stop();
         // Escape is the key people already hit when a machine starts doing
         // something they did not expect. It has to stop the agent too.
         for a in app.state::<Agents>().list() {

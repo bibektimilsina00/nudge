@@ -64,6 +64,60 @@ fn denorm(point: &[f64], w: u32, h: u32) -> Point {
     }
 }
 
+/// The mark a sentence carries, when it carries one.
+///
+/// An area becomes an outline, a pixel becomes a ring, and anything else is
+/// `None` -- a sentence about nothing you can point at, which is a third of any
+/// real tour. Shared by a plain step and by every part of a tour, so there is
+/// one place where normalised corners become a place on the screen.
+fn mark(v: &serde_json::Value, shot: &Shot, say: String) -> Option<Step> {
+    let nums = |key: &str| -> Vec<f64> {
+        v[key]
+            .as_array()
+            .map(|a| a.iter().filter_map(|n| n.as_f64()).collect())
+            .unwrap_or_default()
+    };
+    // Named by the model during a tour; absent on an ordinary step, where the
+    // name comes off the control list instead.
+    let control = v["name"].as_str().map(str::to_string);
+    let act = super::act_from(v["act"].as_str());
+
+    let r = nums("region");
+    if r.len() == 4 {
+        let a = denorm(&r[..2], shot.sent.0, shot.sent.1);
+        let b = denorm(&r[2..], shot.sent.0, shot.sent.1);
+        let (w, h) = ((b.x - a.x).abs(), (b.y - a.y).abs());
+        // A region has to be a part of the screen to mean anything.
+        //
+        // Asked to explain DaVinci Resolve it came back with the whole display,
+        // 1512x982, which outlines everything and therefore points at nothing.
+        // Past two thirds of the screen this is not somewhere to look, so the
+        // box is dropped and the sentence stands on its own.
+        let whole = shot.sent.0 as f64 * shot.sent.1 as f64;
+        let size = (w * h <= whole * 0.66).then(|| shot.to_global_size(w, h));
+        return Some(Step::Point {
+            at: Point {
+                x: (a.x + b.x) / 2.0,
+                y: (a.y + b.y) / 2.0,
+            },
+            size,
+            control,
+            say,
+            act,
+        });
+    }
+
+    let p = nums("point");
+    (p.len() == 2).then(|| Step::Point {
+        at: denorm(&p, shot.sent.0, shot.sent.1),
+        // A guessed pixel has no bounds to draw.
+        size: None,
+        control,
+        say,
+        act,
+    })
+}
+
 #[async_trait]
 impl Provider for Gemini {
     fn name(&self) -> &'static str {
@@ -79,6 +133,7 @@ impl Provider for Gemini {
              {{\"kind\":\"point\",\"control\":7,\"act\":\"click|doubleClick|hover\",\"say\":\"...\"}}\n\
              {{\"kind\":\"point\",\"point\":[y,x],\"act\":\"click|doubleClick|hover\",\"say\":\"...\"}}\n\
              {{\"kind\":\"point\",\"region\":[y0,x0,y1,x1],\"act\":\"hover\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"tour\",\"say\":\"the chapter, in a few words\",\"parts\":[{{\"say\":\"...\",\"region\":[y0,x0,y1,x1],\"name\":\"...\"}},{{\"say\":\"...\",\"point\":[y,x],\"name\":\"...\",\"act\":\"click\"}},{{\"say\":\"...\"}}],\"next\":\"...\"}}\n\
              {{\"kind\":\"done\",\"say\":\"...\"}}\n\
              {{\"kind\":\"unsure\",\"say\":\"...\"}}\n\
              {{\"kind\":\"launch\",\"app\":\"...\",\"say\":\"...\"}}\n\
@@ -161,6 +216,36 @@ impl Provider for Gemini {
             eprintln!("  saw: {seen}");
         }
 
+        // A tour: one narration cut into parts, each with its own mark or none.
+        // Parsed here rather than in `simple_step` because a part carries
+        // coordinates, and coordinates are the one thing the providers do not
+        // share.
+        if v["kind"] == "tour" {
+            let parts = v["parts"]
+                .as_array()
+                .map(|a| {
+                    a.iter()
+                        .map(|p| {
+                            let said = p["say"].as_str().unwrap_or_default().to_string();
+                            // No mark is a real answer, not a failure to give
+                            // one: the opening line, and the sentence that joins
+                            // two panels, are about nothing you can point at.
+                            mark(p, shot, said.clone()).unwrap_or(Step::Reply { say: said })
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
+            return Ok(Step::Tour {
+                say,
+                parts,
+                next: v["next"]
+                    .as_str()
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string),
+            });
+        }
+
         if let Some(step) = super::simple_step(v["kind"].as_str().unwrap_or(""), &v, say.clone()) {
             return Ok(step);
         }
@@ -191,68 +276,14 @@ impl Provider for Gemini {
             eprintln!("  control {n} is not on the list of {}", ask.controls.len());
         }
 
-        // An area, given as corners. Its centre is where the pointer goes and
-        // its size is what the outline is drawn from, so a window nobody can
-        // read through the accessibility tree can still be shown around.
-        if let Some(r) = v["region"].as_array() {
-            let c: Vec<f64> = r.iter().filter_map(|n| n.as_f64()).collect();
-            if c.len() == 4 {
-                let (top, left, bottom, right) = (c[0], c[1], c[2], c[3]);
-                let a = denorm(&[top, left], shot.sent.0, shot.sent.1);
-                let b = denorm(&[bottom, right], shot.sent.0, shot.sent.1);
-                let (w, h) = ((b.x - a.x).abs(), (b.y - a.y).abs());
-                // A region has to be a part of the screen to mean anything.
-                //
-                // Asked to explain DaVinci Resolve it came back with the whole
-                // display, 1512x982, which outlines everything and therefore
-                // points at nothing. Past two thirds of the screen this is not
-                // somewhere to look, so the box is dropped and the sentence
-                // stands on its own.
-                let whole = shot.sent.0 as f64 * shot.sent.1 as f64;
-                // A tour points at something to press, not at an area.
-                //
-                // Its `say` describes the whole window, so a box round any one
-                // part of it contradicts the sentence being spoken -- and drawn
-                // loosely, which is what happens when there is no control list
-                // to take bounds from, it names the wrong place confidently. A
-                // point and no box is the honest version until the tour is cut
-                // into parts with a region each.
-                let tour = say.chars().count() > 200;
-                let size = match tour || w * h > whole * 0.66 {
-                    true => None,
-                    false => Some(shot.to_global_size(w, h)),
-                };
-                return Ok(Step::Point {
-                    at: Point {
-                        x: (a.x + b.x) / 2.0,
-                        y: (a.y + b.y) / 2.0,
-                    },
-                    size,
-                    control: None,
-                    say,
-                    act: super::act_from(v["act"].as_str()),
-                });
-            }
+        // An area or a pixel, whichever it gave. Shared with a tour's parts, so
+        // a box drawn during a tour lands in the same place as one drawn on its
+        // own.
+        if let Some(step) = mark(&v, shot, say.clone()) {
+            return Ok(step);
         }
 
-        let pt: Vec<f64> = v["point"]
-            .as_array()
-            .map(|a| a.iter().filter_map(|n| n.as_f64()).collect())
-            .unwrap_or_default();
-        if pt.len() != 2 {
-            return Err(no_point("gemini", text));
-        }
-        let (w, h) = shot.sent;
-        Ok(Step::Point {
-            // A guessed pixel has no bounds to draw.
-            size: None,
-            // A pixel the model picked out of a picture. Nothing named it, so
-            // there is nothing to press -- this one is a real click.
-            control: None,
-            at: denorm(&pt, w, h),
-            say,
-            act: super::act_from(v["act"].as_str()),
-        })
+        Err(no_point("gemini", text))
     }
 
     /// The same loop without a picture.
@@ -489,7 +520,52 @@ mod shape_tests {
 
 #[cfg(test)]
 mod tests {
-    use super::denorm;
+    use super::{denorm, mark};
+    use crate::core::provider::Step;
+    use crate::core::screen::capture::Shot;
+    use serde_json::json;
+
+    fn shot() -> Shot {
+        Shot {
+            bytes: Vec::new(),
+            sent: (1000, 1000),
+            logical: (1000.0, 1000.0),
+            origin: (0.0, 0.0),
+        }
+    }
+
+    /// The three shapes a tour's parts come in, which is the whole format.
+    #[test]
+    fn a_region_is_a_box_a_point_is_a_ring_and_neither_is_a_sentence_on_its_own() {
+        let box_ = json!({"region": [0, 0, 400, 400], "name": "Media Pool"});
+        match mark(&box_, &shot(), "an area".into()) {
+            Some(Step::Point {
+                at, size, control, ..
+            }) => {
+                assert_eq!((at.x, at.y), (200.0, 200.0));
+                assert_eq!(size, Some((400.0, 400.0)));
+                assert_eq!(control.as_deref(), Some("Media Pool"));
+            }
+            other => panic!("not a box: {other:?}"),
+        }
+        let ring = json!({"point": [600, 300], "name": "Play"});
+        match mark(&ring, &shot(), "a control".into()) {
+            Some(Step::Point { at, size: None, .. }) => assert_eq!((at.x, at.y), (300.0, 600.0)),
+            other => panic!("not a ring: {other:?}"),
+        }
+        assert!(mark(&json!({}), &shot(), "just talking".into()).is_none());
+    }
+
+    /// An outline round everything points at nothing -- and this is exactly what
+    /// came back the first time DaVinci Resolve was explained.
+    #[test]
+    fn a_region_covering_the_screen_loses_its_box() {
+        let whole = json!({"region": [0, 0, 1000, 1000]});
+        assert!(matches!(
+            mark(&whole, &shot(), "everything".into()),
+            Some(Step::Point { size: None, .. })
+        ));
+    }
 
     #[test]
     fn y_comes_first_and_the_grid_is_1000_not_pixels() {

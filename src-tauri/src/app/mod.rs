@@ -6,6 +6,7 @@ pub mod commands;
 mod input;
 mod state;
 pub mod supervise;
+mod tour;
 mod ui;
 pub mod update;
 
