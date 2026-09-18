@@ -62,9 +62,8 @@ export function Companion({
   anchored?: boolean;
 }) {
   const listening = mode === "listening";
-  // Kept in refs, not state: the loop reads them every frame and a render per
-  // change of either would defeat the point of writing to the nodes directly.
-  const frozen = useRef(false);
+  // Kept in a ref, not state: the loop reads it every frame and a render per
+  // change would defeat the point of writing to the nodes directly.
   const stretched = useRef(false);
   const shell = useRef<HTMLDivElement>(null);
   const body = useRef<HTMLDivElement>(null);
@@ -96,24 +95,22 @@ export function Companion({
       listen<boolean>("cursor-visible", (e) => {
         if (body.current) body.current.style.opacity = e.payload ? "1" : "0";
       }),
-      // The same signal that stills the canvas stills the chase.
-      listen<boolean>("overview", (e) => {
-        frozen.current = e.payload;
-      }),
     ];
 
     const tick = () => {
       frame = requestAnimationFrame(tick);
 
-      // Nothing while the overview is up.
+      // The chase does not stop for the overview.
       //
-      // The pointer is busy with Mission Control and the cat has nowhere to be,
-      // so every write below would set a transform to the value it already has
-      // -- and a write is what dirties the layer, whether or not it changes
-      // anything. That is a window re-composited sixty times a second on top of
-      // an animation of every window on the machine, which is what was left of
-      // the flicker after the canvas was paused.
-      if (frozen.current) return;
+      // It did, and the cure was worse than the complaint: a cat that holds
+      // still while the pointer moves does not read as "considerate", it reads
+      // as stuck. Clicky keeps following throughout, which is the whole reason
+      // it feels alive there.
+      //
+      // What stops instead is work that changes nothing -- the canvas, which is
+      // paused below, and the transform, which is written only when the thing
+      // actually moved. Following a moving pointer costs a repaint per frame
+      // and always will; that one is the point.
 
       const dx = target.x - shown.x;
       const dy = target.y - shown.y;
