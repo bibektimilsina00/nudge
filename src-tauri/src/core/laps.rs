@@ -62,6 +62,13 @@ impl Laps {
     ///
     /// Does not spend it: the same turn is both printed and written down, and
     /// whichever went second used to get nothing.
+    /// Is a turn being timed right now? Which is the same question as "is a
+    /// turn happening", asked of the one thing that knows from the moment the
+    /// key comes up rather than from the moment a session opens.
+    pub fn running(&self) -> bool {
+        !self.spent
+    }
+
     pub fn stages(&self) -> Vec<(&'static str, Duration)> {
         match self.spent {
             true => Vec::new(),

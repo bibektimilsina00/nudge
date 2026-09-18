@@ -129,6 +129,9 @@ pub fn run() {
                 crate::core::voice::request_access();
             }
             crate::core::voice::ear::request_access();
+            // And load the speech model now, so the first thing somebody says is
+            // not the one that has to wait for it -- see `ear::warm`.
+            crate::core::voice::ear::warm();
             println!(
                 "nudge: on-device speech = {}",
                 crate::core::voice::ear::status()

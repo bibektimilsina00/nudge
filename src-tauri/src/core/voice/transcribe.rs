@@ -15,10 +15,26 @@ use serde_json::json;
 /// Not an error: the recogniser hearing only room noise is the same everyday
 /// non-event as not speaking at all, and being told off for it is worse than it
 /// passing unremarked.
+/// Did the last transcription happen on this machine, or over the network?
+///
+/// Worth recording, because the two are not close: measured on this Mac, the
+/// on-device recogniser answers in about a quarter of a second and Gemini takes
+/// five to seven, which makes it the largest single difference in how long a
+/// turn feels. A timing file that calls both of them "heard" cannot tell you how
+/// often the fast one is actually working, and the answer turns out to be "less
+/// often than you would think".
+static ON_DEVICE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+pub fn was_on_device() -> bool {
+    ON_DEVICE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 pub async fn speech_to_text(cfg: &Config, wav: &[u8]) -> Result<Option<String>> {
     // This machine first, when it will. No upload, no round trip, and it works
     // with the wifi off -- see `ear`, which declines rather than guesses.
-    if let Some(heard) = super::ear::transcribe(wav) {
+    let here = super::ear::transcribe(wav);
+    ON_DEVICE.store(here.is_some(), std::sync::atomic::Ordering::Relaxed);
+    if let Some(heard) = here {
         return Ok(Some(heard));
     }
 

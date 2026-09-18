@@ -692,6 +692,11 @@ impl Nudge {
         self.laps.lock().unwrap().start();
     }
 
+    /// Is a turn in flight? True from the key coming up until the step returns.
+    pub fn mid_turn(&self) -> bool {
+        self.laps.lock().unwrap().running()
+    }
+
     /// That stage of the current turn is over.
     pub fn mark(&self, stage: &'static str) {
         self.laps.lock().unwrap().mark(stage);

@@ -218,6 +218,17 @@ fn check_and_normalise(samples: &mut [f32], rate: u32) -> Result<bool> {
     Ok(true)
 }
 
+/// A moment of nothing, as a WAV.
+///
+/// For warming the on-device recogniser at startup -- see `ear::warm`. It has to
+/// be a real file with a real header, because what is being warmed is the whole
+/// pipeline that reads one.
+pub fn silence(how_long: std::time::Duration) -> Vec<u8> {
+    const RATE: u32 = 16_000;
+    let samples = vec![0.0f32; (RATE as f64 * how_long.as_secs_f64()) as usize];
+    to_wav(&samples, RATE).unwrap_or_default()
+}
+
 fn to_wav(samples: &[f32], rate: u32) -> Result<Vec<u8>> {
     let spec = hound::WavSpec {
         channels: 1,

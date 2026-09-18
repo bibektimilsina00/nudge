@@ -1457,6 +1457,17 @@ pub(crate) fn speak(app: &AppHandle, line: &str) {
                 break;
             }
         }
-        done.emit("status", "idle").ok();
+        // Idle, unless the turn is still going.
+        //
+        // The acknowledgement is now said the moment the key comes up, and it
+        // finishes while the transcription is still running -- so this line,
+        // written when the only thing spoken was the last word of a turn, would
+        // put the notch back to idle in the middle of one and leave it there for
+        // the longest part of the wait.
+        let next = match done.state::<Nudge>().mid_turn() {
+            true => "thinking",
+            false => "idle",
+        };
+        done.emit("status", next).ok();
     });
 }

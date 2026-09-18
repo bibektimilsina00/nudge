@@ -285,9 +285,33 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
     // reason: this is the only moment on this path where the output device is
     // quiet, so it is the only moment the audio fact is about the world rather
     // than about us.
+    // Said now, not after the transcription.
+    //
+    // There are two waits on this path and the acknowledgement was covering the
+    // second one. The first is longer: turning the audio into text is its own
+    // network call when the on-device recogniser declines, measured here at five
+    // to seven seconds against the model's three or four. So the key came up and
+    // nothing happened at all for the longest part of the turn.
+    //
+    // Only when there is nothing to contradict it. "One sec" followed by "I am
+    // still on the last thing" is worse than the silence it replaced, and both
+    // of those are knowable now rather than after the words arrive.
+    let quiet_start = busy(&app).is_none()
+        && app
+            .state::<crate::core::run::agent::Agents>()
+            .waiting()
+            .is_none();
+
+    // Before we make any noise, because one of them is whether sound is coming
+    // out of this machine -- see `look_knowing`.
+    let facts = crate::core::screen::facts::gather();
+    if quiet_start {
+        commands::speak(&app, acknowledgement());
+    }
+
     let early = tokio::task::spawn_blocking({
         let cfg = cfg.clone();
-        move || crate::core::screen::look(&cfg)
+        move || crate::core::screen::look_knowing(&cfg, facts)
     });
 
     let Some(heard) = transcribe::speech_to_text(&cfg, &wav).await? else {
@@ -295,7 +319,13 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
         app.emit("status", "idle").ok();
         return Ok(());
     };
-    app.state::<Nudge>().mark("heard");
+    // Named for which recogniser answered, because they are twenty times apart
+    // and a file that calls both "heard" cannot tell you which one you got.
+    app.state::<Nudge>()
+        .mark(match transcribe::was_on_device() {
+            true => "heard-here",
+            false => "heard-cloud",
+        });
 
     if app.state::<Nudge>().turn() != turn {
         eprintln!("listening: abandoned before the model was asked");
@@ -355,7 +385,9 @@ pub(crate) async fn ask(app: AppHandle, heard: String) -> Result<()> {
     // waits on a model and both then say something that contradicts it. "One
     // sec" followed instantly by "I'm still on the last thing" is worse than the
     // silence it was meant to fill.
-    commands::speak(&app, acknowledgement());
+    // The acknowledgement is not said here any more. Speech says it at the
+    // moment the key comes up, which is where the wait actually starts; text
+    // arriving through `inject` has no wait to cover.
 
     // Counted before the work, so a session that goes wrong still counts as use.
     app.state::<crate::core::offers::Offers>().a_turn_happened();

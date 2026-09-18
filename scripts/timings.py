@@ -20,6 +20,8 @@ import sys
 MEANS = {
     "wav": "draining the recording",
     "heard": "speech to text",
+    "heard-here": "speech to text, on this machine",
+    "heard-cloud": "speech to text, over the network",
     "fold": "summarising the history",
     "settle": "waiting for the screen to stop moving",
     "still": "waiting for it to stop moving again",

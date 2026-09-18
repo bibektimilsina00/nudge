@@ -118,13 +118,24 @@ pub struct Look {
 /// why it lives here rather than at the call sites: every caller routes through
 /// this function, so no future one can forget it.
 pub fn look(cfg: &Config) -> Result<Look> {
+    look_knowing(cfg, facts::gather())
+}
+
+/// The same, with the facts already in hand.
+///
+/// They have to be gathered before Nudge makes any noise. One of them is whether
+/// sound is coming out of this machine, which is how the next turn knows the
+/// video it clicked actually started -- and our own voice comes out of the same
+/// device, so a fact gathered while we are talking says "cannot tell" and the
+/// turn goes back to guessing from a still frame. The caller that speaks first
+/// takes them first and hands them here.
+pub fn look_knowing(cfg: &Config, facts: facts::Facts) -> Result<Look> {
     let front = privacy::frontmost_window();
     if let Some((_, app, title)) = &front {
         if let Some(reason) = privacy::blocked_by(cfg, app, title) {
             return Err(Error::Blocked(reason));
         }
     }
-    let facts = facts::gather();
     let mut shot = capture::grab(cfg.max_edge)?;
     // Whatever was circled while the key was held. Here rather than inside
     // `grab`, because this is the one path that feeds a model -- the accuracy

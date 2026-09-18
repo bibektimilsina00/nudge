@@ -17,23 +17,36 @@ mod imp {
         SFSpeechRecognitionResult, SFSpeechRecognizer, SFSpeechRecognizerAuthorizationStatus,
         SFSpeechURLRecognitionRequest,
     };
-    use std::sync::atomic::{AtomicBool, Ordering};
+    use std::sync::atomic::{AtomicU32, Ordering};
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
 
     /// How long to give the recogniser before falling back.
     ///
-    /// Tight on purpose. The whole reason to be here is that it is quicker than a
-    /// round trip; waiting longer than one for it to fail would make this slower
-    /// than doing nothing.
-    const PATIENCE: Duration = Duration::from_millis(1500);
+    /// The whole reason to be here is that it is quicker than a round trip, and
+    /// the round trip was measured at five to seven seconds -- so the old 1.5s
+    /// was not "tight", it was tighter than the thing it was racing. Three
+    /// seconds still wins whenever it lands and loses little when it does not.
+    const PATIENCE: Duration = Duration::from_secs(3);
 
-    /// Stop trying after it lets us down once.
+    /// How many times in a row it may let us down before we stop asking.
     ///
-    /// A fallback that runs after a timeout costs the timeout *and* the fallback,
-    /// every time. One failure is enough to conclude this machine is not going to
-    /// do it, and the hosted path is right there.
-    static GIVEN_UP: AtomicBool = AtomicBool::new(false);
+    /// It was once, permanently, and that is what made this the slowest part of
+    /// a turn. Measured over one session on this machine: nineteen transcriptions
+    /// on-device and thirteen timeouts -- and because the first timeout was
+    /// final, every turn after it paid five to seven seconds for a recogniser
+    /// that was working perfectly well a minute earlier.
+    ///
+    /// The first attempt after launch is the one that times out, because the
+    /// speech model has not been loaded yet. That is a cold start, not a broken
+    /// machine, and `warm` now covers it.
+    const FORGIVEN: u32 = 3;
+
+    static FAILURES: AtomicU32 = AtomicU32::new(0);
+
+    fn given_up() -> bool {
+        FAILURES.load(Ordering::Relaxed) >= FORGIVEN
+    }
 
     /// What the grant is, for saying out loud at startup.
     pub fn status() -> &'static str {
@@ -63,13 +76,34 @@ mod imp {
         unsafe { SFSpeechRecognizer::requestAuthorization(&handler) };
     }
 
+    /// Load the speech model before anybody needs it.
+    ///
+    /// The first transcription on a cold recogniser is the slow one, and it was
+    /// the one that decided this machine could not do it at all. Run at startup
+    /// against a moment of silence, it costs nothing anybody is waiting for --
+    /// and it never counts against the failure budget, because a warm-up that
+    /// fails proves only that the model was not loaded, which is what it is for.
+    pub fn warm() {
+        if !granted() {
+            return;
+        }
+        std::thread::spawn(|| {
+            // Half a second of silence: a valid WAV, long enough to make the
+            // recogniser build its pipeline, short enough to cost nothing.
+            let quiet = crate::core::voice::record::silence(std::time::Duration::from_millis(500));
+            let before = FAILURES.load(Ordering::Relaxed);
+            let _ = transcribe(&quiet);
+            FAILURES.store(before, Ordering::Relaxed);
+        });
+    }
+
     /// Words from a WAV, entirely on this machine, or `None`.
     ///
     /// `None` for every way this declines -- no grant, no on-device model, a
     /// recogniser that is busy, a handler that never fires -- and the caller
     /// falls back. It never returns a guess.
     pub fn transcribe(wav: &[u8]) -> Option<String> {
-        if GIVEN_UP.load(Ordering::Relaxed) || !granted() {
+        if given_up() || !granted() {
             return None;
         }
         let recognizer = unsafe { SFSpeechRecognizer::new() };
@@ -127,12 +161,13 @@ mod imp {
 
         if let Some(text) = &heard {
             eprintln!("nudge: heard on this machine -- {text:?}");
+            // A success clears the slate. A recogniser that works once and
+            // stumbles later is a recogniser that is working.
+            FAILURES.store(0, Ordering::Relaxed);
         }
         if heard.is_none() {
-            eprintln!(
-                "nudge: on-device transcription timed out -- using the hosted one from now on"
-            );
-            GIVEN_UP.store(true, Ordering::Relaxed);
+            let missed = FAILURES.fetch_add(1, Ordering::Relaxed) + 1;
+            eprintln!("nudge: on-device transcription timed out ({missed} in a row of {FORGIVEN})");
         }
         heard.filter(|t| !t.trim().is_empty())
     }
