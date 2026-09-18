@@ -18,7 +18,9 @@ use base64::Engine as _;
 use std::io::Write;
 use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::sync::Mutex;
+#[cfg(target_os = "macos")]
+use std::sync::OnceLock;
 
 /// Whatever is making noise right now.
 static PLAYER: Mutex<Option<Child>> = Mutex::new(None);
@@ -192,6 +194,83 @@ fn system(cfg: &Config, text: &str, turn: u64) {
     spawn(&mut cmd, turn);
 }
 
+/// The system voice off macOS: speech-dispatcher, or eSpeak.
+///
+/// `spd-say` first, because it is the desktop's own accessibility stack and
+/// therefore already set to whatever voice the user chose there. `espeak-ng`
+/// is the fallback and sounds like 1995, which still beats silence. Neither is
+/// certain to be installed -- `speech_engine = "gemini"` is a network call and
+/// works anywhere, which is what the startup line says when this finds nothing.
+///
+/// `--wait` matters more than it looks: without it `spd-say` returns the moment
+/// the text is queued, `is_playing` immediately says no, and a tour would run
+/// its whole narration in about a second.
+#[cfg(not(target_os = "macos"))]
+fn system(cfg: &Config, text: &str, turn: u64) {
+    let voice = cfg.speech_voice.clone();
+    for (bin, flag, wait) in [
+        ("spd-say", "-y", true),
+        ("espeak-ng", "-v", false),
+        ("espeak", "-v", false),
+    ] {
+        let mut cmd = Command::new(bin);
+        if wait {
+            cmd.arg("--wait");
+        }
+        if let Some(v) = &voice {
+            cmd.arg(flag).arg(v);
+        }
+        cmd.arg("--").arg(text);
+        if spawn_tried(&mut cmd, turn) {
+            return;
+        }
+    }
+    eprintln!("nudge: no system voice here -- install speech-dispatcher, or set speech_engine = \"gemini\"");
+}
+
+/// The macOS path has exactly one candidate and treats a failure as final;
+/// here the first two may simply not be installed, so this reports rather than
+/// logs and the caller moves on to the next.
+#[cfg(not(target_os = "macos"))]
+fn spawn_tried(cmd: &mut Command, turn: u64) -> bool {
+    match cmd
+        .stdin(Stdio::null())
+        .stdout(Stdio::null())
+        .stderr(Stdio::null())
+        .spawn()
+    {
+        Ok(child) => {
+            let mut slot = PLAYER.lock().unwrap();
+            match current(turn) {
+                true => *slot = Some(child),
+                false => {
+                    let mut child = child;
+                    let _ = child.kill();
+                    let _ = child.wait();
+                }
+            }
+            true
+        }
+        Err(_) => false,
+    }
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn chosen_voice() -> Option<String> {
+    ["spd-say", "espeak-ng", "espeak"]
+        .into_iter()
+        .find(|bin| {
+            Command::new("sh")
+                .arg("-c")
+                .arg(format!("command -v {bin}"))
+                .stdout(Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+        })
+        .map(str::to_string)
+}
+
 fn spawn(cmd: &mut Command, turn: u64) {
     let child = cmd
         .stdin(Stdio::null())
@@ -223,6 +302,7 @@ pub fn chosen_voice() -> Option<String> {
 
 /// Best `say` voice actually installed. Probed once -- shelling out to `say -v ?`
 /// per sentence would add latency to the one thing that should feel immediate.
+#[cfg(target_os = "macos")]
 fn best_voice() -> &'static Option<String> {
     static VOICE: OnceLock<Option<String>> = OnceLock::new();
     VOICE.get_or_init(|| {
@@ -260,6 +340,7 @@ fn best_voice() -> &'static Option<String> {
 /// Voice names are everything before the locale column. They contain spaces, and
 /// the column is not aligned -- `Samantha (English (US)) en_US` has a single space
 /// where `Albert` has many -- so the locale marker is the only reliable boundary.
+#[cfg(target_os = "macos")]
 fn pick(listing: &str, want: impl Fn(&str) -> bool) -> Option<String> {
     listing
         .lines()
@@ -270,15 +351,19 @@ fn pick(listing: &str, want: impl Fn(&str) -> bool) -> Option<String> {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(target_os = "macos")]
     use super::pick;
     use super::sample_rate;
     use super::wrap_pcm;
 
+    #[cfg(target_os = "macos")]
     const LISTING: &str = "\
 Albert              en_US    # Hello!
 Samantha (English (US)) en_US    # Hello!
 Anna                de_DE    # Hallo!";
 
+    // `say -v ?` and its listing exist on one platform.
+    #[cfg(target_os = "macos")]
     #[test]
     fn keeps_multi_word_voice_names_despite_ragged_columns() {
         assert_eq!(
@@ -291,6 +376,8 @@ Anna                de_DE    # Hallo!";
         );
     }
 
+    // `say -v ?` and its listing exist on one platform.
+    #[cfg(target_os = "macos")]
     #[test]
     fn ignores_voices_that_do_not_speak_english() {
         assert_eq!(pick(LISTING, |l| l.starts_with("Anna")), None);
@@ -314,23 +401,4 @@ Anna                de_DE    # Hallo!";
         assert_eq!(u32::from_le_bytes(wav[40..44].try_into().unwrap()), 4);
         assert_eq!(u32::from_le_bytes(wav[4..8].try_into().unwrap()), 40);
     }
-}
-
-/// The system voice, on a platform that has not been taught how yet.
-///
-/// Not fatal: `speech_engine = "gemini"` is a network call and works anywhere,
-/// so a port has a voice from the first day. This is the free, offline, instant
-/// one that macOS happens to ship -- `tts` wraps the equivalent on Windows and
-/// Linux, and this is where it would go.
-#[cfg(not(target_os = "macos"))]
-fn system(_cfg: &Config, _text: &str, turn: u64) {
-    // Nothing to spawn, so nothing to reap. `is_playing` reads the child that
-    // was never started and correctly says no.
-    let _ = turn;
-    eprintln!("nudge: no system voice here -- set speech_engine = \"gemini\" for a voice");
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn chosen_voice() -> Option<String> {
-    None
 }

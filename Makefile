@@ -70,7 +70,7 @@ truth: ## Score the answers — does it tell the truth? (needs a key, makes real
 	cd src-tauri && cargo run --quiet --bin truth
 
 lint: ## Clippy with warnings as errors, plus a format check
-	cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo fmt --check
+	cd src-tauri && cargo clippy --all-targets --features appkit -- -D warnings && cargo fmt --check
 
 fmt: ## Format Rust sources
 	cd src-tauri && cargo fmt

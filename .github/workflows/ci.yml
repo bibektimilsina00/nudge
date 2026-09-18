@@ -62,6 +62,41 @@ jobs:
             src-tauri/target
           key: cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
       - run: cd src-tauri && cargo fmt --check
+      # `appkit` is the macOS-only diagnostics in examples/. They are not built
+      # by default any more -- a Linux build cannot -- so this is what keeps them
+      # compiling on the platform where they are run.
+      - run: cd src-tauri && cargo clippy --all-targets --features appkit -- -D warnings
+      - run: cd src-tauri && cargo test
+
+  # The same crate, built the way somebody on Linux gets it.
+  #
+  # Nothing here is a second opinion about the logic: the tests are the same
+  # tests. It is about the half of the code that macOS never compiles -- the
+  # portable input path, the xcap capture, the Secret Service, and the stubs
+  # standing in for AppKit. Those rot silently otherwise, which is exactly how
+  # they were found rotted the first time.
+  linux:
+    needs: changed
+    if: needs.changed.outputs.app == 'true'
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with: { components: clippy }
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: cargo-linux-${{ hashFiles('src-tauri/Cargo.lock') }}
+      - name: Install what a Tauri build needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libasound2-dev libssl-dev \
+            libx11-dev libxi-dev libxtst-dev libdbus-1-dev
       - run: cd src-tauri && cargo clippy --all-targets -- -D warnings
       - run: cd src-tauri && cargo test
 

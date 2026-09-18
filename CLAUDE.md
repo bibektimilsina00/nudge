@@ -50,6 +50,42 @@ leaked into `app` and belongs in `core`.
 **Secrets live in the Keychain.** `connections.toml` only ever *names* one, as
 `keychain:<item>`. Nothing is pasted into a file, a commit, or a chat.
 
+## Linux
+
+The app builds and runs on Linux. `core` is portable already; what differs is
+gathered in a handful of places and compiled on both platforms rather than left
+to rot:
+
+| macOS | Everywhere else |
+|---|---|
+| ScreenCaptureKit | `xcap`, in `capture::portable` |
+| CGEvent clicks and typing | `enigo` + `device_query`, in `screen/elsewhere/` |
+| The accessibility tree | Nothing -- falls back to the vision model |
+| Keychain | Secret Service, over D-Bus (`keyring`) |
+| `say` | `spd-say`, then `espeak-ng` |
+| NSWindow levels and Spaces | `set_visible_on_all_workspaces`, in `ui/elsewhere/` |
+
+**X11, not Wayland.** Injecting input and reading a held modifier are things
+Wayland deliberately forbids; doing it there means the RemoteDesktop portal and
+libei, which is its own piece of work. On Wayland the window appears and the
+hotkey never fires.
+
+The macOS diagnostics in `examples/` are behind `--features appkit`, which is
+why `make lint` passes it. Without that they are not built at all, on either
+platform.
+
+To check a change compiles there without waiting for CI:
+
+```
+docker run --rm -v "$PWD":/w -v nudge-linux-target:/target \
+  -e CARGO_TARGET_DIR=/target -w /w/src-tauri nudge-linux \
+  cargo clippy --all-targets -- -D warnings
+```
+
+Never run `pnpm` in that container against the mounted tree: it swaps the
+platform-specific binaries in `ui/node_modules` for Linux ones and `tsc` on the
+Mac then refuses to start.
+
 ## Things that have bitten
 
 **The shell has `noclobber` set** and `cp` is aliased to `cp -i`. `>` on an

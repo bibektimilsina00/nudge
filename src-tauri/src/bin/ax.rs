@@ -5,9 +5,12 @@
 //! native one, a browser, an Electron app -- and the answers differ enough that
 //! guessing was never going to do it.
 //!
-//!     cargo run --bin ax                  # the frontmost application
-//!     cargo run --bin ax -- search        # only controls matching "search"
-//!     cargo run --bin ax -- --pid 7193    # a particular one, no countdown
+//!     cargo run --features appkit --bin ax               # the frontmost application
+//!     cargo run --features appkit --bin ax -- search     # only controls matching "search"
+//!     cargo run --features appkit --bin ax -- --pid 7193 # a particular one, no countdown
+//!
+//! Behind `appkit` because it is CoreGraphics and the accessibility tree all the
+//! way down, and a Linux build has neither.
 //!
 //! Note what it cannot tell you. An application with no window open exposes a
 //! menu bar and nothing else, which reads exactly like an application that

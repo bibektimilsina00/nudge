@@ -156,3 +156,23 @@ def test_update_downloads_are_not_counted_as_downloads(client):
     client.get("/api/update/download/macos-arm64")
     with Session(client.engine) as db:
         assert db.exec(select(Download)).all() == []
+
+
+def test_the_updater_archive_keeps_the_suffix_it_arrived_with():
+    """A Linux release is an AppImage, and the name has to say so.
+
+    The macOS name was hardcoded for two platforms' worth of releases; this is
+    the assertion that notices when it comes back.
+    """
+    from pathlib import Path
+
+    import publish
+
+    assert (
+        publish.update_name("0.1.2", "macos-arm64", Path("/t/Nudge.app.tar.gz"))
+        == "Nudge-0.1.2-macos-arm64.app.tar.gz"
+    )
+    assert (
+        publish.update_name("0.1.2", "linux-x64", Path("/t/Nudge_0.1.2_amd64.AppImage.tar.gz"))
+        == "Nudge-0.1.2-linux-x64.AppImage.tar.gz"
+    )

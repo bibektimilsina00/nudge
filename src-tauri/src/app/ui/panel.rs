@@ -50,7 +50,6 @@ pub fn dock_to_notch(app: &AppHandle) {
     let _ = win.set_focusable(false);
     let _ = win.show();
 
-    #[cfg(target_os = "macos")]
     crate::app::ui::native::float_everywhere(&win);
 }
 

@@ -46,6 +46,18 @@ def looks_like(given: str) -> str:
     return given.strip()
 
 
+def update_name(version: str, platform: str, update: Path) -> str:
+    """What to call the updater's archive on disk.
+
+    The suffix comes off the file rather than a constant. It was ".app.tar.gz"
+    for as long as macOS was the only platform; a Linux release ships
+    ".AppImage.tar.gz", and a name that lied about it would hand the updater a
+    macOS bundle under a Linux row.
+    """
+    suffix = "".join(update.suffixes[-3:]) or update.suffix
+    return f"Nudge-{version}-{platform}{suffix}"
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("file", type=Path)
@@ -56,7 +68,11 @@ def main() -> int:
     # have a download before it has updates -- but published together when they
     # exist, so "the current release" stays one fact rather than two that can
     # drift apart.
-    ap.add_argument("--update", type=Path, help="the .app.tar.gz the updater installs")
+    ap.add_argument(
+        "--update",
+        type=Path,
+        help="the archive the updater installs: .app.tar.gz on macOS, .AppImage.tar.gz on Linux",
+    )
     ap.add_argument("--signature", help="minisign signature over --update, or a path to it")
     args = ap.parse_args()
 
@@ -84,7 +100,7 @@ def main() -> int:
         if not args.update.is_file():
             print(f"no such file: {args.update}", file=sys.stderr)
             return 1
-        update_file = f"Nudge-{args.version}-{args.platform}.app.tar.gz"
+        update_file = update_name(args.version, args.platform, args.update)
         shutil.copy2(args.update, dest_dir / update_file)
         # Either the signature itself or the .sig file holding it. The workflow
         # has a path; a person at a terminal has whichever is nearer.

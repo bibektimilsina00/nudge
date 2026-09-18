@@ -251,7 +251,17 @@ mod tests {
     fn a_narrow_shell_lists_less_than_a_wide_one() {
         let narrow = line(false);
         let wide = line(true);
-        assert!(wide.len() >= narrow.len());
+        // The names, not the sentence. On a machine where every installed tool
+        // is read-only anyway the two lists match, and the narrow one is then
+        // the *longer string* because it carries the note about the grant.
+        let names = |anything| -> Vec<&'static str> {
+            usable(anything).into_iter().flat_map(|(_, n)| n).collect()
+        };
+        let (few, many) = (names(false), names(true));
+        assert!(
+            few.iter().all(|n| many.contains(n)),
+            "a wider grant dropped something: {few:?} vs {many:?}"
+        );
         assert!(narrow.contains("a wider grant would reach"));
         assert!(!wide.contains("a wider grant would reach"));
     }

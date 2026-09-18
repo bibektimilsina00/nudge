@@ -54,35 +54,84 @@ const VAULT_ACCOUNT: &str = "vault";
 
 /// Read once per process, then kept.
 ///
-/// Without this, ten lookups during startup are ten trips to the Keychain, and
+/// Without this, ten lookups during startup are ten trips to the store, and
 /// the first of those is the one that can put a dialog on screen.
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 static OPENED: std::sync::OnceLock<std::sync::Mutex<std::collections::BTreeMap<String, String>>> =
     std::sync::OnceLock::new();
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn vault() -> &'static std::sync::Mutex<std::collections::BTreeMap<String, String>> {
     OPENED.get_or_init(|| {
-        let found = security_framework::passwords::get_generic_password(VAULT, VAULT_ACCOUNT)
-            .ok()
-            .and_then(|raw| String::from_utf8(raw).ok())
+        let found = store::read()
             .and_then(|text| serde_json::from_str(&text).ok())
             .unwrap_or_default();
         std::sync::Mutex::new(found)
     })
 }
 
-#[cfg(target_os = "macos")]
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn save(all: &std::collections::BTreeMap<String, String>) -> Result<()> {
     let body = serde_json::to_string(all)
-        .map_err(|e| Error::Config(format!("could not write the Keychain item: {e}")))?;
-    security_framework::passwords::set_generic_password(VAULT, VAULT_ACCOUNT, body.as_bytes())
-        .map_err(|e| Error::Config(format!("the Keychain refused to save: {e}")))
+        .map_err(|e| Error::Config(format!("could not write the vault: {e}")))?;
+    store::write(&body)
+}
+
+/// The one item, wherever this platform keeps such things.
+///
+/// Every decision above -- one item, all the tokens inside it, read once and
+/// cached -- holds on both. What changes is four lines of API, so that is all
+/// that is split.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
+mod store {
+    use super::{Error, Result, VAULT, VAULT_ACCOUNT};
+
+    #[cfg(target_os = "macos")]
+    pub fn read() -> Option<String> {
+        let raw = security_framework::passwords::get_generic_password(VAULT, VAULT_ACCOUNT).ok()?;
+        String::from_utf8(raw).ok()
+    }
+
+    #[cfg(target_os = "macos")]
+    pub fn write(body: &str) -> Result<()> {
+        security_framework::passwords::set_generic_password(VAULT, VAULT_ACCOUNT, body.as_bytes())
+            .map_err(|e| Error::Config(format!("the Keychain refused to save: {e}")))
+    }
+
+    /// The Secret Service, over D-Bus: gnome-keyring, KWallet, or whatever else
+    /// the desktop provides. Same properties as the Keychain -- encrypted,
+    /// unlocked with the login password, shared with every other program that
+    /// keeps a credential.
+    ///
+    /// There is deliberately no file fallback. A machine with no secret service
+    /// is a machine where writing a token to disk would be a silent downgrade
+    /// from "encrypted at rest" to "sitting in your home directory", and Nudge
+    /// drives a desktop, so the desktop's own store is a fair thing to require.
+    #[cfg(target_os = "linux")]
+    fn entry() -> Result<keyring::Entry> {
+        keyring::Entry::new(VAULT, VAULT_ACCOUNT).map_err(|e| {
+            Error::Config(format!(
+                "no secret service to keep tokens in ({e}). Install gnome-keyring or kwallet."
+            ))
+        })
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn read() -> Option<String> {
+        entry().ok()?.get_password().ok()
+    }
+
+    #[cfg(target_os = "linux")]
+    pub fn write(body: &str) -> Result<()> {
+        entry()?
+            .set_password(body)
+            .map_err(|e| Error::Config(format!("the secret service refused to save: {e}")))
+    }
 }
 
 /// Look one up. `None` covers both "no such item" and "the Keychain said no".
 pub fn from_keychain(name: &str) -> Option<String> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         if let Some(found) = vault().lock().ok()?.get(name) {
             let found = found.trim().to_string();
@@ -94,22 +143,30 @@ pub fn from_keychain(name: &str) -> Option<String> {
         // One dialog per old item, once, and then never again -- which is the
         // same cost as leaving them where they were, except that it is paid
         // for the last time rather than on every change of signature.
-        let raw = security_framework::passwords::get_generic_password(name, "nudge").ok()?;
-        let found = String::from_utf8(raw).ok()?.trim().to_string();
-        if found.is_empty() {
-            return None;
-        }
-        if let Ok(mut all) = vault().lock() {
-            all.insert(name.to_string(), found.clone());
-            if save(&all).is_ok() {
-                // Only once it is safely in the new item. Deleting first would
-                // turn a failed write into a lost token.
-                let _ = security_framework::passwords::delete_generic_password(name, "nudge");
+        //
+        // macOS only: the per-item layout it migrates from never shipped
+        // anywhere else.
+        #[cfg(target_os = "macos")]
+        {
+            let raw = security_framework::passwords::get_generic_password(name, "nudge").ok()?;
+            let found = String::from_utf8(raw).ok()?.trim().to_string();
+            if found.is_empty() {
+                return None;
             }
+            if let Ok(mut all) = vault().lock() {
+                all.insert(name.to_string(), found.clone());
+                if save(&all).is_ok() {
+                    // Only once it is safely in the new item. Deleting first would
+                    // turn a failed write into a lost token.
+                    let _ = security_framework::passwords::delete_generic_password(name, "nudge");
+                }
+            }
+            Some(found)
         }
-        Some(found)
+        #[cfg(not(target_os = "macos"))]
+        None
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = name;
         None
@@ -130,7 +187,7 @@ pub fn from_keychain(name: &str) -> Option<String> {
 /// from outside. `security-framework` was already in the tree via rustls, so it
 /// costs no new dependency either.
 pub fn to_keychain(name: &str, token: &str) -> Result<()> {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         {
             let mut all = vault()
@@ -146,15 +203,15 @@ pub fn to_keychain(name: &str, token: &str) -> Result<()> {
         match from_keychain(name).as_deref() == Some(token) {
             true => Ok(()),
             false => Err(Error::Config(format!(
-                "the Keychain did not keep {name:?}. If a dialog appeared, allow it and try again."
+                "the store did not keep {name:?}. If a dialog appeared, allow it and try again."
             ))),
         }
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     {
         let _ = (name, token);
         Err(Error::Config(
-            "there is no Keychain on this platform".into(),
+            "there is nowhere to keep a secret on this platform".into(),
         ))
     }
 }
@@ -165,7 +222,7 @@ pub fn to_keychain(name: &str, token: &str) -> Result<()> {
 /// was already deleted by hand, should not be an error somebody has to think
 /// about -- the state afterwards is the one they asked for either way.
 pub fn forget_keychain(name: &str) {
-    #[cfg(target_os = "macos")]
+    #[cfg(any(target_os = "macos", target_os = "linux"))]
     {
         if let Ok(mut all) = vault().lock() {
             if all.remove(name).is_some() {
@@ -174,9 +231,10 @@ pub fn forget_keychain(name: &str) {
         }
         // And the old per-token item, for anything not migrated yet. Forgetting
         // one of those has to forget it everywhere, or it comes back.
+        #[cfg(target_os = "macos")]
         let _ = security_framework::passwords::delete_generic_password(name, "nudge");
     }
-    #[cfg(not(target_os = "macos"))]
+    #[cfg(not(any(target_os = "macos", target_os = "linux")))]
     let _ = name;
 }
 
@@ -191,9 +249,12 @@ pub fn resolve(value: &str) -> Result<String> {
         return Ok(value.to_string());
     };
     from_keychain(name).ok_or_else(|| {
+        #[cfg(target_os = "macos")]
+        let how = format!("security add-generic-password -s {name} -a nudge -w <the-token>");
+        #[cfg(not(target_os = "macos"))]
+        let how = format!("secret-tool store --label=nudge service {name} account nudge");
         Error::Config(format!(
-            "no Keychain item called {name:?}. Store it with:\n    \
-             security add-generic-password -s {name} -a nudge -w <the-token>"
+            "no stored secret called {name:?}. Store it with:\n    {how}"
         ))
     })
 }
@@ -327,8 +388,14 @@ mod tests {
         let e = resolve("keychain:nudge-definitely-not-here")
             .unwrap_err()
             .to_string();
-        assert!(e.contains("no Keychain item"));
-        assert!(e.contains("add-generic-password"), "it should say how: {e}");
+        assert!(e.contains("no stored secret"));
+        // Naming a command that does not exist on the machine reading the error
+        // is the same as not saying how.
+        let how = match cfg!(target_os = "macos") {
+            true => "add-generic-password",
+            false => "secret-tool",
+        };
+        assert!(e.contains(how), "it should say how: {e}");
     }
 
     /// Round trip through the real Keychain, since that is the only thing that

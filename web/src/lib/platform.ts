@@ -7,11 +7,13 @@ export const LABEL: Record<Platform, string> = {
   "macos-arm64": "macOS · Apple silicon",
   "macos-x64": "macOS · Intel",
   "windows-x64": "Windows",
-  "linux-x64": "Linux",
+  // An AppImage: one file, no install, and the only Linux package that does not
+  // need a different answer per distribution.
+  "linux-x64": "Linux · AppImage",
 };
 
 /** Which platforms actually have a build. The rest are honest about it. */
-export const BUILT: Platform[] = ["macos-arm64"];
+export const BUILT: Platform[] = ["macos-arm64", "linux-x64"];
 
 /**
  * Guess what somebody is on, from the browser.

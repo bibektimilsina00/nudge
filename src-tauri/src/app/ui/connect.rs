@@ -78,7 +78,6 @@ pub fn ask(app: &AppHandle, offer: &Offer) {
         };
         place(&handle);
         let _ = win.show();
-        #[cfg(target_os = "macos")]
         crate::app::ui::native::float_everywhere(&win);
         handle.emit("offer", &told).ok();
     });

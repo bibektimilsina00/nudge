@@ -288,6 +288,9 @@ fn portable(max_edge: u32, origin: (f64, f64), logical: (f64, f64)) -> Option<Sh
 /// or changing resolution, or unplugging a monitor -- left every coordinate
 /// silently wrong until Nudge was restarted.
 pub fn grab(max_edge: u32) -> Result<Shot> {
+    // `id` names the display to ScreenCaptureKit; the portable path finds the
+    // monitor by position instead.
+    #[cfg_attr(not(target_os = "macos"), allow(unused_variables))]
     let (origin, logical, id) = active_display();
 
     // Anywhere else, one cross-platform crate. Slower than what follows -- it
@@ -364,7 +367,8 @@ pub fn grab(max_edge: u32) -> Result<Shot> {
     })
 }
 
-#[cfg(test)]
+// Asks the macOS window server a question only it can answer.
+#[cfg(all(test, target_os = "macos"))]
 mod capture_tests {
     /// The wallpaper is a window, and leaving it out is how a screen with
     /// nothing open composites to solid black -- one run reported "a completely

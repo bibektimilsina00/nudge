@@ -22,10 +22,27 @@ path = "src/bin/probe.rs"
 [[example]]
 name = "handback"
 path = "examples/handback.rs"
+required-features = ["appkit"]
 
 [[example]]
 name = "tap"
 path = "examples/tap.rs"
+required-features = ["appkit"]
+
+[[example]]
+name = "haptic"
+path = "examples/haptic.rs"
+required-features = ["appkit"]
+
+[[example]]
+name = "mic"
+path = "examples/mic.rs"
+required-features = ["appkit"]
+
+[[example]]
+name = "spaces"
+path = "examples/spaces.rs"
+required-features = ["appkit"]
 
 [[example]]
 name = "portable"
@@ -34,22 +51,27 @@ path = "examples/portable.rs"
 [[example]]
 name = "jpegtime"
 path = "examples/jpegtime.rs"
+required-features = ["appkit"]
 
 [[example]]
 name = "ear"
 path = "examples/ear.rs"
+required-features = ["appkit"]
 
 [[example]]
 name = "sck"
 path = "examples/sck.rs"
+required-features = ["appkit"]
 
 [[example]]
 name = "captime"
 path = "examples/captime.rs"
+required-features = ["appkit"]
 
 [[bin]]
 name = "ax"
 path = "src/bin/ax.rs"
+required-features = ["appkit"]
 
 [[bin]]
 name = "truth"
@@ -75,6 +97,8 @@ tauri-build = { version = "2", features = [] }
 # and run on the machine doing the porting. Without this the `elsewhere/` code is
 # never compiled here, and code that is never compiled is code that does not work.
 portable = []
+# The macOS-only examples above. Not a code path -- just which files get built.
+appkit = []
 
 [dependencies]
 active-win-pos-rs = "0.11.0"
@@ -91,7 +115,6 @@ getrandom = "0.4.3"
 enigo = "0.3.0"
 hound = "3.5.1"
 image = { version = "0.25.6", default-features = false, features = ["jpeg", "png"] }
-objc2-pdf-kit = { version = "0.3.2", features = ["PDFDocument"] }
 open = "5.4.4"
 portable-pty = "0.9.0"
 reqwest = { version = "0.13.3", default-features = false, features = ["json", "rustls", "charset", "http2", "form", "query"] }
@@ -106,7 +129,16 @@ tokio = { version = "1.53.1", features = ["time", "process", "io-util", "sync", 
 toml = "1.0.7"
 xcap = "0.9.8"
 
+[target.'cfg(target_os = "linux")'.dependencies]
+# The Secret Service over D-Bus, which is the Keychain's opposite number. Pure
+# Rust crypto rather than linking libsecret, so the build needs no C library that
+# a CI image might not have.
+keyring = { version = "3", default-features = false, features = ["sync-secret-service", "crypto-rust"] }
+
 [target.'cfg(target_os = "macos")'.dependencies]
+# PDFKit reads a PDF; off macOS `paper.rs` says it cannot and the build has no
+# business pulling in the Objective-C runtime to be told so.
+objc2-pdf-kit = { version = "0.3.2", features = ["PDFDocument"] }
 # Already in the tree via rustls. Named here so the Keychain can be reached
 # through its own API rather than by shelling out to `security`, which
 # truncates a password read from a pipe at 128 characters without saying so.

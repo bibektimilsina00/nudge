@@ -9,6 +9,7 @@
 //! Everything here is public API, needs no permission, and names no application.
 //! The rule it follows: before teaching a model to recognise a state, check
 //! whether macOS will simply tell us.
+#[cfg(target_os = "macos")]
 use std::ffi::c_void;
 
 /// Facts gathered immediately before the capture, and handed to the model
@@ -80,10 +81,12 @@ impl Facts {
 // ---------------------------------------------------------------------------
 
 /// Four-character codes, the way CoreAudio spells its constants.
+#[cfg(target_os = "macos")]
 const fn fourcc(s: &[u8; 4]) -> u32 {
     ((s[0] as u32) << 24) | ((s[1] as u32) << 16) | ((s[2] as u32) << 8) | (s[3] as u32)
 }
 
+#[cfg(target_os = "macos")]
 #[repr(C)]
 struct Address {
     selector: u32,
@@ -166,7 +169,8 @@ fn audio_playing() -> bool {
     false
 }
 
-#[cfg(test)]
+// CoreAudio's constants, and the Objective-C runtime that reads them.
+#[cfg(all(test, target_os = "macos"))]
 mod tests {
     use super::*;
 

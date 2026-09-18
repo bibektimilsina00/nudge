@@ -212,3 +212,131 @@ jobs:
         with:
           draft: true
           files: src-tauri/target/release/bundle/dmg/*.dmg
+
+  # Linux. No certificate, no notarisation, no Gatekeeper -- the whole Apple half
+  # of the job above does not exist here. What is left is the same build, the
+  # same minisign signature over the updater's archive, and the same publish.
+  #
+  # 22.04 rather than latest: the glibc a binary is linked against is the oldest
+  # it will run on, and building on the newest Ubuntu is how you ship something
+  # that will not start on the LTS everybody is actually running.
+  linux:
+    runs-on: ubuntu-22.04
+
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: pnpm/action-setup@v4
+        with: { package_json_file: web/package.json }
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: ui/pnpm-lock.yaml
+
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            src-tauri/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('src-tauri/Cargo.lock') }}
+
+      # webkit2gtk is the web view, appindicator is the tray, xdo is the pointer.
+      # libasound is the microphone; without it the build fails on cpal rather
+      # than at the first recording, which is the better place to find out.
+      - name: Install what a Tauri build needs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev libgtk-3-dev libayatana-appindicator3-dev \
+            librsvg2-dev libxdo-dev libasound2-dev libssl-dev \
+            libx11-dev libxi-dev libxtst-dev libdbus-1-dev file
+
+      - name: Install the interface
+        run: cd ui && pnpm install --frozen-lockfile
+
+      - name: Install tauri-cli
+        run: cargo install tauri-cli --version '^2' --locked
+
+      - name: Check it still works
+        run: cd src-tauri && cargo test
+
+      - name: Build
+        env:
+          # The same minisign key as the Mac build. One key signs every platform;
+          # the app checks it before letting a download replace itself.
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+          NUDGE_GOOGLE_CLIENT_ID: ${{ secrets.NUDGE_GOOGLE_CLIENT_ID }}
+          NUDGE_GOOGLE_CLIENT_SECRET: ${{ secrets.NUDGE_GOOGLE_CLIENT_SECRET }}
+        run: cd src-tauri && cargo tauri build
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Nudge-linux-x64
+          path: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb
+
+      - name: Publish to the download API
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: ./.github/actions/ssh
+        with:
+          key: ${{ secrets.DEPLOY_KEY }}
+          known_hosts: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+
+      - name: Ship it
+        if: startsWith(github.ref, 'refs/tags/')
+        env:
+          NOTES: ${{ github.event.head_commit.message }}
+          HOST: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          version="${GITHUB_REF_NAME#v}"
+          # The AppImage is the download: one file, no install, runs on anything
+          # with a glibc new enough. The .deb is uploaded to the GitHub release
+          # for people who would rather their package manager knew about it.
+          img=$(ls src-tauri/target/release/bundle/appimage/*.AppImage | head -1)
+          tgz=$(ls src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz | head -1)
+          sig=$(ls src-tauri/target/release/bundle/appimage/*.AppImage.tar.gz.sig | head -1)
+          notes=$(printf '%s' "$NOTES" | head -1)
+
+          scp "$img" "$HOST:/tmp/Nudge.AppImage"
+          scp "$tgz" "$HOST:/tmp/Nudge.AppImage.tar.gz"
+
+          ssh "$HOST" "env \
+            NUDGE_VERSION=$(printf %q "$version") \
+            NUDGE_NOTES=$(printf %q "$notes") \
+            NUDGE_SIG=$(printf %q "$(cat "$sig")") \
+            bash -s" <<'REMOTE'
+          set -euo pipefail
+          cd /opt/nudge
+          docker cp /tmp/Nudge.AppImage nudge-api-1:/tmp/Nudge.AppImage
+          docker cp /tmp/Nudge.AppImage.tar.gz nudge-api-1:/tmp/Nudge.AppImage.tar.gz
+          docker compose exec -T api uv run publish.py /tmp/Nudge.AppImage \
+            --version "$NUDGE_VERSION" --platform linux-x64 --notes "$NUDGE_NOTES" \
+            --update /tmp/Nudge.AppImage.tar.gz --signature "$NUDGE_SIG"
+          rm -f /tmp/Nudge.AppImage /tmp/Nudge.AppImage.tar.gz
+          REMOTE
+
+          curl -fsS https://nudge.runmycrew.com/api/releases/linux-x64 \
+            | grep -q "\"version\":\"$version\"" \
+            || { echo "published, but the API reports a different version" >&2; exit 1; }
+          echo "live: $version"
+
+      - name: Add to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          files: |
+            src-tauri/target/release/bundle/appimage/*.AppImage
+            src-tauri/target/release/bundle/deb/*.deb

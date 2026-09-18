@@ -30,6 +30,7 @@ use std::path::Path;
 /// The same reasoning as every other clip here: a whole book in the history is
 /// a whole book in every later turn, and a model that needs page ninety can be
 /// pointed at the page.
+#[cfg(target_os = "macos")]
 const MOST: usize = 120_000;
 
 /// Does this look like something only this module can read?
@@ -85,13 +86,19 @@ pub fn read(path: &Path) -> Result<String> {
 
 #[cfg(not(target_os = "macos"))]
 pub fn read(path: &Path) -> Result<String> {
+    // The missing file first, because "reading /nowhere/at/all.pdf needs macOS"
+    // is a true sentence that sends somebody hunting for the wrong problem.
+    if !path.is_file() {
+        return Err(Error::Click(format!("{} is not a file", path.display())));
+    }
     Err(Error::Click(format!(
-        "reading {} needs macOS",
+        "reading {} needs macOS -- PDFKit has no counterpart here yet",
         path.display()
     )))
 }
 
 /// Bound it, and say what was left out rather than stopping mid-sentence.
+#[cfg(target_os = "macos")]
 fn clip(text: &str, pages: usize) -> String {
     let flat = text.trim();
     if flat.chars().count() <= MOST {
@@ -126,6 +133,7 @@ mod tests {
     }
 
     /// Something that is not a PDF at all must not come back as an empty one.
+    #[cfg(target_os = "macos")]
     #[test]
     fn a_file_that_is_not_a_pdf_is_refused_rather_than_read_as_blank() {
         let path = std::env::temp_dir().join(format!("nudge-notapdf-{}.pdf", std::process::id()));
@@ -138,6 +146,9 @@ mod tests {
         let _ = std::fs::remove_file(&path);
     }
 
+    // Both of these read a PDF, which off macOS is the one thing this module
+    // says it cannot do.
+    #[cfg(target_os = "macos")]
     #[test]
     fn a_long_document_says_what_it_left_out() {
         let out = clip(&"word ".repeat(MOST), 300);
@@ -149,6 +160,7 @@ mod tests {
         );
     }
 
+    #[cfg(target_os = "macos")]
     #[test]
     fn a_short_one_is_given_whole() {
         let out = clip("Invoice 4471", 1);

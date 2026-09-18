@@ -166,7 +166,6 @@ fn show_window(app: &AppHandle, visible: bool) {
     };
     if visible {
         let _ = win.show();
-        #[cfg(target_os = "macos")]
         crate::app::ui::native::float_everywhere(&win);
     } else {
         let _ = win.hide();

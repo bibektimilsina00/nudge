@@ -32,7 +32,6 @@ pub fn set_docked(app: AppHandle, docked: bool) {
     // window stays.
     if let Some(panel) = crate::app::ui::panel::window(&app) {
         let _ = panel.show();
-        #[cfg(target_os = "macos")]
         crate::app::ui::native::float_everywhere(&panel);
     }
 }
@@ -254,7 +253,6 @@ pub async fn shot_for_report(app: AppHandle) -> std::result::Result<String, Stri
 
     if let Some(win) = panel {
         let _ = win.show();
-        #[cfg(target_os = "macos")]
         crate::app::ui::native::float_everywhere(&win);
     }
 

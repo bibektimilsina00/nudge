@@ -4,7 +4,9 @@
 //! transparent, and the *content* grows -- so the open and close are a CSS
 //! transition rather than a sequence of window resizes, which cannot be animated
 //! and tear on a Retina display.
+#[cfg(target_os = "macos")]
 use objc2_app_kit::NSScreen;
+#[cfg(target_os = "macos")]
 use objc2_foundation::MainThreadMarker;
 use std::sync::Mutex;
 
@@ -58,6 +60,7 @@ pub fn set_open_size(w: f64, h: f64) {
     *OPEN.lock().unwrap() = (w, h);
 }
 
+#[cfg(target_os = "macos")]
 pub fn measure() -> Notch {
     let fallback = Notch {
         center_x: 720.0,
@@ -94,6 +97,26 @@ pub fn measure() -> Notch {
             width: 180.0,
             height: 32.0,
         }
+    }
+}
+
+/// A pill at the top of the first screen, because nothing else has a notch.
+///
+/// The width is asked for rather than assumed: the constant that stands in when
+/// AppKit cannot be reached puts the dock at x=720, which is the middle of a
+/// 1440-point display and nowhere near the middle of anything else.
+#[cfg(not(target_os = "macos"))]
+pub fn measure() -> Notch {
+    let width = xcap::Monitor::all()
+        .ok()
+        .and_then(|monitors| monitors.into_iter().next())
+        .and_then(|m| m.width().ok())
+        .map(f64::from)
+        .unwrap_or(1440.0);
+    Notch {
+        center_x: width / 2.0,
+        width: 180.0,
+        height: 32.0,
     }
 }
 

@@ -6,6 +6,10 @@
 //! quietly resetting their level -- see `native` for what was measured to get
 //! there.
 pub mod connect;
+#[cfg(target_os = "macos")]
+pub mod native;
+#[cfg(not(target_os = "macos"))]
+#[path = "elsewhere/native.rs"]
 pub mod native;
 pub mod notch;
 pub mod overlay;
