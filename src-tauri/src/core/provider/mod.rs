@@ -700,6 +700,9 @@ pub struct Ask<'a> {
     /// spent eleven turns rephrasing greps against a folder it had never looked
     /// at, because nothing said which folder that was or what was in it.
     pub workspace: String,
+    /// Somebody drew on the screenshot while they spoke. See
+    /// [`crate::core::screen::ink`].
+    pub drawn: bool,
     /// Nudge is doing this itself, with nobody watching. The model must act
     /// rather than delegate or chat -- there is no one to read a reply, and
     /// answering `agent` from inside an agent is how it delegated to itself.
@@ -973,6 +976,23 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
             .to_string()
     };
 
+    // A pink line in the screenshot is a hand pointing.
+    //
+    // Only said when there is one. A paragraph explaining a mark that is not
+    // there is a paragraph inviting the model to find one, and "the circled
+    // item" is exactly the kind of thing a model will happily invent.
+    let drawn = match ask.drawn {
+        false => String::new(),
+        true => "\n\nSomebody drew on this screenshot while they were speaking. \
+                 The pink line is theirs, and it is not part of the application \
+                 -- it is a finger pointing. Whatever it circles, underlines or \
+                 sits beside is what \"this\", \"that\" and \"here\" refer to, \
+                 and it is more reliable than the words, which were said while \
+                 drawing it. Never click the line itself and never describe it \
+                 back as something on screen."
+            .to_string(),
+    };
+
     let styling = {
         let has = |needle: &str| ask.tools.iter().any(|t| t.name.contains(needle));
         let doc = has("Doc") || has("document") || has("Presentation") || has("Slide");
@@ -1064,7 +1084,7 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          before you search -- a listing costs one turn and a blind grep can cost \
          ten.\n\n\
          {facts}{here}{memory}{earlier}{skills}{controls}{tools}{reach}\
-         Steps already completed:\n{history}{stalled}{styling}{teaching}\n\n\
+         Steps already completed:\n{history}{stalled}{drawn}{styling}{teaching}\n\n\
          ## Every reply starts with what you see\n\n\
          Begin with `screen`: one plain sentence describing what is actually on \
          the screen, and whether the goal is already met. Describe what is there, \
@@ -2110,6 +2130,7 @@ mod tests {
             goal,
             done,
             stalled,
+            drawn: false,
             agent: false,
             facts: Default::default(),
             controls: &[],
@@ -2121,6 +2142,19 @@ mod tests {
             skills: String::new(),
             workspace: "/tmp/workspace".into(),
         }
+    }
+
+    /// The line is in the picture, so the model has to be told whose it is --
+    /// and only when there is one, or "the circled item" becomes a thing it
+    /// looks for in a screenshot nobody drew on.
+    #[test]
+    fn a_drawn_mark_is_explained_only_when_there_is_one() {
+        let mut a = ask("what is this", &[], false);
+        assert!(!prompt(&a).contains("pink line"));
+        a.drawn = true;
+        let p = prompt(&a);
+        assert!(p.contains("pink line"));
+        assert!(p.contains("a finger pointing"));
     }
 
     /// Nobody is watching an agent, and a subagent has no picture at all -- so

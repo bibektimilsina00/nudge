@@ -75,6 +75,7 @@ pub mod facts;
 #[cfg(target_os = "macos")]
 pub mod fast;
 pub mod haptics;
+pub mod ink;
 #[cfg(all(target_os = "macos", not(feature = "portable")))]
 pub mod keyboard;
 #[cfg(any(not(target_os = "macos"), feature = "portable"))]
@@ -124,7 +125,12 @@ pub fn look(cfg: &Config) -> Result<Look> {
         }
     }
     let facts = facts::gather();
-    let shot = capture::grab(cfg.max_edge)?;
+    let mut shot = capture::grab(cfg.max_edge)?;
+    // Whatever was circled while the key was held. Here rather than inside
+    // `grab`, because this is the one path that feeds a model -- the accuracy
+    // harnesses and the diagnostics take pictures too, and they are not being
+    // asked about a gesture.
+    ink::burn(&mut shot);
     // After the picture, not before. Reading a tree can take the best part of a
     // second, and the two will disagree by however long that took -- so the
     // fresher of the pair should be the one whose coordinates we click.

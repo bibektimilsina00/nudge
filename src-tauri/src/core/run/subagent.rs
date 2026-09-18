@@ -165,6 +165,9 @@ where
     let mut consulted = false;
     for _ in 0..CHECKS {
         let ask = Ask {
+            // Nobody is drawing for a subagent: there is no screen in front of
+            // anybody and no hand on the pointer.
+            drawn: false,
             goal: &task,
             done: &done,
             stalled: false,
@@ -284,6 +287,9 @@ where
 
     for turn in 0..MAX_TURNS {
         let ask = Ask {
+            // Nobody is drawing for a subagent: there is no screen in front of
+            // anybody and no hand on the pointer.
+            drawn: false,
             goal: task,
             done: &done,
             stalled: false,

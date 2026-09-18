@@ -98,7 +98,7 @@ impl Shot {
 /// Measured: the same screenshot is ~930KB as PNG and ~130KB as JPEG, and upload
 /// was the dominant cost of a step. Lossless pixels buy nothing here -- the model
 /// is looking for a button, not inspecting compression artefacts.
-const QUALITY: u8 = 78;
+pub(super) const QUALITY: u8 = 78;
 pub const MIME: &str = "image/jpeg";
 
 /// Every on-screen window that is not ours, newest first.

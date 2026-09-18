@@ -1,5 +1,6 @@
 import { Bubble } from "./components/Bubble";
 import { Companion } from "./components/Companion";
+import { Ink } from "./components/Ink";
 import { Ring } from "./components/Ring";
 import { useDocked } from "./lib/useDocked";
 import { useNudge } from "./lib/useNudge";
@@ -12,6 +13,12 @@ export default function App() {
 
   return (
     <>
+      {/* Drawn while the key is held, and drawn again into the screenshot the
+          model is given, so circling a thing and asking about "this" works.
+          When to draw comes from the key watcher rather than from `phase`:
+          listening lasts until the answer arrives, and the pen comes up with
+          the key. */}
+      <Ink />
       {/* Parked in the panel means not on the screen -- otherwise there are two. */}
       {!docked && <Companion mode={mode} />}
       {/* The ring says where. The hand that used to press it is gone: the real

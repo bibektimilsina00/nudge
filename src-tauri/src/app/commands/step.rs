@@ -81,7 +81,25 @@ pub async fn advance(app: AppHandle) -> Result<Option<Step>> {
     app.state::<Nudge>().mark("settle");
 
     let began = std::time::Instant::now();
+    // Which turn this is, taken before the round trip and checked after it.
+    let turn = app.state::<Nudge>().turn();
     let step = app.state::<Nudge>().step().await?;
+
+    // Escape, while this was in the air.
+    //
+    // Nothing above can be interrupted -- it is one `await` around a network
+    // call -- so the turn is disowned rather than cancelled: the answer arrives,
+    // and nobody speaks it, performs it, or draws it. Without this, pressing
+    // Escape cleared the screen and then the model's reply appeared three
+    // seconds later and started talking, which reads as the app ignoring you.
+    if app.state::<Nudge>().turn() != turn {
+        eprintln!(
+            "foreground: abandoned after {:.1}s",
+            began.elapsed().as_secs_f32()
+        );
+        app.emit("status", "idle").ok();
+        return Ok(None);
+    }
     // Logged like an agent turn. The trace used to begin at the agent, so a
     // foreground step that launched something looked like an app the agent found
     // already open -- it appeared on screen and nothing said why.
@@ -329,6 +347,10 @@ pub fn cancel(app: AppHandle, silence: bool) {
     if silence {
         speech::hush();
         crate::app::tour::stop();
+        // And whatever is mid-flight. Escape means stop, and a turn that is
+        // already at the model is the one case where "stop" used to mean
+        // "carry on and tell me in a moment".
+        app.state::<Nudge>().abandon();
         // Escape is the key people already hit when a machine starts doing
         // something they did not expect. It has to stop the agent too.
         for a in app.state::<Agents>().list() {
@@ -1408,8 +1430,27 @@ pub(crate) fn speak(app: &AppHandle, line: &str) {
     app.state::<Voice>().get().apply(&mut cfg);
     let line = line.to_string();
     let done = app.clone();
+    // The turn this sentence belongs to.
+    //
+    // Escape hushes whatever is playing, and this had a hole in it either side
+    // of that: a sentence spawned a moment before Escape would start playing a
+    // moment after, and one whose audio was still being fetched from Gemini
+    // would arrive later still and say it anyway. Both look identical from the
+    // outside -- you press Escape, the screen clears, and the app keeps talking.
+    let turn = app.state::<Nudge>().turn();
     tauri::async_runtime::spawn(async move {
+        if done.state::<Nudge>().turn() != turn {
+            done.emit("status", "idle").ok();
+            return;
+        }
         speech::speak(&cfg, &line).await;
+        // Fetching the audio takes a network round trip on the Gemini voice, and
+        // Escape can land inside it.
+        if done.state::<Nudge>().turn() != turn {
+            speech::hush();
+            done.emit("status", "idle").ok();
+            return;
+        }
         loop {
             tokio::time::sleep(std::time::Duration::from_millis(150)).await;
             if !speech::is_playing() {

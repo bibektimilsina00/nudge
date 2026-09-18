@@ -80,6 +80,7 @@ fn run(cfg: Config, goal: &str) -> nudge_lib::error::Result<()> {
             .unwrap_or_default()
     );
     let ask = provider::Ask {
+        drawn: false,
         goal,
         done: &[],
         stalled: false,

@@ -171,6 +171,16 @@ pub struct Nudge {
     /// conversation does not survive quitting the application, any more than one
     /// survives the other person leaving the room.
     last: Mutex<Option<(std::time::Instant, String, Vec<String>)>>,
+    /// Which turn is wanted, counted up every time one is abandoned.
+    ///
+    /// Escape has to stop a turn that is already in flight, and there is nothing
+    /// to interrupt: the model call is an `await` in the middle of a function, a
+    /// network round trip nobody can take back. So the answer is not cancelled,
+    /// it is *disowned* -- whoever comes back from the await checks whether the
+    /// turn they started is still the turn anybody wants, and drops it on the
+    /// floor if it is not. The same trick `speech::TURN` plays on audio, for the
+    /// same reason.
+    wanted: std::sync::atomic::AtomicU64,
 }
 
 impl Nudge {
@@ -185,6 +195,7 @@ impl Nudge {
             reach,
             memory: crate::core::memory::Memory::load(),
             last: Mutex::new(None),
+            wanted: std::sync::atomic::AtomicU64::new(0),
             cfg,
             provider: std::sync::RwLock::new(provider),
             tuning: Mutex::new(tuning),
@@ -523,6 +534,17 @@ impl Nudge {
     /// sharing nothing but the screen. That survives while the answer is visual
     /// and stops the moment it is not: what a command printed, what a search
     /// returned, what was decided, all existed nowhere once the turn ended.
+    /// Which turn is current. Taken before the model call and checked after.
+    pub fn turn(&self) -> u64 {
+        self.wanted.load(std::sync::atomic::Ordering::SeqCst)
+    }
+
+    /// Stop wanting whatever is in flight.
+    pub fn abandon(&self) {
+        self.wanted
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    }
+
     pub fn end(&self) {
         let finished = self.session.lock().unwrap().take();
         if let Some(s) = finished {
@@ -841,6 +863,8 @@ impl Nudge {
         // application is known -- which is the whole scoping rule.
         let memory = self.memory.prompt(facts.app.as_deref());
         let ask = Ask {
+            // Only a person draws, and only the foreground has one.
+            drawn: crate::core::screen::ink::drawn(),
             goal: &goal,
             done: &done,
             stalled,

@@ -258,6 +258,11 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
     // The turn starts here: the key is up and the clock is the user's from this
     // moment, whatever we spend it on.
     app.state::<Nudge>().clock_in();
+    // And so does the right to abandon it. Escape during the transcription is
+    // the commonest moment of all to press it -- the notch says "thinking" and
+    // nothing has happened yet -- and checking only after the model call meant
+    // that press was ignored and the answer arrived anyway.
+    let turn = app.state::<Nudge>().turn();
 
     // finish() blocks a few ms draining the audio callbacks. Not worth a
     // spawn_blocking hop.
@@ -291,6 +296,12 @@ async fn ask_by_voice(app: AppHandle, rec: voice::Recording) -> Result<()> {
         return Ok(());
     };
     app.state::<Nudge>().mark("heard");
+
+    if app.state::<Nudge>().turn() != turn {
+        eprintln!("listening: abandoned before the model was asked");
+        app.emit("status", "idle").ok();
+        return Ok(());
+    }
 
     // A refusal or a failed capture is dropped here rather than reported.
     // `step` looks again for itself when there is nothing stashed, and that is

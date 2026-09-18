@@ -134,6 +134,17 @@ pub fn follow(app: &AppHandle) {
             let pressed = escape && !escape_was;
             escape_was = escape;
 
+            if pressed {
+                // Logged unconditionally. Escape is rare, one line costs
+                // nothing, and "Escape did not cancel it" has two causes that
+                // need different fixes -- the key not being seen, and the
+                // self-press guard swallowing it. Without this line the two are
+                // indistinguishable from outside.
+                eprintln!(
+                    "escape: pressed (ours={})",
+                    crate::core::screen::keyboard::we_pressed_escape()
+                );
+            }
             if pressed && !crate::core::screen::keyboard::we_pressed_escape() {
                 let agents = app.state::<crate::core::run::agent::Agents>();
                 for a in agents.list() {
@@ -142,6 +153,19 @@ pub fn follow(app: &AppHandle) {
                         agents.stop(a.id);
                     }
                 }
+                // And the foreground turn, wherever it has got to.
+                //
+                // Escape reached the agents and the overlay and stopped short of
+                // the one thing most likely to be happening when somebody
+                // presses it: a model call in flight. It could not be seen to do
+                // anything, because "thinking" carried on and then spoke.
+                //
+                // Through the same command the overlay uses, so there is one
+                // definition of what stopping means.
+                eprintln!("escape: cancelling the foreground turn");
+                crate::app::commands::cancel(app.clone(), true);
+                app.emit("dismiss", ()).ok();
+                app.emit("status", "idle").ok();
             }
 
             // Push-to-talk on a bare modifier, or several. Edge-triggered, so
@@ -156,9 +180,43 @@ pub fn follow(app: &AppHandle) {
                 &app.state::<crate::app::state::Hotkey>().get(),
             ) {
                 let ctrl = click::modifiers_held() == want;
+                // Drawing, while the key is held.
+                //
+                // Only while it is held: the pointer is somewhere for the whole
+                // day and almost none of that is a gesture. Held, it is, and the
+                // overlay draws the same points for the person to see.
+                if ctrl {
+                    let p = app.cursor_position().ok();
+                    if let Some(p) = p {
+                        crate::core::screen::ink::add(crate::core::screen::capture::Point {
+                            x: p.x / app.state::<Screen>().scale,
+                            y: p.y / app.state::<Screen>().scale,
+                        });
+                    }
+                }
+                if std::env::var_os("NUDGE_DEBUG_HOTKEY").is_some() && tick % 30 == 0 {
+                    eprintln!(
+                        "hotkey: want {want:?} held {:?} match {ctrl}",
+                        click::modifiers_held()
+                    );
+                }
                 if ctrl != ctrl_was {
                     ctrl_was = ctrl;
+                    // Said out loud, because the overlay cannot work it out.
+                    //
+                    // It draws the ink, and it was deciding when to draw from
+                    // the phase it happens to be in -- which says "listening"
+                    // from the moment the key goes down until the *answer*
+                    // arrives, because nothing tells it otherwise. So the pen
+                    // stayed down after the key came up, and kept drawing while
+                    // the model was thinking. This is the edge itself, which is
+                    // the only thing that actually knows.
+                    app.emit("drawing", ctrl).ok();
+
                     let state = if ctrl {
+                        // A fresh gesture. Whatever was drawn for the last turn
+                        // is not part of this one.
+                        crate::core::screen::ink::clear();
                         ShortcutState::Pressed
                     } else {
                         ShortcutState::Released
