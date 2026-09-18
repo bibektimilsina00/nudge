@@ -29,6 +29,17 @@ services:
       # app -- but it is not optional either: with this unset the server refuses
       # every Google sign-in rather than accepting tokens from anywhere.
       NUDGE_GOOGLE_CLIENT_ID: 141497173619-dph3q1epsjo8i7d7pafoq1lbmd7hckme.apps.googleusercontent.com
+      # The model key every signed-in copy borrows -- see server/app/routes/think.py.
+      #
+      # From the environment on the box, never written here: this file is in a
+      # public repository and the client id above is the only thing in it that is
+      # safe to be. Put it in /opt/nudge/.env, which compose reads automatically:
+      #
+      #     NUDGE_GEMINI_KEY=...
+      #
+      # Unset, the proxy answers 503 and says so, and the app falls back to
+      # whatever key the person set themselves.
+      NUDGE_GEMINI_KEY: ${NUDGE_GEMINI_KEY:-}
     volumes:
       # Builds and the database outlive any deploy, so neither lives in the
       # image. A 20MB binary in a layer is a 20MB rebuild every time a line of

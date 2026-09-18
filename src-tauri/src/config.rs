@@ -230,11 +230,21 @@ impl Config {
         toml::from_str(&text).map_err(|e| Error::Config(format!("{}: {e}", path.display())))
     }
 
-    /// Env wins over the file so a shared config can stay free of secrets.
+    /// The key to use, from the three places one can be.
+    ///
+    /// Env first, so a single run can be pointed at a different key without
+    /// editing anything. Then the Keychain, which is where Settings puts one --
+    /// a credential typed into the app belongs there rather than in a file that
+    /// gets copied between machines and pasted into bug reports. The config file
+    /// last, because it is the oldest of the three and the least private.
+    ///
+    /// Named after the variable rather than mapped through a table: the item is
+    /// called `GEMINI_API_KEY` for the same reason the variable is.
     pub fn key(&self, env_var: &str) -> Option<String> {
         std::env::var(env_var)
             .ok()
             .filter(|k| !k.is_empty())
+            .or_else(|| crate::core::tools::secret::from_keychain(env_var))
             .or_else(|| self.api_key.clone())
     }
 }

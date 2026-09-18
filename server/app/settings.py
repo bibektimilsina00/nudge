@@ -47,6 +47,12 @@ class Settings(BaseSettings):
     # audience check is not a smaller check, it is no check at all.
     google_client_id: str = ""
 
+    # The model key every signed-in copy borrows -- see routes/think.py.
+    #
+    # Empty means the proxy refuses rather than failing further in: an app told
+    # "no key configured" can say so to a person, and one handed a 500 cannot.
+    gemini_key: str = ""
+
     # How long a device stays signed in. Long, because the thing behind it is a
     # menu-bar app somebody opens for ten seconds at a time, and an app that
     # asks who you are every fortnight is an app people stop opening.

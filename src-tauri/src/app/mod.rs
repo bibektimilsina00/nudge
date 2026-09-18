@@ -272,6 +272,8 @@ pub fn run() {
             commands::skills,
             commands::open_skills_folder,
             commands::set_open_size,
+            commands::model_access,
+            commands::set_api_key,
             commands::notch_height,
             commands::open_artifact,
             commands::voice_mode,

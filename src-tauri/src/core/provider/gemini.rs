@@ -13,7 +13,10 @@ use serde_json::json;
 
 pub struct Gemini {
     model: String,
-    key: String,
+    /// Kept whole rather than reduced to a key at startup: where a call goes is
+    /// decided per call, because signing in, signing out and pasting a key into
+    /// Settings all change the answer and none of them should need a restart.
+    cfg: Config,
     think: Option<String>,
     http: reqwest::Client,
 }
@@ -35,10 +38,21 @@ impl Gemini {
 }
 
 impl Gemini {
+    /// One request, wherever this copy is entitled to send it.
+    ///
+    /// Not `Result` at the call sites' expense: every one of them is already in
+    /// a function that returns `Result`, and a relay that cannot be chosen is
+    /// the same failure as a missing key always was.
+    fn send(&self, model: &str, body: &serde_json::Value) -> Result<reqwest::RequestBuilder> {
+        let relay = crate::core::relay::Relay::choose(&self.cfg)
+            .ok_or_else(|| Error::Config(crate::core::relay::Relay::missing()))?;
+        Ok(relay.authorise(self.http.post(relay.url(model))).json(body))
+    }
+
     pub fn new(cfg: &Config) -> Result<Self> {
-        let key = cfg
-            .key("GEMINI_API_KEY")
-            .ok_or_else(|| Error::Config("set GEMINI_API_KEY or api_key in config.toml".into()))?;
+        // No key needed to build one any more. A signed-in copy borrows the
+        // server's, and whether this copy has either is a question for the
+        // moment it actually sends something.
         Ok(Self {
             // Measured against the same screenshot and goal: 3.8-flash 9.6s,
             // 3.5-flash 5.1s, 3.5-flash-lite 3.3s -- and the lite model still put
@@ -48,7 +62,7 @@ impl Gemini {
                 .model
                 .clone()
                 .unwrap_or_else(|| "gemini-3.5-flash-lite".into()),
-            key,
+            cfg: cfg.clone(),
             think: cfg.think.clone(),
             http: reqwest::Client::new(),
         })
@@ -189,13 +203,7 @@ impl Provider for Gemini {
         });
 
         let resp: serde_json::Value = self
-            .http
-            .post(format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
-                self.model
-            ))
-            .header("x-goog-api-key", &self.key)
-            .json(&body)
+            .send(&self.model, &body)?
             .send()
             .await?
             .error_for_status()?
@@ -315,12 +323,7 @@ impl Provider for Gemini {
             "generationConfig": self.generation(),
         });
         let resp: serde_json::Value = self
-            .http
-            .post(format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                self.model, self.key
-            ))
-            .json(&body)
+            .send(&self.model, &body)?
             .send()
             .await?
             .error_for_status()?
@@ -361,12 +364,7 @@ impl Provider for Gemini {
             "generationConfig": {"responseMimeType": "application/json"},
         });
         let resp: serde_json::Value = self
-            .http
-            .post(format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                self.model, self.key
-            ))
-            .json(&body)
+            .send(&self.model, &body)?
             .send()
             .await?
             .error_for_status()?
@@ -395,12 +393,7 @@ impl Provider for Gemini {
             "tools": [{"google_search": {}}],
         });
         let resp: serde_json::Value = self
-            .http
-            .post(format!(
-                "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-                self.model, self.key
-            ))
-            .json(&body)
+            .send(&self.model, &body)?
             .send()
             .await?
             .error_for_status()?

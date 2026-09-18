@@ -97,9 +97,8 @@ pub async fn speak(cfg: &Config, text: &str) {
 }
 
 async fn gemini(cfg: &Config, text: &str) -> Result<Vec<u8>, String> {
-    let key = cfg
-        .key("GEMINI_API_KEY")
-        .ok_or_else(|| "no GEMINI_API_KEY".to_string())?;
+    let relay = crate::core::relay::Relay::choose(cfg)
+        .ok_or_else(|| "no key and no account".to_string())?;
     let voice = cfg.speech_voice.as_deref().unwrap_or("Kore");
 
     let body = serde_json::json!({
@@ -112,12 +111,8 @@ async fn gemini(cfg: &Config, text: &str) -> Result<Vec<u8>, String> {
         },
     });
 
-    let resp: serde_json::Value = crate::core::http()
-        .post(format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
-            cfg.speech_model
-        ))
-        .header("x-goog-api-key", key)
+    let resp: serde_json::Value = relay
+        .authorise(crate::core::http().post(relay.url(&cfg.speech_model)))
         .json(&body)
         .send()
         .await

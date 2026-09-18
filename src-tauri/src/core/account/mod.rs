@@ -83,7 +83,7 @@ fn profile() -> std::path::PathBuf {
 
 /// Where the server is. Overridable so that running the API locally does not
 /// mean editing a constant and remembering to put it back.
-fn api() -> String {
+pub fn api() -> String {
     std::env::var("NUDGE_API").unwrap_or_else(|_| "https://nudge.runmycrew.com".into())
 }
 

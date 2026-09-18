@@ -22,9 +22,8 @@ pub async fn speech_to_text(cfg: &Config, wav: &[u8]) -> Result<Option<String>> 
         return Ok(Some(heard));
     }
 
-    let key = cfg
-        .key("GEMINI_API_KEY")
-        .ok_or_else(|| Error::Voice("voice needs GEMINI_API_KEY (or api_key) set".into()))?;
+    let relay = crate::core::relay::Relay::choose(cfg)
+        .ok_or_else(|| Error::Voice(crate::core::relay::Relay::missing()))?;
 
     let body = json!({
         "contents": [{"parts": [
@@ -38,12 +37,8 @@ pub async fn speech_to_text(cfg: &Config, wav: &[u8]) -> Result<Option<String>> 
         ]}],
     });
 
-    let resp: serde_json::Value = crate::core::http()
-        .post(format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent",
-            cfg.voice_model
-        ))
-        .header("x-goog-api-key", &key)
+    let resp: serde_json::Value = relay
+        .authorise(crate::core::http().post(relay.url(&cfg.voice_model)))
         .json(&body)
         .send()
         .await?

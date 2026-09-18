@@ -27,6 +27,7 @@ pub mod permits;
 pub mod provenance;
 pub mod provider;
 pub mod reach;
+pub mod relay;
 pub mod report;
 pub mod risk;
 pub mod run;

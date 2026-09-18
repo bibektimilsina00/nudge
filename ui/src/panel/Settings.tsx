@@ -17,6 +17,8 @@ type Shortcut = {
   fixed: string | null;
 };
 type Setup = { workspace: string; suggesting: boolean; steps: number };
+/** Whose model this copy is using, and whether a key of your own is stored. */
+type Access = { mine: boolean; through: string | null };
 type Server = { name: string; about: string; said: string; failed: boolean };
 type PermitState = "granted" | "denied" | "unasked";
 type Permit = {
@@ -95,6 +97,12 @@ export function Settings({
   const [look, setLook] = useState(DEFAULT_LOOK);
   const [permits, setPermits] = useState<Permit[]>([]);
   const [keys, setKeys] = useState<Shortcut[]>([]);
+  const [access, setAccess] = useState<Access | null>(null);
+  // Held apart from `access`: what is in the box is what you are typing, and
+  // what is in the Keychain is what is saved. Conflating them is how a field
+  // shows a key that is not in use yet.
+  const [typedKey, setTypedKey] = useState("");
+  const [saved, setSaved] = useState(false);
 
   useEffect(() => {
     void invoke<VoiceMode>("voice_mode").then(setVoice);
@@ -108,6 +116,7 @@ export function Settings({
     void invoke<Allowed[]>("reach").then(setAllowed);
     void invoke<boolean>("reviewing").then(setReviewing);
     void invoke<Brain>("brain").then(setBrain);
+    void invoke<Access>("model_access").then(setAccess);
     void invoke<string>("look").then(setLook);
     // Polled, not asked once. The entire shape of granting one of these is that
     // somebody leaves for System Settings and comes back, and an answer cached
@@ -221,6 +230,74 @@ export function Settings({
           <p className="px-0.5 pt-1.5 text-[10px] text-ink-3">
             Using {brain.model}. Name a different one in config.toml.
           </p>
+        </Section>
+
+        <Section title="Model access">
+          {/* Two states worth telling apart, and neither is a setting: what is
+              paying for the next request, and whether there is a key of your
+              own behind it. */}
+          <p className="px-0.5 text-[10.5px] leading-snug text-ink-3">
+            {access?.mine
+              ? "Using your key. Requests go straight to Google and are billed to you."
+              : access?.through
+                ? "Using Nudge's model, through your account. Nothing to set up."
+                : "Sign in, or paste a key below, and Nudge can think."}
+          </p>
+          <input
+            type="password"
+            value={typedKey}
+            placeholder={access?.mine ? "A key is saved" : "Your own Gemini API key"}
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => {
+              setTypedKey(e.target.value);
+              setSaved(false);
+            }}
+            className={[
+              "w-full rounded-xl bg-[#262626] px-3 py-2 text-[11.5px] text-ink",
+              "ring-1 ring-white/9 outline-none placeholder:text-ink-3",
+              "focus:ring-white/20",
+            ].join(" ")}
+          />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              disabled={typedKey.trim() === ""}
+              onClick={() => {
+                void invoke("set_api_key", { key: typedKey })
+                  .then(() => {
+                    setTypedKey("");
+                    setSaved(true);
+                    return invoke<Access>("model_access").then(setAccess);
+                  })
+                  .catch((e) => setProblem(String(e)));
+              }}
+              className={[
+                "rounded-lg bg-[#2f2f2f] px-3 py-1.5 text-[11px] font-medium text-ink",
+                "ring-1 ring-white/9 transition-transform duration-150",
+                "active:scale-[0.97] disabled:opacity-40",
+              ].join(" ")}
+            >
+              Save key
+            </button>
+            {access?.mine && (
+              <button
+                type="button"
+                onClick={() => {
+                  void invoke("set_api_key", { key: "" })
+                    .then(() => invoke<Access>("model_access").then(setAccess))
+                    .catch((e) => setProblem(String(e)));
+                }}
+                className={[
+                  "rounded-lg px-3 py-1.5 text-[11px] text-ink-2",
+                  "transition-transform duration-150 active:scale-[0.97] hover:text-ink",
+                ].join(" ")}
+              >
+                Use Nudge's instead
+              </button>
+            )}
+            {saved && <span className="text-[10.5px] text-ink-3">Saved to your Keychain.</span>}
+          </div>
         </Section>
 
         <Section title="Thinking before answering">

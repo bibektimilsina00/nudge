@@ -116,6 +116,41 @@ pub fn set_reviewing(app: AppHandle, on: bool) {
     );
 }
 
+/// Which key the next request will use, and where it came from.
+///
+/// Two separate facts, because the panel says different things about them: an
+/// account is something you have, a key is something you typed, and "signed in
+/// but no key anywhere" is the state this whole feature exists to fix.
+#[tauri::command]
+pub fn model_access() -> serde_json::Value {
+    let cfg = crate::config::Config::load().unwrap_or_default();
+    // Never the key itself. It goes one way: into the Keychain and out to
+    // Google, and a settings page that can read it back is a settings page that
+    // can leak it into a screenshot.
+    serde_json::json!({
+        "mine": cfg.key("GEMINI_API_KEY").is_some(),
+        "through": crate::core::relay::Relay::choose(&cfg).map(|r| r.describe()),
+    })
+}
+
+/// Keep a key somebody typed, or forget the one they cleared.
+///
+/// The Keychain, not the config file. It is a credential, and this repository's
+/// rule about those has one exception and it is not this.
+#[tauri::command]
+pub fn set_api_key(key: String) -> crate::error::Result<()> {
+    let key = key.trim();
+    if key.is_empty() {
+        crate::core::tools::secret::forget_keychain("GEMINI_API_KEY");
+        return Ok(());
+    }
+    crate::core::tools::secret::to_keychain("GEMINI_API_KEY", key)?;
+    // So it cannot leave again in a URL or a command -- the same guard every
+    // other secret this process holds goes through.
+    crate::core::tools::secret::remember([key.to_string()]);
+    Ok(())
+}
+
 #[tauri::command]
 pub fn quit(app: AppHandle) {
     app.exit(0);
