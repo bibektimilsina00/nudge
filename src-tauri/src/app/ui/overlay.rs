@@ -48,10 +48,11 @@ pub fn fit(app: &AppHandle) -> tauri::Result<Screen> {
         }
     };
     win.set_ignore_cursor_events(true)?;
-    // Never focusable, ever. A window the system considers focusable is one it
-    // considers part of a Space, and it is evicted when a full-screen Space takes
-    // over -- the window server reported ours ABSENT the moment VS Code went full
-    // screen. This is what actually keeps the companion visible there.
+    // Never focusable, ever. This window covers the whole desk, so a click it
+    // could take is a click somebody meant for what is underneath.
+    //
+    // It used to claim to be what keeps the companion visible in a full-screen
+    // Space. It is not -- `native::become_panel` is.
     let _ = win.set_focusable(false);
     follow_everywhere(&win);
 
@@ -111,15 +112,13 @@ fn follow_everywhere(win: &WebviewWindow) {
     //   IgnoresCycle       never a cmd-tab target; it is a cursor, not a window
     window.setCollectionBehavior(behavior());
 
-    // Borderless: a title bar cannot be made to not take focus.
-    //
-    // tao builds this window as FullSizeContentView|Miniaturizable (32772), which
-    // also makes it key-capable. A key-capable window is a window the system
-    // believes belongs to a Space -- and it gets evicted when a full-screen Space
-    // takes over, which is precisely what the window-server poll showed. Borderless
-    // makes canBecomeKeyWindow false, and the overlay stops being treated as a
-    // window someone might switch to.
+    // Borderless: a title bar cannot be made to not take focus, and tao builds
+    // this as FullSizeContentView|Miniaturizable (32772), which is key-capable.
     window.setStyleMask(NSWindowStyleMask::Borderless);
+    // And then a panel, which is what actually keeps it in a full-screen Space --
+    // see `native::become_panel`, where the four explanations that are not it are
+    // written down.
+    crate::app::ui::native::become_panel(window);
 
     // The missing piece. Nudge is an accessory app, so it is *never* the active
     // application -- and a window that hides on deactivation is therefore a window

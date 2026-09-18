@@ -35,18 +35,14 @@ pub fn dock_to_notch(app: &AppHandle) {
     let _ = win.set_size(LogicalSize::new(w, h));
     let _ = win.set_position(tauri::LogicalPosition::new(notch.center_x - w / 2.0, 0.0));
     let _ = win.set_ignore_cursor_events(true);
-    // Not focusable while it is just a strip.
+    // Not focusable while it is just a strip: a pill over the menu bar has
+    // nothing to type into.
     //
-    // This is what keeps it on screen inside a full-screen app, and it is the
-    // same reason the companion sets it: tao's NSWindow subclass answers
-    // `canBecomeKeyWindow` from this flag, whatever the style mask says, and a
-    // window the system thinks can take focus is one it thinks belongs to a
-    // Space -- so a full-screen Space takes the screen and the strip goes with
-    // the Space it came from.
-    //
-    // There used to be a 1x1 parent window holding both windows in every Space
-    // instead. It did the job and it is also why they blinked in step through
-    // Mission Control, so this is the half of that trade worth keeping.
+    // It no longer decides anything about Spaces, and it used to say it did.
+    // `native::become_panel` replaces tao's class, and with it the override that
+    // answered `canBecomeKeyWindow` from this flag -- `becomesKeyOnlyIfNeeded`
+    // does that job now. This is left because `set_interactive` still turns it
+    // back on, and the two should agree.
     let _ = win.set_focusable(false);
     let _ = win.show();
 

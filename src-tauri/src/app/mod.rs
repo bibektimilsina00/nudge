@@ -129,6 +129,8 @@ pub fn run() {
                 "nudge: overlay anchored = {}",
                 ui::native::anchor_overlay(handle)
             );
+            #[cfg(target_os = "macos")]
+            ui::native::watch_spaces(handle);
             app.manage(Mic::default());
             app.manage(voice);
             app.manage(Settle(std::sync::Mutex::new(None)));

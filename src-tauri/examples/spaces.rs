@@ -7,12 +7,14 @@ fn main() {
     use core_foundation::dictionary::CFDictionary;
     use core_foundation::number::CFNumber;
     use core_foundation::string::CFString;
+    use core_graphics::geometry::CGRect;
     use core_graphics::window::{
         copy_window_info, kCGNullWindowID, kCGWindowListOptionOnScreenOnly,
     };
 
     println!("polling for 60s -- switch an app to full screen now");
     let mut last = String::new();
+    let began = std::time::Instant::now();
 
     for _ in 0..60 {
         let mut front = String::from("?");
@@ -37,7 +39,16 @@ fn main() {
                     .unwrap_or(-1.0);
 
                 if layer > 0 {
-                    floating.push(format!("{owner}@{layer}/a{alpha:.1}"));
+                    // Size as well as owner. Three windows of ours on the list
+                    // and one window of ours on the list are different answers,
+                    // and which one survived is the whole question: the anchor is
+                    // 1x1, the strip is 560 wide, the companion covers the desk.
+                    let size = get("kCGWindowBounds")
+                        .and_then(|v| v.downcast::<CFDictionary>())
+                        .and_then(|d| CGRect::from_dict_representation(&d))
+                        .map(|r| format!("{:.0}x{:.0}", r.size.width, r.size.height))
+                        .unwrap_or_else(|| "?".into());
+                    floating.push(format!("{owner}@{layer}/a{alpha:.1}/{size}"));
                 } else if front == "?" && layer == 0 {
                     front = owner;
                 }
@@ -52,10 +63,13 @@ fn main() {
                 floating.join("  ")
             }
         );
-        if line != last {
-            println!("{line}");
-            last = line;
-        }
+        // Timestamped, and repeats kept. "Nothing of ours is on screen" is a
+        // state with a duration, and printing only the transitions hides how
+        // long it lasted -- which is the one number that says whether a window
+        // was evicted or was mid-animation.
+        let mark = if line == last { "" } else { "  <-- changed" };
+        println!("{:5.1}s {line}{mark}", began.elapsed().as_secs_f32());
+        last = line;
         std::thread::sleep(std::time::Duration::from_secs(1));
     }
     println!("done");

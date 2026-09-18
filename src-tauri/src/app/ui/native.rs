@@ -40,20 +40,19 @@ use tauri::{AppHandle, Manager};
 /// Keeps our window alive. An `NSWindow` we drop is an `NSWindow` that disappears.
 static OVERLAY: Mutex<Option<usize>> = Mutex::new(None);
 
-/// Anchor tao's overlay window to one of ours, so it inherits its Spaces.
+/// Anchor tao's overlay window to one of ours.
 ///
-/// Measured, both ways round: a window we build ourselves stays in the window
-/// server's list continuously, including inside a full-screen Space, while tao's
-/// is evicted the moment one activates. Same process, same flags, same moment --
-/// the window is the only difference.
+/// **This does not do what the rest of this comment used to say it does.** It was
+/// added to keep the overlay in a full-screen Space, on the reasoning that a child
+/// window follows its parent between Spaces. Measured since, with the anchor and
+/// without it: the children are evicted either way, reporting `visible = true`
+/// and `isOnActiveSpace = false`, while the anchor itself stays. What actually
+/// keeps them there is being an `NSPanel` -- see [`become_panel`].
 ///
-/// Moving the webview into our window was the obvious fix and it does not work:
-/// the transplanted WKWebView never redraws, the window never earns a backing
-/// store, and it stops registering anywhere at all.
-///
-/// So the webview stays exactly where it is and our window becomes its *parent*.
-/// A child window follows its parent between Spaces, which is the one thing tao's
-/// window could not do on its own.
+/// It is kept for the moment because the overview work was built on top of it and
+/// that is a separate measurement. It is a deletion waiting to happen, and the
+/// comment in `dock_to_notch` about a parent being why both windows blink in step
+/// through Mission Control is the reason to make it.
 pub fn anchor_overlay(app: &AppHandle) -> bool {
     let Some(mtm) = MainThreadMarker::new() else {
         return false;
@@ -122,6 +121,105 @@ pub fn anchor_overlay(app: &AppHandle) -> bool {
     let raw = Retained::into_raw(anchor) as usize;
     *OVERLAY.lock().unwrap() = Some(raw);
     true
+}
+
+/// Ask the windows themselves, once a second, what the window server thinks of
+/// them. Behind `NUDGE_DEBUG_SPACES`, and meant to be taken out again.
+///
+/// The on-screen list says *that* a window was evicted from a full-screen Space.
+/// It cannot say whether the parent link that was supposed to prevent it is
+/// still there, and every guess about that so far has been wrong.
+pub fn watch_spaces(app: &AppHandle) {
+    if std::env::var("NUDGE_DEBUG_SPACES").is_err() {
+        return;
+    }
+    let app = app.clone();
+    std::thread::spawn(move || loop {
+        std::thread::sleep(std::time::Duration::from_secs(1));
+        let here = app.clone();
+        let _ = app.run_on_main_thread(move || {
+            for label in ["overlay", "panel"] {
+                let Some(win) = here.get_webview_window(label) else {
+                    continue;
+                };
+                let Ok(ptr) = win.ns_window() else { continue };
+                if ptr.is_null() {
+                    continue;
+                }
+                let ns: &NSWindow = unsafe { &*(ptr as *const NSWindow) };
+                println!(
+                    "spaces: {label:<7} visible={} onActiveSpace={} parent={} level={} behavior={:?}",
+                    ns.isVisible(),
+                    ns.isOnActiveSpace(),
+                    ns.parentWindow().is_some(),
+                    ns.level(),
+                    ns.collectionBehavior(),
+                );
+            }
+            if let Some(anchor) = overlay() {
+                println!(
+                    "spaces: anchor  visible={} onActiveSpace={} children={}",
+                    anchor.isVisible(),
+                    anchor.isOnActiveSpace(),
+                    anchor.childWindows().map(|c| c.len()).unwrap_or(0),
+                );
+            }
+        });
+    });
+}
+
+/// Make a Tauri window an `NSPanel`, non-activating.
+///
+/// **This is the one thing that gets a window into a full-screen Space.** Four
+/// other explanations were measured and are wrong, and they are written down
+/// because each one reads as obviously right:
+///
+///   * the collection behaviour -- `CanJoinAllSpaces | FullScreenAuxiliary`, with
+///     and without `Stationary` and `IgnoresCycle`, evicted every time;
+///   * the parent window -- with the anchor and without it, evicted every time,
+///     while the anchor itself stayed;
+///   * ordering the window out and back in so the window server assigns its
+///     Space after the flags are set -- evicted every time;
+///   * the window level, which was already screen-saver and above everything.
+///
+/// The window reports `visible = true` and `isOnActiveSpace = false` throughout:
+/// it is not hidden, it is somewhere else. An `NSWindow` belongs to the Space it
+/// was born in and a full-screen Space is a Space it was not born in; an `NSPanel`
+/// is a utility window and is allowed alongside one. That is the whole difference,
+/// and it is a difference of *class*, which is why nothing settable on the window
+/// could reach it.
+///
+/// `object_setClass` on a live window is the same trick `tauri-nspanel` exists to
+/// perform. The cost is tao's subclass going with it, and with it the override
+/// that answers `canBecomeKeyWindow` from tao's own `focusable` flag -- so
+/// `becomesKeyOnlyIfNeeded` takes over that job. It is the better answer anyway:
+/// the strip never wants focus, and a text field inside the open panel always
+/// does, and that is exactly what the flag means.
+pub fn become_panel(ns: &NSWindow) {
+    use objc2::runtime::{AnyClass, NSObjectProtocol};
+
+    let Some(class) = AnyClass::get(c"NSPanel") else {
+        return;
+    };
+    // Already converted. Doing it twice is harmless, but this runs on every dock
+    // and undock and the check is cheaper than the call.
+    if ns.isKindOfClass(class) {
+        return;
+    }
+    let obj: *mut objc2::runtime::AnyObject = ns as *const NSWindow as *mut _;
+    unsafe { objc2::ffi::object_setClass(obj.cast(), (class as *const AnyClass).cast()) };
+
+    // Non-activating: clicking the panel must not bring Nudge to the front. It has
+    // no Dock icon and no main window to come forward to, and stealing activation
+    // from whatever somebody is working in is the whole thing this app exists not
+    // to do.
+    ns.setStyleMask(NSWindowStyleMask::Borderless | NSWindowStyleMask::NonactivatingPanel);
+
+    let panel: &objc2_app_kit::NSPanel = unsafe { &*(ns as *const NSWindow as *const _) };
+    // Key only when something in it actually needs typing -- a text field in the
+    // settings sheet, the sign-in form. The collapsed strip is decoration over the
+    // menu bar and must never take the keyboard.
+    panel.setBecomesKeyOnlyIfNeeded(true);
 }
 
 /// Our window, if we made one.
@@ -324,6 +422,8 @@ pub fn float_everywhere(win: &tauri::WebviewWindow) {
     );
     ns.setHidesOnDeactivate(false);
     ns.setHasShadow(false);
+
+    become_panel(ns);
 
     if let Some(anchor) = overlay() {
         // Same trick as the companion: a child window follows its parent between
