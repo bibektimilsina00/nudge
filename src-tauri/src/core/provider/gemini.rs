@@ -113,7 +113,10 @@ impl Provider for Gemini {
              number from the list above whenever the thing you want is on it -- \
              a number is exact and a guess at a pixel is not. \"point\" is for \
              everything the list does not contain.\n\
-             \"region\" is for showing somebody a whole *area* rather than one \
+             \"region\" is a *part* of a window -- a sidebar, a toolbar, a \
+             panel, a row of tabs. Never the whole screen and never the whole \
+             window: an outline round everything points at nothing. \
+             It is for showing somebody an area rather than one \
              control: the media pool, a sidebar, a toolbar. Give the corners as \
              [top, left, bottom, right], normalised to 0-1000 like \"point\". \
              Use it while explaining what part of a window is for, where a ring \
@@ -197,13 +200,25 @@ impl Provider for Gemini {
                 let (top, left, bottom, right) = (c[0], c[1], c[2], c[3]);
                 let a = denorm(&[top, left], shot.sent.0, shot.sent.1);
                 let b = denorm(&[bottom, right], shot.sent.0, shot.sent.1);
-                let size = shot.to_global_size((b.x - a.x).abs(), (b.y - a.y).abs());
+                let (w, h) = ((b.x - a.x).abs(), (b.y - a.y).abs());
+                // A region has to be a part of the screen to mean anything.
+                //
+                // Asked to explain DaVinci Resolve it came back with the whole
+                // display, 1512x982, which outlines everything and therefore
+                // points at nothing. Past two thirds of the screen this is not
+                // somewhere to look, so the box is dropped and the sentence
+                // stands on its own.
+                let whole = shot.sent.0 as f64 * shot.sent.1 as f64;
+                let size = match w * h > whole * 0.66 {
+                    true => None,
+                    false => Some(shot.to_global_size(w, h)),
+                };
                 return Ok(Step::Point {
                     at: Point {
                         x: (a.x + b.x) / 2.0,
                         y: (a.y + b.y) / 2.0,
                     },
-                    size: Some(size),
+                    size,
                     control: None,
                     say,
                     act: super::act_from(v["act"].as_str()),
