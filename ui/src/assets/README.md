@@ -57,26 +57,3 @@ The component treats every input as optional -- Rive returns null for a name it
 cannot find and says nothing about it, so a rename costs the expression rather
 than the card.
 
-## `pointer.riv`
-
-A hand that goes to the control and presses it. Used by `components/Pointer.tsx`
-on the overlay.
-
-The real pointer still travels -- a click is delivered to whatever is under the
-cursor and macOS offers no general way round it, which was measured rather than
-assumed. It goes and comes straight back in about 150ms, hidden while it does,
-and this is what is on screen instead.
-
-| | |
-|---|---|
-| artboard | `New Artboard` |
-| state machine | `State Machine 1` |
-| trigger | `Click` |
-| booleans | `IsHovering`, `isDark`, `isIdle` |
-
-Note the capitalisation: `IsHovering` but `isDark` and `isIdle`. That is how the
-file has them, and Rive will silently ignore an input it cannot find.
-
-There are two click transitions inside -- *Click from idle* and *Click from
-hover* -- so firing `Click` looks right whether or not `IsHovering` was set
-first.

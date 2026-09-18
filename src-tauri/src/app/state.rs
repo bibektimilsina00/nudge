@@ -118,15 +118,6 @@ impl Flag {
     }
 }
 
-/// Show the clicking hand parked on the real cursor, for looking at it.
-///
-/// The hand normally exists for about 150ms, at a target, while the pointer
-/// goes and comes back -- which is the worst possible conditions for judging
-/// whether it looks right. Pinned to the cursor it can just be watched.
-///
-/// Off by default and nowhere near the model: this is a mirror, not a feature.
-pub struct ShowHand(pub Flag);
-
 /// Whether Nudge may raise a suggestion nobody asked for.
 ///
 /// On by default, because an assistant that only ever answers is one people

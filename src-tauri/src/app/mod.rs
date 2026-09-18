@@ -140,7 +140,6 @@ pub fn run() {
             // Starts undocked: an app that does nothing until you find a button is
             // an app most people never see working.
             app.manage(Docked(Flag::new(false)));
-            app.manage(crate::app::state::ShowHand(Flag::new(false)));
             app.manage(Reviewing(Flag::new(reviewing)));
             app.manage(commands::Connections {
                 path: crate::core::connect::store(),
@@ -288,8 +287,6 @@ pub fn run() {
             commands::retune,
             commands::agent_setup,
             commands::set_suggesting,
-            commands::show_hand,
-            commands::set_show_hand,
             commands::pick_workspace,
             commands::shortcuts,
             commands::set_shortcut,
