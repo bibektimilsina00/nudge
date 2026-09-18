@@ -168,7 +168,7 @@ impl Provider for Gemini {
              {{\"kind\":\"tools\",\"server\":\"gmail\",\"say\":\"...\"}}\n\
              {{\"kind\":\"request\",\"method\":\"POST\",\"url\":\"https://...\",\"headers\":{{}},\"body\":{{}},\"say\":\"...\"}}\n\
              {{\"kind\":\"delegate\",\"task\":\"the whole job, written out\",\"say\":\"...\"}}\n\
-             {{\"kind\":\"remember\",\"about\":\"AppName\",\"note\":\"what would have saved you\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"remember\",\"scope\":\"app|project|me\",\"about\":\"AppName\",\"note\":\"what would have saved you\",\"say\":\"...\"}}\n\
              {{\"kind\":\"skill\",\"name\":\"exact skill name\",\"say\":\"...\"}}\n\
              {{\"kind\":\"task\",\"task\":\"...\",\"say\":\"...\"}}\n\
              {{\"kind\":\"show\",\"path\":\"index.html\",\"say\":\"...\"}}\n\
@@ -313,7 +313,7 @@ impl Provider for Gemini {
              {{\"kind\":\"mcp\",\"tool\":\"server/name\",\"args\":{{}},\"say\":\"...\"}}\n\
              {{\"kind\":\"request\",\"method\":\"POST\",\"url\":\"https://...\",\"headers\":{{}},\"body\":{{}},\"say\":\"...\"}}\n\
              {{\"kind\":\"delegate\",\"task\":\"the whole job, written out\",\"say\":\"...\"}}\n\
-             {{\"kind\":\"remember\",\"about\":\"AppName\",\"note\":\"what would have saved you\",\"say\":\"...\"}}\n\
+             {{\"kind\":\"remember\",\"scope\":\"app|project|me\",\"about\":\"AppName\",\"note\":\"what would have saved you\",\"say\":\"...\"}}\n\
              {{\"kind\":\"skill\",\"name\":\"exact skill name\",\"say\":\"...\"}}\n\
              {{\"kind\":\"done\",\"say\":\"what you found, in full\"}}\n\
              {{\"kind\":\"unsure\",\"say\":\"why you could not\",\"needed\":\"Calendar (only if a service would have done it)\"}}",

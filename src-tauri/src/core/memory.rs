@@ -20,6 +20,19 @@
 //! that records a broken loop's habits is worse than none**, because it turns one
 //! bad turn into a permanent one.
 //!
+//! ## Three things worth keeping, not one
+//!
+//! An application is one scope and it was the only one. There was nowhere to put
+//! a fact about the *project* -- this repository uses `pnpm`, the tests live
+//! here -- and nowhere at all for a fact about the *person*, so the same
+//! correction got made every week and nothing could tell a habit from an
+//! accident.
+//!
+//! They are kept in one file, under keys that say which is which, and offered on
+//! different turns: an application's notes when it is in front, a project's when
+//! the work is happening inside it, and a person's always -- which is why that
+//! one is capped hardest.
+//!
 //! ## Visible, and forgettable
 //!
 //! It changes what Nudge does, so the same rule as everything else that does
@@ -39,10 +52,77 @@ use std::sync::Mutex;
 /// rediscovered and anything not is better gone.
 const PER_APP: usize = 8;
 
+/// How many notes about the person.
+///
+/// Fewer, and for a different reason: these are read on *every* turn rather than
+/// on the turns one application is in front, so a note here is paid for
+/// constantly. Four is enough for how somebody likes to be answered; past that
+/// it stops being a preference and becomes a second set of instructions.
+const PER_PERSON: usize = 4;
+
 /// Longest a single note may be.
 const LONGEST: usize = 200;
 
-/// Notes about applications, keyed by the name the system reports.
+/// What a note is about.
+///
+/// The key in the file carries the scope, so one file holds all three and an
+/// older file -- which had bare application names -- still reads correctly.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scope {
+    /// The application in front. `Safari`, `DaVinci Resolve`.
+    App,
+    /// The folder being worked in.
+    Project,
+    /// The person. Read on every turn.
+    Person,
+}
+
+impl Scope {
+    pub fn of(said: Option<&str>) -> Scope {
+        match said.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
+            Some("project") => Scope::Project,
+            Some("me") | Some("person") | Some("user") => Scope::Person,
+            _ => Scope::App,
+        }
+    }
+
+    /// How it is written in the file.
+    ///
+    /// An application keeps its bare name, so a `memory.toml` written before
+    /// scopes existed still reads as what it was.
+    fn key(self, about: &str) -> String {
+        match self {
+            Scope::App => about.to_string(),
+            Scope::Project => format!("project:{about}"),
+            Scope::Person => "me".to_string(),
+        }
+    }
+
+    fn cap(self) -> usize {
+        match self {
+            Scope::Person => PER_PERSON,
+            _ => PER_APP,
+        }
+    }
+}
+
+/// Notes, keyed by what they are about. A bare name is an application; anything
+/// else says which scope it belongs to.
+/// A key as somebody would say it.
+fn readable(key: &str) -> String {
+    match key {
+        "me" => "you".into(),
+        _ => match key.strip_prefix("project:") {
+            Some(path) => std::path::Path::new(path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(path)
+                .to_string(),
+            None => key.to_string(),
+        },
+    }
+}
+
 #[derive(Default)]
 pub struct Memory {
     path: Option<PathBuf>,
@@ -55,6 +135,13 @@ impl Memory {
         dirs::home_dir().map(|d| d.join(".config/nudge/memory.toml"))
     }
 
+    /// Read once, at startup.
+    ///
+    /// Which is right for one copy of the app and wrong for two: a note written
+    /// by one instance is invisible to another until it restarts. Left alone
+    /// because a second instance is a thing that happens while developing and
+    /// never afterwards -- and because the fix is a file watch, which is a
+    /// moving part to maintain for a case nobody is in.
     pub fn load() -> Memory {
         let path = Memory::path();
         let notes = path
@@ -63,8 +150,9 @@ impl Memory {
             .and_then(|text| toml::from_str::<BTreeMap<String, Vec<String>>>(&text).ok())
             .unwrap_or_default();
         if !notes.is_empty() {
+            // "applications" was true when that was the only scope there was.
             eprintln!(
-                "memory: {} notes about {} applications",
+                "memory: {} notes about {} things",
                 notes.values().map(Vec::len).sum::<usize>(),
                 notes.len()
             );
@@ -86,16 +174,21 @@ impl Memory {
     }
 
     /// Keep a note. Returns what to tell the model about what just happened.
-    pub fn learn(&self, app: &str, note: &str) -> String {
-        let app = app.trim();
+    pub fn learn(&self, scope: Scope, about: &str, note: &str) -> String {
+        let about = about.trim();
         let note = note.trim();
-        if app.is_empty() || note.is_empty() {
+        if note.is_empty() || (about.is_empty() && scope != Scope::Person) {
             return "There was nothing to remember.".into();
         }
         let note: String = note.chars().take(LONGEST).collect();
+        let key = scope.key(about);
+        let named = match scope {
+            Scope::Person => "you".to_string(),
+            _ => about.to_string(),
+        };
 
         let mut notes = self.notes.lock().unwrap();
-        let for_app = notes.entry(app.to_string()).or_default();
+        let for_app = notes.entry(key.clone()).or_default();
 
         // Said twice is said once. Models restate things, and a note repeated in
         // slightly different words is the same note taking two of eight slots.
@@ -103,18 +196,18 @@ impl Memory {
             .iter()
             .any(|n| n.eq_ignore_ascii_case(&note) || n.contains(note.as_str()))
         {
-            return format!("Already noted about {app}.");
+            return format!("Already noted about {named}.");
         }
         for_app.push(note.clone());
-        while for_app.len() > PER_APP {
+        while for_app.len() > scope.cap() {
             for_app.remove(0);
         }
         let count = for_app.len();
         drop(notes);
 
         self.save();
-        eprintln!("memory: about {app} -- {note}");
-        format!("Noted about {app} ({count} kept).")
+        eprintln!("memory: about {key} -- {note}");
+        format!("Noted about {named} ({count} kept).")
     }
 
     /// Forget one application entirely.
@@ -124,36 +217,56 @@ impl Memory {
         eprintln!("memory: forgot everything about {app}");
     }
 
-    /// Every application there is anything about, and how much.
-    pub fn everything(&self) -> Vec<(String, usize)> {
+    /// Everything there is anything about, and how much.
+    ///
+    /// The key as stored -- which is the name for an application -- and a
+    /// readable name beside it, because "project:/Users/sam/projects/nudge" is a
+    /// key and not something to put in a menu.
+    pub fn everything(&self) -> Vec<(String, String, usize)> {
         self.notes
             .lock()
             .unwrap()
             .iter()
-            .map(|(app, notes)| (app.clone(), notes.len()))
+            .map(|(key, notes)| (key.clone(), readable(key), notes.len()))
             .collect()
     }
 
-    /// What goes in the prompt. Empty unless this application has something.
-    pub fn prompt(&self, app: Option<&str>) -> String {
-        let Some(app) = app else {
-            return String::new();
+    /// What goes in the prompt: the application in front, the project being
+    /// worked in, and the person -- whichever of them has anything.
+    pub fn prompt(&self, app: Option<&str>, project: Option<&str>) -> String {
+        let mut out = String::new();
+        let mut block = |title: String, notes: Vec<String>| {
+            if notes.is_empty() {
+                return;
+            }
+            out.push_str(&format!(
+                "## {title}\n\n\
+                 Learned here, by getting it wrong once. Treat it as true unless \
+                 the screen says otherwise -- the screen is what is happening now \
+                 and this is only what happened before.\n{}\n\n",
+                notes
+                    .iter()
+                    .map(|n| format!("- {n}"))
+                    .collect::<Vec<_>>()
+                    .join("\n")
+            ));
         };
-        let notes = self.about(app);
-        if notes.is_empty() {
-            return String::new();
+
+        if let Some(app) = app {
+            block(format!("What {app} turned out to be like"), self.about(app));
         }
-        format!(
-            "## What {app} turned out to be like\n\n\
-             Learned here, by getting it wrong once. Treat it as true unless the \
-             screen says otherwise -- the screen is what is happening now and this \
-             is only what happened before.\n{}\n\n",
-            notes
-                .iter()
-                .map(|n| format!("- {n}"))
-                .collect::<Vec<_>>()
-                .join("\n")
-        )
+        if let Some(project) = project {
+            let name = std::path::Path::new(project)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or(project);
+            block(
+                format!("What working in {name} is like"),
+                self.about(&Scope::Project.key(project)),
+            );
+        }
+        block("How they like to be helped".into(), self.about("me"));
+        out
     }
 
     fn save(&self) {
@@ -188,33 +301,94 @@ mod tests {
     #[test]
     fn a_note_comes_back_for_its_own_application_and_no_other() {
         let m = blank();
-        m.learn("CapCut", "The timeline view means a project is open.");
+        m.learn(
+            Scope::App,
+            "CapCut",
+            "The timeline view means a project is open.",
+        );
         assert_eq!(m.about("CapCut").len(), 1);
         assert!(m.about("Safari").is_empty());
         // And the prompt is silent about applications it knows nothing about.
-        assert_eq!(m.prompt(Some("Safari")), "");
-        assert!(m.prompt(Some("CapCut")).contains("timeline view"));
-        assert_eq!(m.prompt(None), "");
+        assert_eq!(m.prompt(Some("Safari"), None), "");
+        assert!(m.prompt(Some("CapCut"), None).contains("timeline view"));
+        assert_eq!(m.prompt(None, None), "");
     }
 
     /// Eight slots are worth having only if the same thing cannot take three.
     #[test]
     fn the_same_thing_said_twice_is_kept_once() {
         let m = blank();
-        m.learn("Chrome", "Menus close if you click into them.");
-        m.learn("Chrome", "menus close if you click into them.");
+        m.learn(Scope::App, "Chrome", "Menus close if you click into them.");
+        m.learn(Scope::App, "Chrome", "menus close if you click into them.");
         m.learn(
+            Scope::App,
             "Chrome",
             "Menus close if you click into them. Use the shortcut.",
         );
         assert_eq!(m.about("Chrome").len(), 2, "{:?}", m.about("Chrome"));
     }
 
+    /// The three scopes are three different files' worth of fact in one file,
+    /// and each is offered on its own turns.
+    #[test]
+    fn a_project_note_and_a_person_note_go_to_different_places() {
+        let m = blank();
+        let here = "/Users/sam/projects/nudge";
+        m.learn(
+            Scope::App,
+            "Safari",
+            "The reader button hides in the URL bar.",
+        );
+        m.learn(Scope::Project, here, "This one uses pnpm, never npm.");
+        m.learn(
+            Scope::Person,
+            "",
+            "They asked to be told before anything is deleted.",
+        );
+
+        // The application's notes only when it is in front.
+        let elsewhere = m.prompt(Some("Mail"), Some(here));
+        assert!(!elsewhere.contains("reader button"), "{elsewhere}");
+        // The project's whenever the work is here.
+        assert!(elsewhere.contains("uses pnpm"), "{elsewhere}");
+        // The person's on every turn, whatever else is true.
+        assert!(
+            elsewhere.contains("before anything is deleted"),
+            "{elsewhere}"
+        );
+        assert!(m.prompt(None, None).contains("before anything is deleted"));
+        // Named by the folder rather than by the whole path.
+        assert!(elsewhere.contains("working in nudge"), "{elsewhere}");
+    }
+
+    /// Read on every turn, so the budget is smaller and the oldest goes first.
+    #[test]
+    fn what_is_known_about_the_person_is_kept_shortest() {
+        let m = blank();
+        for i in 0..10 {
+            m.learn(Scope::Person, "", &format!("preference number {i}"));
+        }
+        assert_eq!(m.about("me").len(), PER_PERSON);
+        assert!(m.about("me").iter().any(|n| n.contains("number 9")));
+        assert!(!m.about("me").iter().any(|n| n.contains("number 0")));
+    }
+
+    /// A file written before scopes existed holds bare application names, and
+    /// has to keep reading as what it was.
+    #[test]
+    fn an_application_is_still_stored_under_its_own_name() {
+        assert_eq!(Scope::App.key("Safari"), "Safari");
+        assert_eq!(Scope::Person.key("anything"), "me");
+        assert_eq!(Scope::of(None), Scope::App);
+        assert_eq!(Scope::of(Some("me")), Scope::Person);
+        assert_eq!(Scope::of(Some("PROJECT")), Scope::Project);
+    }
+
     #[test]
     fn it_does_not_grow_without_limit() {
         let m = blank();
         for i in 0..20 {
-            m.learn("Xcode", &format!("note number {i}"));
+            m.learn(Scope::App, "Xcode", &format!("note number {i}"));
         }
         assert_eq!(m.about("Xcode").len(), PER_APP);
         // The oldest went; the newest stayed.
@@ -225,7 +399,7 @@ mod tests {
     #[test]
     fn forgetting_is_complete() {
         let m = blank();
-        m.learn("Mail", "a thing");
+        m.learn(Scope::App, "Mail", "a thing");
         m.forget("Mail");
         assert!(m.about("Mail").is_empty());
         assert!(m.everything().is_empty());
@@ -234,8 +408,8 @@ mod tests {
     #[test]
     fn nothing_is_learned_from_nothing() {
         let m = blank();
-        m.learn("", "a thing");
-        m.learn("Mail", "   ");
+        m.learn(Scope::App, "", "a thing");
+        m.learn(Scope::App, "Mail", "   ");
         assert!(m.everything().is_empty());
     }
 }

@@ -888,7 +888,8 @@ impl Nudge {
         let stalled = !done.is_empty() && capture::unchanged(&seen, &now);
         // Before `facts` is moved into the Ask, and the only place the frontmost
         // application is known -- which is the whole scoping rule.
-        let memory = self.memory.prompt(facts.app.as_deref());
+        let workspace = self.workspace().display().to_string();
+        let memory = self.memory.prompt(facts.app.as_deref(), Some(&workspace));
         let ask = Ask {
             using: &using,
             // Only a person draws, and only the foreground has one.

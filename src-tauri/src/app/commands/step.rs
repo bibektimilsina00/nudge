@@ -436,8 +436,20 @@ pub(crate) async fn perform_async(app: &AppHandle, step: &Step) -> Result<()> {
             }
         }
     }
-    if let Step::Remember { about, note, .. } = step {
-        let said = app.state::<Nudge>().memory.learn(about, note);
+    if let Step::Remember {
+        scope, about, note, ..
+    } = step
+    {
+        let nudge = app.state::<Nudge>();
+        let scope = crate::core::memory::Scope::of(Some(scope));
+        // A project note is filed under the folder being worked in, whatever the
+        // model called it -- the name it uses for a project is not a key anything
+        // else can look up.
+        let about = match scope {
+            crate::core::memory::Scope::Project => nudge.workspace().display().to_string(),
+            _ => about.to_string(),
+        };
+        let said = nudge.memory.learn(scope, &about, note);
         app.state::<Nudge>().note(said);
     }
     if let Step::Delegate { task, named, .. } = step {

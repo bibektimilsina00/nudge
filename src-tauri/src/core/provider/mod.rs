@@ -241,6 +241,10 @@ pub enum Step {
     /// `about` is the application the note concerns -- normally the one in front,
     /// which is the only one it will ever be shown for.
     Remember {
+        /// Which of the three: the application in front, the project being
+        /// worked in, or the person. Absent means the application, which is
+        /// what every note was before there was a choice.
+        scope: String,
         about: String,
         note: String,
         say: String,
@@ -604,7 +608,12 @@ impl Step {
             Step::Request { method, url, .. } => format!("{method} {url}"),
             // Named by the work, never by who did it.
             Step::Delegate { task, .. } => format!("Handed over: {}", short(task)),
-            Step::Remember { about, note, .. } => format!("Noted about {about}: {}", short(note)),
+            Step::Remember {
+                scope, about, note, ..
+            } => match scope.as_str() {
+                "me" | "person" | "user" => format!("Noted about them: {}", short(note)),
+                _ => format!("Noted about {about}: {}", short(note)),
+            },
             Step::Skill { name, .. } => format!("Opened the {name:?} skill"),
             Step::Task { task, .. } => format!("Asked a task agent: {}", short(task)),
             Step::Show { path, .. } => format!("Showed {path}"),
@@ -1148,15 +1157,25 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
          has not been you will be told so plainly -- say what you would have done \
          and that it needs allowing, rather than trying it another way.\n\n\
          ## Keeping what you find out\n\n\
-         Applications are strange in their own particular ways, and you find that \
-         out by getting it wrong once. When a step fails and you work out why, \
-         answer `remember` with the application and one sentence of what would \
-         have saved you -- it is put in front of you next time that application is \
-         open, and never otherwise.\n\
-         Only from failure. \u{201c}It worked\u{201d} teaches nothing, because next time \
-         would have done that anyway. Write what was surprising, not what was \
-         obvious, and write it as a fact about the application rather than as a \
-         story about this turn.\n\n\
+         Things are strange in their own particular ways, and you find that out \
+         by getting it wrong once. When a step fails and you work out why, answer \
+         `remember` with one sentence of what would have saved you, and say which \
+         of three it is a fact about:\n\
+         `scope: \"app\"` with the application's name -- how *this program* \
+         behaves. Put in front of you next time that application is open, and \
+         never otherwise.\n\
+         `scope: \"project\"` -- how the work in this folder is done: the package \
+         manager it uses, where its tests live, what its build is called. Offered \
+         whenever the work is happening here.\n\
+         `scope: \"me\"` -- how this person likes to be helped. Read on *every* \
+         turn, so there is room for about four and the bar is correspondingly \
+         high: a standing preference they stated, not an inference from one \
+         request. \u{201c}They said to stop reading the whole file before editing\u{201d} \
+         is one; \u{201c}they seem to like Python\u{201d} is not.\n\
+         Only from failure, or from being told. \u{201c}It worked\u{201d} teaches nothing, \
+         because next time would have done that anyway. Write what was \
+         surprising, not what was obvious, and write it as a fact about the thing \
+         rather than as a story about this turn.\n\n\
          ## When something underneath breaks\n\n\
          Errors you are shown are about programs the person does not know are \
          running. A stack trace, a crate name, an exit code -- passing any of that \
@@ -1736,6 +1755,7 @@ pub(crate) fn simple_step(kind: &str, v: &serde_json::Value, say: String) -> Opt
             say,
         }),
         "remember" => Some(Step::Remember {
+            scope: v["scope"].as_str().unwrap_or("app").to_string(),
             about: v["about"].as_str().unwrap_or_default().to_string(),
             note: v["note"].as_str().unwrap_or_default().to_string(),
             say,
@@ -2396,7 +2416,7 @@ mod tests {
         let before = ["They had asked: x".to_string()];
         a.tools = &tools;
         a.earlier = &before;
-        a.memory = crate::core::memory::Memory::default().prompt(None);
+        a.memory = crate::core::memory::Memory::default().prompt(None, None);
         a.skills = crate::core::skills::prompt();
         a.reach = crate::core::reach::Reach::default().prompt();
 

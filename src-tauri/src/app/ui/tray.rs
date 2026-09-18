@@ -112,10 +112,10 @@ fn build(app: &AppHandle, hotkey: &str) -> tauri::Result<Menu<Wry>> {
     let learned = nudge.memory.everything();
     let notes: Vec<MenuItem<_>> = learned
         .iter()
-        .map(|(about, count)| {
+        .map(|(key, about, count)| {
             MenuItem::with_id(
                 app,
-                format!("forget:{about}"),
+                format!("forget:{key}"),
                 match count {
                     1 => format!("Forget 1 note about {about}"),
                     n => format!("Forget {n} notes about {about}"),
