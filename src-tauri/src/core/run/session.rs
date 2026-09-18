@@ -173,11 +173,9 @@ pub struct Nudge {
     /// What this Mac's applications turned out to be like. See
     /// [`crate::core::memory`].
     pub memory: crate::core::memory::Memory,
-    /// The last finished session: when it ended, what it was for, and what
-    /// happened. Read by [`Nudge::still_warm`] and never persisted -- a
-    /// conversation does not survive quitting the application, any more than one
-    /// survives the other person leaving the room.
-    last: Mutex<Option<(std::time::Instant, String, Vec<String>)>>,
+    /// Finished work, on disk. Held rather than reached for, so a test can be
+    /// given one that writes nowhere near the real conversations.
+    pub threads: crate::core::threads::Threads,
     /// Which turn is wanted, counted up every time one is abandoned.
     ///
     /// Escape has to stop a turn that is already in flight, and there is nothing
@@ -201,7 +199,7 @@ impl Nudge {
         Ok(Self {
             reach,
             memory: crate::core::memory::Memory::load(),
-            last: Mutex::new(None),
+            threads: crate::core::threads::Threads::open(),
             wanted: std::sync::atomic::AtomicU64::new(0),
             cfg,
             provider: std::sync::RwLock::new(provider),
@@ -447,38 +445,17 @@ impl Nudge {
     /// first, so a command's output survives and a file dump from four turns ago
     /// does not.
     fn still_warm(&self) -> Vec<String> {
-        /// How long a thread stays warm. Long enough for someone to look at what
-        /// happened and ask about it; short enough that what you say after lunch
-        /// is a new subject.
-        const WARM: std::time::Duration = std::time::Duration::from_secs(300);
-        /// Entries, newest first.
-        const CARRY: usize = 6;
-        /// And a ceiling on all of them together.
-        const CARRY_CHARS: usize = 2000;
-
-        let last = self.last.lock().unwrap();
-        let Some((ended, goal, done)) = last.as_ref() else {
-            return Vec::new();
-        };
-        if ended.elapsed() > WARM {
-            return Vec::new();
-        }
-
-        let mut out = Vec::new();
-        let mut spent = 0usize;
-        for line in done.iter().rev().take(CARRY) {
-            let room = CARRY_CHARS.saturating_sub(spent);
-            if room < 40 {
-                break;
-            }
-            let kept: String = line.chars().take(room).collect();
-            spent += kept.chars().count();
-            out.push(kept);
-        }
-        out.reverse();
-        // The goal itself first, because it is what makes "that" and "it" resolve.
-        out.insert(0, format!("They had asked: {goal}"));
-        out
+        // From the file, not from this process's memory.
+        //
+        // It was a value with a five-minute timer on it: inside the window you
+        // inherited the last few lines, outside it there had never been a
+        // conversation, and quitting forgot everything. Two windows now, because
+        // there are two questions -- see `core::threads`, which owns both.
+        let now = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_millis() as u64)
+            .unwrap_or_default();
+        crate::core::threads::carry(&self.threads.recent(), now)
     }
 
     /// Ask the provider to search. Here rather than in the app layer because the
@@ -559,15 +536,23 @@ impl Nudge {
             // An empty one carries nothing worth keeping and would only push a
             // real conversation out of the slot.
             if !s.done.is_empty() {
-                *self.last.lock().unwrap() = Some((std::time::Instant::now(), s.goal, s.done));
+                // Written down as well as remembered. The in-memory copy is what
+                // the next turn reads a second later; the file is what survives
+                // the process, and is the difference between "shall I show you
+                // the next chapter?" being an offer and being a lie.
+                self.threads
+                    .keep(&crate::core::threads::Thread::new(s.goal, s.said, &s.done));
             }
         }
     }
 
     /// Forget the thread deliberately -- for a subject change nobody has to wait
     /// five minutes for.
+    ///
+    /// A line in the file rather than a value cleared in memory, so it is still
+    /// forgotten after a restart.
     pub fn forget_thread(&self) {
-        *self.last.lock().unwrap() = None;
+        self.threads.forget();
     }
 
     /// What the current session is working towards, if anything. The agent
@@ -1141,7 +1126,18 @@ mod tests {
             provider: "ollama".into(),
             ..Default::default()
         };
-        Nudge::new(cfg).unwrap()
+        let mut n = Nudge::new(cfg).unwrap();
+        // Its own file, in the temp directory. Threads live on disk now, and a
+        // test that used the real one would read somebody's actual conversations
+        // and leave its own behind for the next run to carry.
+        let path = std::env::temp_dir().join(format!(
+            "nudge-threads-{}-{:?}.jsonl",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = std::fs::remove_file(&path);
+        n.threads = crate::core::threads::Threads::at(path);
+        n
     }
 
     /// Three ways an early picture stops being the truth, and the one way it is.

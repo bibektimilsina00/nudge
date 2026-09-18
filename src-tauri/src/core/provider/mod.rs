@@ -842,12 +842,13 @@ pub(crate) fn prompt(ask: &Ask<'_>) -> String {
     let earlier = match ask.earlier.is_empty() {
         true => String::new(),
         false => format!(
-            "## A moment ago\n\n\
-             They were talking to you just before this, and may be carrying on \
-             from it -- \u{201c}that\u{201d}, \u{201c}it\u{201d} and \u{201c}the same one\u{201d} probably \
-             mean something here. It is finished business: none of it counts \
-             towards the goal above, and if this request is plainly a new subject, \
-             ignore it.\n{}\n\n",
+            "## Before this\n\n\
+             What they were doing earlier, newest first. The most recent one \
+             brings its steps while it is still minutes old; the ones before it \
+             are a line each, so \u{201c}carry on with what we were doing\u{201d} and \
+             \u{201c}show me the next bit\u{201d} still resolve later in the day. It is \
+             finished business: none of it counts towards the goal above, and if \
+             this request is plainly a new subject, ignore it.\n{}\n\n",
             ask.earlier
                 .iter()
                 .map(|l| format!("- {l}"))
@@ -2591,7 +2592,10 @@ mod tests {
     #[test]
     fn a_warm_thread_is_kept_apart_from_work_on_this_goal() {
         let quiet = prompt(&ask("open safari", &[], false));
-        assert!(!quiet.contains("A moment ago"), "said with nothing to say");
+        assert!(
+            !quiet.contains("## Before this"),
+            "said with nothing to say"
+        );
 
         let mut a = ask("now go to wikipedia", &[], false);
         let before = [
@@ -2600,7 +2604,7 @@ mod tests {
         ];
         a.earlier = &before;
         let p = prompt(&a);
-        assert!(p.contains("A moment ago"));
+        assert!(p.contains("## Before this"));
         assert!(p.contains("Opened Safari"));
         // Said plainly, because a model that reads this as work done will report
         // a goal finished that it never started.

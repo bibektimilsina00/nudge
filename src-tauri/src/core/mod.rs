@@ -36,6 +36,7 @@ pub mod signin;
 pub mod skills;
 pub mod stuck;
 pub mod teaching;
+pub mod threads;
 pub mod tools;
 pub mod voice;
 
