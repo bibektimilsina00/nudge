@@ -9,7 +9,10 @@ provider = "ollama"
 # Prefer the env var (ANTHROPIC_API_KEY / GEMINI_API_KEY) -- it wins over this.
 # api_key = ""
 
-hotkey = "cmd+shift+space"
+# Two modifiers, held. Control alone was the first gesture and it is in the way
+# of too much -- ctrl-click is a right click, ctrl-arrow switches Spaces, and
+# every terminal binding anybody has.
+hotkey = "ctrl+alt"
 
 # Long edge of the screenshot sent to the model -- the main speed dial.
 # Measured on a 3024x1964 display: 1920px cost 3.6s a step, 1280px cost 2.4s, and

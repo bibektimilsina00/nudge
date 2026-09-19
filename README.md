@@ -1,273 +1,228 @@
+<div align="center">
+
+<img src="docs/media/cat.png" width="140" alt="The Nudge cat" />
+
 # Nudge
 
-Points at the thing you need to click, in whatever desktop app you're already in.
-Press a hotkey, say what you want, follow the ring.
+**A small agent that lives in your notch and does things on your screen.**
 
-Status: **skeleton**. It builds, the loop is wired, the coordinate math is tested.
-Whether the pointing is *accurate enough to be a product* is still an open question
-— see [Is this even possible?](#is-this-even-possible) before building on it.
+Hold a key. Say what you want. It reads what you are looking at, finds the
+control, and clicks it — or takes the whole task away and finishes it.
 
-## The documents
+[![Release](https://img.shields.io/badge/release-v0.1.9-1f6feb?style=flat-square)](https://nudge.runmycrew.com)
+[![macOS](https://img.shields.io/badge/macOS-Apple%20Silicon-000?style=flat-square&logo=apple&logoColor=white)](https://nudge.runmycrew.com)
+[![Linux](https://img.shields.io/badge/Linux-x86__64%20·%20X11-FCC624?style=flat-square&logo=linux&logoColor=black)](https://nudge.runmycrew.com)
+[![CI](https://img.shields.io/github/actions/workflow/status/bibektimilsina00/nudge/ci.yml?branch=alpha&style=flat-square&label=CI)](https://github.com/bibektimilsina00/nudge/actions/workflows/ci.yml)
+[![Rust](https://img.shields.io/badge/Rust-Tauri%20v2-CE422B?style=flat-square&logo=rust&logoColor=white)](https://tauri.app)
 
-Every document in this repository and what it is for. If a document is not on
-this list it should not exist.
+[**Download**](https://nudge.runmycrew.com) · [Build from source](#build-it-yourself) · [How it works](#how-it-works) · [Report a bug](https://github.com/bibektimilsina00/nudge/issues)
 
-Not documents, and not on it: `.claude/skills/*/SKILL.md` are tooling, and
-`web/AGENTS.md` is written by `next dev` — deleting it only re-creates it as an
-uncommitted change.
+</div>
 
-| | |
+---
+
+## The idea
+
+Every AI assistant right now is the same shape: a text box. You describe what you
+are looking at to something that cannot see it, it describes back what you should
+click, and you go and click it yourself.
+
+Nudge is on your side of the screen. It sees what you see, and it has hands.
+
+| You say | It does |
 |---|---|
-| [PLAN.md](PLAN.md) | What is being built next, and why. The live one |
-| [FEATURES.md](FEATURES.md) | Every feature between here and "gets your everyday tasks done" |
-| [FINDINGS.md](FINDINGS.md) | What the accuracy and truth suites actually measured |
-| [SPEED.md](SPEED.md) | Where the seconds go |
-| [OPENWORKER.md](OPENWORKER.md) | A reading of OpenWorker — the source of most of the plan |
-| [OPENEXECUTIVE.md](OPENEXECUTIVE.md) | A reading of OpenExecutive — ablation, mostly |
-| [RELEASING.md](RELEASING.md) | Signing and notarising. Read this before cutting a tag |
-| [DEPLOY.md](DEPLOY.md) | The site, the API, and how they ship |
-| [PORTING.md](PORTING.md) | Which calls to suspect first on Windows and Linux |
-| [truth/README.md](truth/README.md) | The truth suite |
-| [picks/README.md](picks/README.md) | The accuracy suite |
-| [ui/src/assets/README.md](ui/src/assets/README.md) | What is inside each `.riv` |
-| [src-tauri/icons/README.md](src-tauri/icons/README.md) | How the app icon is made |
+| *"What is this error actually telling me?"* | Reads the dialog in front of you and answers in plain language |
+| *"Where is the setting for scaling in this app?"* | Finds the buried menu item and points at it, so you learn where it was |
+| *"Play something by Radiohead on YouTube."* | Opens the browser, searches, picks a result, presses play |
+| *"Fill this form in with the details from that email."* | Reads one window, types into another, field by field |
+| *"Teach me DaVinci Resolve."* | Draws on your screen and walks you through it, one chapter at a time |
 
-## Run it
+No window. No dock icon. No chat history to scroll — just a cat in the dead space
+at the top of the display.
+
+<div align="center">
+<img src="docs/media/panel.png" width="720" alt="The Nudge panel" />
+</div>
+
+## Install
+
+**Download the build** — [nudge.runmycrew.com](https://nudge.runmycrew.com) serves
+signed, notarised `.dmg` for Apple Silicon and `.deb` / AppImage for Linux. It
+updates itself after that.
+
+On first use Nudge asks for **Screen Recording** and **Microphone**. Grant both and
+relaunch — macOS does not hand a new grant to a process that is already running.
+
+No API key? Sign in and turns go through our proxy. Prefer your own? Paste a Gemini
+or Anthropic key in Settings, or run a local model and pay nobody:
 
 ```sh
-make tools                                           # one time
-cp config.example.toml ~/.config/nudge/config.toml   # set provider + api_key
-chmod 600 ~/.config/nudge/config.toml
-make pin-identity ID="Apple Development: ..."        # see Code signing below
-make run
+brew install ollama && ollama pull qwen3-vl:4b   # then set provider = "ollama"
 ```
 
-`make` on its own lists every target.
+## Using it
 
-Nudge lives in the **menu bar** — no Dock icon, no window. A small orb trails your
-cursor so you can see it's awake.
-
-**Hold** `cmd+shift+space`, say what you want, release. **Tap** the same key to type
-instead, or to skip to the next step. A ring appears over the control to click, and
-stays there until you actually click it -- then the next step loads by itself.
-
-**Escape** cancels and hands the machine straight back.
-
-### Menu bar
-
-| Item | What |
+| Key | What happens |
 |---|---|
-| **Click for me** | Nudge clicks the control instead of pointing at it. Needs Accessibility. |
-| **Natural voice (uses API)** | Gemini TTS instead of the free offline macOS voice. Off by default. |
+| **Hold** `ctrl` `alt` | Talk. Release and it answers |
+| **Tap** the same keys | Type instead, or skip to the next step |
+| **Draw** while you talk | Circle anything on screen — it sees the drawing |
+| `esc` | Stops it. Whatever it was in the middle of |
 
-Both override the config file at runtime, so trying either costs a click rather than
-an edit and a restart.
+A ring appears over the control to click and stays there until you actually click
+it, then the next step loads by itself. Turn on **Click for me** and it does the
+clicking too.
 
-Nudge asks for **Screen Recording** and **Microphone** on first use. Grant both, then
-relaunch — the toggles don't reach a running process. Build the `.app` rather than
-`cargo run`: a bundled app requests permission as itself and reads your config,
-where a bare binary inherits your terminal's permissions and shell env instead.
+## How it works
 
-For a free, offline, keyless setup, `brew install ollama && ollama pull qwen3-vl:4b`
-and set `provider = "ollama"`.
+Each turn is a fresh capture, because step 2's target usually lives inside a menu
+step 1 opened — it is in no earlier screenshot. The model is asked what to do next
+and answers with exactly one of 31 outcomes:
 
-## Is this even possible?
-
-The entire product rests on one question: *can a model return the on-screen position
-of a named control accurately enough to draw a ring around it?* Everything else here
-is plumbing.
-
-The `probe` bin answers it empirically, using the same providers and the same
-coordinate math as the app -- it just writes a PNG instead of an overlay:
-
-```sh
-export GEMINI_API_KEY=...          # free tier, no card
-cd src-tauri && cargo run --bin probe -- "open the UV editor"
-
-# compare models without touching config
-NUDGE_PROVIDER=gemini NUDGE_MODEL=gemini-robotics-er-2-preview \
-    cargo run --bin probe -- "open the UV editor"
+```
+Point · Launch · Open · Type · Press · Tour · Done · Unsure
+Run · Write · Read · Edit · Fetch · Search · Task · Agent · Question · …
 ```
 
-It screenshots, asks the model, and writes `hit-<provider>.png` with a ring drawn
-on. Run ~20 real goals in the app you care about and count the hits.
-That number decides the shape of the project:
+Each exists because collapsing it into another one caused a visible bug. `Unsure`
+is there because a model that may only point or finish will **invent coordinates**
+when shown a screen with no matching control. `Question` is what makes an
+unattended agent able to ask *"which Sara?"* instead of guessing.
 
-| Result | What Nudge becomes |
-|---|---|
-| Local model hits | Genuinely free, offline, open source |
-| Only hosted hits | Free tier ships it; power users bring a key |
-| Only frontier hits | Real, but ~$0.003–0.017 per step, BYO key |
+**Three things run underneath the loop:**
 
-Don't pick an architecture before you know which row you're in.
+- **Grounding** — on macOS the accessibility tree gives exact bounds for free;
+  everywhere else, and inside Blender, DAWs and CAD where the whole window is one
+  GPU canvas, the vision model is the universal path.
+- **A context budget** — `core/context.rs` decides room for every section of the
+  prompt first, then cuts each exactly once. A plain question used to ship 52,221
+  characters of prompt and now ships about 22,000.
+- **An agent runtime** — `core/run/agent.rs` drives itself with a step budget,
+  a visible stop, and a question it can ask you. While it runs it owns the real
+  cursor, which is what "do it for me" means.
 
-## Develop
+## What it will not do
 
-```sh
-make dev      # hot-reloading
-make test
-make lint     # clippy -D warnings + fmt check
-make probe GOAL="open the UV editor" MODEL=gemini-robotics-er-2-preview
-```
-
-Vite hot-reloads the overlay; editing Rust rebuilds and restarts the app.
-
-Dev runs an **unsigned binary, not a bundle**, so it cannot use Nudge's own
-permission grants -- it inherits them from whatever launched it. Run it from a
-terminal that already has Screen Recording and you are fine. Signed bundle for real
-use, inherited grant for dev.
-
-### Code signing is not optional on macOS
-
-TCC identifies an app by its code signature. An ad-hoc signed bundle gets a new hash
-on every build, so macOS treats each rebuild as a brand-new app and your Screen
-Recording grant silently stops applying -- the toggle still looks on. `tauri.conf.json`
-sets `bundle.macOS.signingIdentity` to a stable identity to avoid this.
-
-Which certificate signs the build is pinned in `.signing-identity` (gitignored) via
-`make pin-identity`, not auto-detected. `security find-identity` does not order its
-output stably, so on a machine with several certificates auto-detection picks a
-different one between runs -- the signature changes and the grant is quietly voided
-while the toggle still reads "on". Auto-detect only kicks in when there is exactly
-one candidate and therefore no choice to get wrong.
-
-Changing the pinned identity voids existing grants: run `make reset-perms` after.
+- **Secrets stay in the Keychain.** `connections.toml` only ever *names* one, as
+  `keychain:<item>`. Nothing is pasted into a file or a commit.
+- **It refuses to look at password managers.** `core/screen/privacy.rs`, mid-agent
+  as well as before one starts.
+- **Counts, never content.** The analytics send how long a turn took and which
+  model answered. Never a goal, a transcript, a window title, an application name
+  or a path — and the switch in Settings is off in one click. See
+  [`core/counted.rs`](src-tauri/src/core/counted.rs).
+- **Launching is validated as untrusted input.** The app name comes from a language
+  model, so paths, flags, shell metacharacters and URLs are all refused, with a
+  test for each.
 
 ## Layout
 
 ```
-ui/                     React + Tailwind overlay (Vite)
-  src/lib/              nudge.ts (typed commands) · useNudge.ts (events + phase)
-  src/components/       Companion · Ring · Bubble · AskInput
-
 src-tauri/src/
-  lib.rs                module tree, nothing else
-  config.rs             ~/.config/nudge/config.toml
-  error.rs              one error enum
+  core/                 What Nudge does. No Tauri. Unit-testable.
+    provider/           gemini · anthropic · ollama, behind one trait
+    run/                session · agent · subagent — the loops
+    screen/             capture · ax · click · keyboard · ink · privacy
+    tools/              mcp · shell · files · fetch · relevant
+    voice/              ear · record · transcribe · speech
+    context.rs          the prompt budget          teaching.rs   tour scoring
+    memory.rs           what it remembers          threads.rs    conversations
+    counted.rs          what it reports            laps.rs       where time goes
+  app/                  Wiring core to the OS. Thin by design.
+    ui/ · input/ · commands/ · agent.rs · tour.rs · update.rs
+  bin/                  errand · bench · picks · truth · probe · judge · ax
+tests/layering.rs       Fails the build if core imports Tauri
 
-  core/                 what Nudge does. No Tauri, no windows, unit-testable.
-    capture.rs          screenshot → the image the model sees + the mapping back
-    session.rs          the step loop
-    voice.rs            microphone → WAV
-    transcribe.rs       speech → text
-    speech.rs           reads each nudge aloud (Gemini TTS, `say` fallback)
-    click.rs            posts clicks, and watches for real ones
-    launch.rs           opens an app by name — the one guarded action
-    provider/           mod.rs (trait + prompt + dispatch)
-                        ollama.rs · gemini.rs · anthropic.rs
-
-  app/                  wiring core to the OS. Thin by design.
-    mod.rs              builder + setup
-    commands.rs         the frontend's entire API surface
-    overlay.rs          the transparent click-through window
-    hotkey.rs           push-to-talk: tap advances, hold speaks
-    tray.rs             menu bar item
-    cursor.rs           60Hz poll driving the companion orb
-    state.rs            Screen · Mic
-
-  bin/probe.rs          accuracy harness — same code path, writes a PNG
-tests/layering.rs       enforces that core never imports Tauri
+ui/                     The panel and overlay. React, Tailwind v4, Vite.
+server/                 FastAPI: releases, accounts, model proxy, counts.
+web/                    The marketing site. Next.js.
 ```
 
-### The four answers
+**The one architectural rule:** `core` must not know Tauri exists. That is what
+lets 494 tests run without a window server, and it is checked rather than trusted —
+a documented boundary decays the first time somebody wants an `AppHandle` inside a
+provider.
 
-A nudge is not always "click here". `Step` has four variants because there are
-genuinely four things to say, and every one collapsed into the others causes a
-visible bug:
+## Build it yourself
 
-| Outcome | Means | Ends the session? |
-|---|---|---|
-| `Point` | click this control | no |
-| `Launch` | the app isn't open — open it | no |
-| `Unsure` | not on this screen, and I won't guess | no |
-| `Done` | already achieved | yes |
+```sh
+make tools                                           # one time
+cp config.example.toml ~/.config/nudge/config.toml
+make pin-identity ID="Apple Development: ..."        # macOS only — see below
+make run                                             # build, sign, restart
+```
 
-`Unsure` exists because a model that may only point or finish will **invent
-coordinates** when shown a screen with no matching control. `Launch` exists because
-"open Blender" cannot be satisfied by pointing at anything.
+```sh
+make dev          # hot reload
+make test         # 494 Rust tests
+make lint         # clippy -D warnings, then fmt --check
+make timings      # where turns have been spending their time
+make bench        # the accuracy number
+```
 
-`Unsure` and `Launch` are not recorded as completed steps — logging "I can't see it"
-as progress makes the next call believe the user already did it.
+`make` on its own lists every target.
 
-### The overlay cannot be both click-through and typable
+> **Code signing is not optional on macOS, even in development.** TCC identifies an
+> app by its signature, so an ad-hoc build gets a fresh identity every time and your
+> Screen Recording grant silently stops applying — while the toggle still reads
+> "on". `.signing-identity` pins the certificate. See [RELEASING.md](RELEASING.md).
 
-A full-screen window that accepts the keyboard also swallows **every click on
-screen**, and the app underneath goes dead. Pointing and asking therefore need
-different window shapes, not a flag on one shape:
+**Linux** is X11 only. Injecting input and reading a held modifier are things
+Wayland deliberately forbids; on Wayland the window appears and the hotkey never
+fires.
 
-- **pointing** — full screen, click-through, input passes to the app below
-- **asking** — shrunk to the prompt box, takes the keyboard, covers nothing else
+## Proving it works
 
-`overlay::set_prompt_mode` switches between them, and losing focus while asking
-hands input straight back. Get this wrong and the symptom is not a broken overlay,
-it is a machine where clicking stops working.
+The whole product rested on one question: *can a model return the on-screen
+position of a named control accurately enough to draw a ring around it?* That is
+measured, not assumed:
 
-### Guide mode and auto mode share one path
+```sh
+make probe GOAL="open the UV editor"     # writes a PNG with the ring drawn on
+make bench                               # scores every saved case
+make timings                             # p50 per stage, per turn
+```
 
-"Click for me" posts a click; the same watcher that notices *your* clicks notices
-that one and advances the step. There is no separate automation loop, so the two
-modes cannot drift apart. Auto mode therefore drives itself, which is why sessions
-are capped at 12 steps -- guide mode is bounded by the user's patience.
+Nearly every fix in this repository came out of one of those rather than out of
+reading the code. Spoken turns got roughly twice as fast when measurement showed
+the on-device transcriber was being abandoned after one cold-start timeout. Tour
+scoring promptly revealed that the sloppy boxes were mine, not the model's.
 
-### Launching is the only thing Nudge does *to* your machine
+## The documents
 
-Everything else shows you where to click. `launch.rs` runs `open -a <name>` and
-nothing else: it cannot open a file, follow a URL, run a binary, or pass an argument.
-The name comes from a language model, so it is validated as untrusted input — paths,
-flags, shell metacharacters and URLs are all refused, with tests for each.
+Every document in this repository and what it is for. If a document is not on this
+list it should not exist.
 
-### The one architectural rule
-
-`core` must not know Tauri exists. That is what makes the logic testable without
-spawning a window, and it is checked by `tests/layering.rs` rather than trusted --
-a documented boundary decays the first time someone wants an `AppHandle` inside a
-provider to emit a progress event.
-
-Dependencies point one way: `app → core`. `config` and `error` are shared by both.
-
-## Adding a model
-
-One file in `src-tauri/src/provider/`, one arm in `provider::build()`. There is no
-registry and no plugin loader — with three providers, a `match` is still smaller
-than the machinery to avoid one.
-
-Implement `next_step` and return a `Step`. `point: None` means "nothing left to
-click", which is how a session reports that the goal is met.
-
-The only thing that meaningfully differs between providers is the coordinate
-convention, and it is a minefield:
-
-| Provider | Returns |
+| | |
 |---|---|
-| Anthropic | Absolute pixels, 1:1 with the image sent (under 2576px long edge) |
-| Gemini | `[y, x]` normalised to 0–1000 — **y first, and not pixels** |
-| Qwen/Ollama | Absolute pixels |
+| [CLAUDE.md](CLAUDE.md) | Conventions, and the things that have bitten |
+| [PLAN.md](PLAN.md) | What is being built next, and why |
+| [FEATURES.md](FEATURES.md) | Every feature between here and "gets your everyday tasks done" |
+| [FINDINGS.md](FINDINGS.md) | What the accuracy and truth suites actually measured |
+| [SPEED.md](SPEED.md) | Where the seconds go |
+| [RELEASING.md](RELEASING.md) | Signing and notarising. Read before cutting a tag |
+| [DEPLOY.md](DEPLOY.md) | The site, the API, and how they ship |
+| [PORTING.md](PORTING.md) | Which calls to suspect first on another platform |
+| [OPENWORKER.md](OPENWORKER.md) · [OPENEXECUTIVE.md](OPENEXECUTIVE.md) | Readings that shaped the plan |
+| [truth/README.md](truth/README.md) · [picks/README.md](picks/README.md) | The two scoring suites |
 
-Each conversion is unit-tested. Add a test with your provider; an off-by-2× ring is
-invisible in code review and obvious in a test.
+## Status
 
-## Design notes
+**Early, and honest about it.** It works, it is genuinely useful, and it will also
+do things confidently and wrongly. 397 commits, 10 releases.
 
-**Why a loop, not a plan.** "Unwrap UVs" is five steps, but step 2's target lives
-inside a menu step 1 opens — it isn't in any earlier screenshot. So each step needs
-a fresh capture. Cost and latency scale with *steps*, not questions.
+Not built yet, deliberately:
 
-**Why the hotkey advances.** Detecting "did they click it?" wants click hooks,
-accessibility observers, or screenshot diffing. Pressing the hotkey again costs none
-of that and keeps the user in control, which is the safety story anyway.
+- **Concurrent agents** — two agents fighting over one cursor is incoherent
+- **Wayland** — needs the RemoteDesktop portal and libei, which is its own project
+- **Windows** — reachable through Tauri; the screen and input layers are the work
 
-**Why one window.** The overlay is click-through so clicks reach the app underneath,
-and only grabs the cursor while the input box is open. Two windows would need to stay
-in sync for no gain.
+If you want to break it, that is the most useful thing anyone can do right now.
+There is a **Report a bug** button inside the app, or
+[open an issue](https://github.com/bibektimilsina00/nudge/issues) — what you asked
+it to do and what it did instead is the good stuff.
 
-**Why coordinates convert exactly once.** `Shot::to_overlay` folds the Retina backing
-factor and our own downscale into a single ratio. Two separate conversions is how you
-ship a ring that is off by exactly 2×.
-
-## Not built yet
-
-- **Accessibility API fast path.** Would give exact bounds free in native apps — but
-  is useless in Blender, DAWs and CAD, which are one GPU canvas. Vision is the
-  universal path and the one that has to be proven first.
-- **Windows/Linux.** Tauri makes it reachable; `capture.rs` is the only part that
-  shells out to something mac-specific.
+<div align="center">
+<br />
+<sub>Built with Rust, Tauri and too many evenings.</sub>
+</div>
